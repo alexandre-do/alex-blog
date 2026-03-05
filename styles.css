@@ -1,1 +1,15 @@
 /* css styles */
+
+/* Rounded profile image */
+.rounded-image {
+  border-radius: 50%;
+  width: 200px !important;
+  height: 200px !important;
+  object-fit: cover;
+}
+
+/* Center about page image */
+.about-img {
+  display: block;
+  margin: 0 auto;
+}

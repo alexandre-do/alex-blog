@@ -2,29 +2,36 @@
   {
     "objectID": "project/posts.html",
     "href": "project/posts.html",
-    "title": "posts",
+    "title": "All Posts",
     "section": "",
-    "text": "Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see https://quarto.org."
-  },
-  {
-    "objectID": "project/posts.html#quarto",
-    "href": "project/posts.html#quarto",
-    "title": "posts",
-    "section": "",
-    "text": "Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see https://quarto.org."
-  },
-  {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "alex-blog",
-    "section": "",
-    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites."
+    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "about.html",
     "href": "about.html",
-    "title": "About",
+    "title": "Alexandre DO",
     "section": "",
-    "text": "About this site"
+    "text": "This is the contents of the about page for my blog."
+  },
+  {
+    "objectID": "about.html#about-this-blog",
+    "href": "about.html#about-this-blog",
+    "title": "Alexandre DO",
+    "section": "",
+    "text": "This is the contents of the about page for my blog."
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Welcome to my blog",
+    "section": "",
+    "text": "&gt; Machine Learning Engineer passionate about AI, data science, and cutting-edge technologies"
+  },
+  {
+    "objectID": "index.html#latest-posts",
+    "href": "index.html#latest-posts",
+    "title": "Welcome to my blog",
+    "section": "Latest Posts",
+    "text": "Latest Posts\n\n\n\n\nNo matching items"
   }
 ]
