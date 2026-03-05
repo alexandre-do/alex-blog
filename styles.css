@@ -1,15 +1,149 @@
-/* css styles */
+/* Developer font */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
 
-/* Rounded profile image */
-.rounded-image {
-  border-radius: 50%;
-  width: 200px !important;
-  height: 200px !important;
-  object-fit: cover;
+/* ---------------- Global ---------------- */
+body {
+  background-color: #302311;
+  color: #ffffff;
+  font-family: 'Fira Code', monospace;
+  transition: background 0.3s ease;
 }
 
-/* Center about page image */
-.about-img {
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  color: #ffffff;
+  font-weight: 500;
+  border-left: none !important;      /* remove theme blue bar */
+}
+
+h1::before, h2::before, h3::before, h4::before {
+  content: none !important;          /* remove pseudo-element */
+}
+
+/* Optional terminal arrow for H2 */
+h2::before {
+  content: "→ ";
+  color: #8b5e3c;                   /* dark earth */
+  padding-right: 0.3em;
+}
+
+/* ---------------- Links ---------------- */
+a, a:visited, a small, a time {
+  color: #ffffff !important;
+  text-decoration: none;
+}
+
+a:hover, a:focus {
+  color: #8b5e3c !important;
+}
+
+/* ---------------- Navbar ---------------- */
+.navbar {
+  background-color: #1e1e1e !important;  /* dark background */
+  border-bottom: 1px solid #333333;
+}
+
+.navbar a,
+.navbar a:visited {
+  color: #ffffff !important;
+  background: transparent;
+}
+
+/* Hover & active navbar links */
+.navbar a:hover,
+.navbar .active,
+.navbar a:focus,
+.navbar a:active {
+  background-color: #8b5e3c;   /* dark earth */
+  color: #ffffff !important;
+  border-radius: 4px;
+  padding: 0.2em 0.5em;
+  font-weight: 500;
+  outline: none;
+}
+
+/* ---------------- Collapsed / Mobile Navbar ---------------- */
+.navbar-collapse.collapse {
+  background-color: #1e1e1e !important;
+}
+
+.navbar-collapse.collapse a {
+  color: #ffffff !important;
   display: block;
-  margin: 0 auto;
+  padding: 0.5rem 0;
+}
+
+.navbar-collapse.collapse a:hover {
+  background-color: #8b5e3c;
+  color: #ffffff !important;
+  border-radius: 4px;
+}
+
+/* ---------------- Listings / Posts ---------------- */
+/* Post cards */
+.quarto-grid-item {
+  background-color: #262626;
+  border-radius: 10px;
+  padding: 1rem;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.quarto-grid-item:hover {
+  background-color: #8b5e3c;
+  transform: scale(1.03);
+}
+
+/* Listing titles (Latest Posts, etc.) */
+.listing h2, 
+.listing h3, 
+.listing .listing-title {
+  color: #ffffff !important;
+}
+
+.listing h2 a, 
+.listing h3 a, 
+.listing .listing-title a {
+  color: #ffffff !important;
+}
+
+.listing h2 a:hover,
+.listing h3 a:hover,
+.listing .listing-title a:hover {
+  color: #8b5e3c !important;
+}
+
+/* Post categories / tags */
+.post-categories a, .post-tags a {
+  color: #ffffff !important;
+}
+
+/* ---------------- Code Blocks ---------------- */
+pre, code {
+  background-color: #1b1b1b;
+  border-radius: 6px;
+  color: #ffffff;
+}
+
+/* Override code keywords / strings for dark earth */
+pre code .token.keyword,
+pre code .token.string {
+  color: #8b5e3c !important;
+}
+
+/* ---------------- Cursor ---------------- */
+.blink::after {
+  content: "_";
+  color: #ffffff;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%,50%,100% {opacity:1;}
+  25%,75% {opacity:0;}
+}
+
+/* ---------------- Text Selection ---------------- */
+::selection {
+  background: #8b5e3c;
+  color: #ffffff;
 }
