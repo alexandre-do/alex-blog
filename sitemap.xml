@@ -2,19 +2,31 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://alexdo.xyz/project/posts.html</loc>
-    <lastmod>2026-03-04T21:49:17.399Z</lastmod>
+    <lastmod>2026-08-29T03:26:49.522Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/art.html</loc>
     <lastmod>2026-03-04T23:21:02.190Z</lastmod>
   </url>
   <url>
+    <loc>https://alexdo.xyz/project/posts/fine-tuning-llms.html</loc>
+    <lastmod>2026-08-29T03:31:20.833Z</lastmod>
+  </url>
+  <url>
     <loc>https://alexdo.xyz/about.html</loc>
-    <lastmod>2026-03-05T03:46:55.391Z</lastmod>
+    <lastmod>2026-08-29T03:22:00.030Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/index.html</loc>
-    <lastmod>2026-03-05T03:43:39.824Z</lastmod>
+    <lastmod>2026-08-29T03:26:49.521Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</loc>
+    <lastmod>2026-08-29T03:31:20.834Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/rest-vs-graphql-vs-websocket.html</loc>
+    <lastmod>2026-08-29T03:31:20.832Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/lectures.html</loc>

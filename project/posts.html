@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="description" content="Posts on machine learning, data science, and AI engineering by Alexandre DO.">
 
 <title>All Posts – Alexandre DO</title>
 <style>
@@ -33,6 +34,7 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-search/fuse.min.js"></script>
 <script src="../site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="../">
+<link href="../images/favicon.png" rel="icon" type="image/png">
 <script src="../site_libs/quarto-listing/list.min.js"></script>
 <script src="../site_libs/quarto-listing/quarto-listing.js"></script>
 <script src="../site_libs/quarto-html/quarto.js" type="module"></script>
@@ -41,10 +43,10 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-9457a98b6c60d9e92c4ed9de5cff1330.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-bb20547001a1d989548e38f98aad2907.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -84,7 +86,7 @@ ul.task-list li input[type="checkbox"] {
     const options = {
       valueNames: ['listing-image','listing-date','listing-title','listing-description',{ data: ['index'] },{ data: ['categories'] },{ data: ['listing-date-sort'] },{ data: ['listing-file-modified-sort'] }],
       
-      searchColumns: [],
+      searchColumns: ["listing-title","listing-author","listing-date","listing-image","listing-description"],
     };
 
     window['quarto-listings'] = window['quarto-listings'] || {};
@@ -101,6 +103,9 @@ ul.task-list li input[type="checkbox"] {
     }
   })
   </script>
+<style>
+#title-block-header { display: none !important; }
+</style>
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -164,21 +169,10 @@ window.Quarto = {
     <a class="nav-link" href="../about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
-  <li class="nav-item dropdown ">
-    <a class="nav-link dropdown-toggle" href="#" id="nav-menu-others" role="link" data-bs-toggle="dropdown" aria-expanded="false">
- <span class="menu-text">Others</span>
-    </a>
-    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-menu-others">    
-        <li>
-    <a class="dropdown-item" href="../project/art.html">
- <span class="dropdown-text">art works</span></a>
+  <li class="nav-item">
+    <a class="nav-link" href="../project/art.html"> 
+<span class="menu-text">Art</span></a>
   </li>  
-        <li>
-    <a class="dropdown-item" href="../project/lectures.html">
- <span class="dropdown-text">lectures</span></a>
-  </li>  
-    </ul>
-  </li>
 </ul>
           </div> <!-- /navcollapse -->
             <div class="quarto-navbar-tools">
@@ -199,6 +193,11 @@ window.Quarto = {
 <h1 class="title">All Posts</h1>
 </div>
 
+<div>
+  <div class="description">
+    Posts on machine learning, data science, and AI engineering by Alexandre DO.
+  </div>
+</div>
 
 
 <div class="quarto-title-meta">
@@ -218,7 +217,69 @@ window.Quarto = {
 <p>Explore all my posts on machine learning, data science, and AI engineering.</p>
 <div id="listing-all-posts" class="quarto-listing quarto-listing-container-grid">
 <div class="list grid quarto-listing-cols-3">
-
+<div class="g-col-1" data-index="0" data-categories="QVdTJTJDQ2xvdWRGb3JtYXRpb24lMkNNTE9wcw==" data-listing-date-sort="1778738400000" data-listing-file-modified-sort="1787974280834" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="390">
+<a href="../project/posts/deploy-ml-aws-cloudformation.html" class="quarto-grid-link">
+<div class="quarto-grid-item card h-100 card-left">
+<p class="card-img-top">
+<img loading="lazy" src="../project/posts/images/deploy-ml-aws-cloudformation.png" class="thumbnail-image card-img" style="height: 150px;">
+</p>
+<div class="card-body post-contents">
+<h5 class="no-anchor card-title listing-title" data-anchor-id="blog-posts">
+Deploying a Machine Learning Project with AWS CloudFormation
+</h5>
+<div class="card-text listing-description delink">
+<p>Turning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.</p>
+</div>
+<div class="card-attribution card-text-small end">
+<div class="listing-date">
+May 14, 2026
+</div>
+</div>
+</div>
+</div></a>
+</div>
+<div class="g-col-1" data-index="1" data-categories="TExNJTJDRmluZS1UdW5pbmclMkNIdWdnaW5nJTIwRmFjZQ==" data-listing-date-sort="1768892400000" data-listing-file-modified-sort="1787974280833" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="206">
+<a href="../project/posts/fine-tuning-llms.html" class="quarto-grid-link">
+<div class="quarto-grid-item card h-100 card-left">
+<p class="card-img-top">
+<img loading="lazy" src="../project/posts/images/fine-tuning-llms.png" class="thumbnail-image card-img" style="height: 150px;">
+</p>
+<div class="card-body post-contents">
+<h5 class="no-anchor card-title listing-title">
+Fine-Tuning LLMs
+</h5>
+<div class="card-text listing-description delink">
+<p>A short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.</p>
+</div>
+<div class="card-attribution card-text-small end">
+<div class="listing-date">
+Jan 20, 2026
+</div>
+</div>
+</div>
+</div></a>
+</div>
+<div class="g-col-1" data-index="2" data-categories="UHl0aG9uJTJDQVBJJTJDRmFzdEFQSQ==" data-listing-date-sort="1757484000000" data-listing-file-modified-sort="1787974280832" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="256">
+<a href="../project/posts/rest-vs-graphql-vs-websocket.html" class="quarto-grid-link">
+<div class="quarto-grid-item card h-100 card-left">
+<p class="card-img-top">
+<img loading="lazy" src="../project/posts/images/rest-graphql-websocket.png" class="thumbnail-image card-img" style="height: 150px;">
+</p>
+<div class="card-body post-contents">
+<h5 class="no-anchor card-title listing-title">
+REST vs GraphQL vs WebSocket in Python
+</h5>
+<div class="card-text listing-description delink">
+<p>A practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.</p>
+</div>
+<div class="card-attribution card-text-small end">
+<div class="listing-date">
+Sep 10, 2025
+</div>
+</div>
+</div>
+</div></a>
+</div>
 </div>
 <div class="listing-no-matching d-none">No matching items</div>
 </div>

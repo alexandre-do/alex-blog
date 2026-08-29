@@ -1,10 +1,18 @@
 [
   {
     "listing": "/project/posts.html",
-    "items": []
+    "items": [
+      "/project/posts/deploy-ml-aws-cloudformation.html",
+      "/project/posts/fine-tuning-llms.html",
+      "/project/posts/rest-vs-graphql-vs-websocket.html"
+    ]
   },
   {
     "listing": "/index.html",
-    "items": []
+    "items": [
+      "/project/posts/deploy-ml-aws-cloudformation.html",
+      "/project/posts/fine-tuning-llms.html",
+      "/project/posts/rest-vs-graphql-vs-websocket.html"
+    ]
   }
 ]

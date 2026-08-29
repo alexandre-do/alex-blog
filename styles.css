@@ -1,51 +1,108 @@
-/* Developer font */
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
+/* ==========================================================
+   Alexandre DO — "Modern SaaS" theme
+   Warm dark-earth surfaces, amber/copper accents, Inter type.
+   ========================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #1b1611;
+  --surface: #2a2118;
+  --surface-alt: #17130f;
+  --border: rgba(214, 178, 140, 0.14);
+  --border-strong: rgba(214, 178, 140, 0.28);
+  --text: #f1ece2;
+  --text-muted: #c4b49c;
+  --accent: #c9822e;       /* warm amber/ochre */
+  --accent-light: #e0a458; /* lighter amber */
+  --accent-2: #8b5e3c;     /* dark earth brown */
+  --accent-soft: rgba(201, 130, 46, 0.14);
+  --shadow-glow: 0 12px 28px rgba(201, 130, 46, 0.22);
+
+  /* Force Bootstrap's own muted/secondary text variables to match,
+     in case Quarto's markup uses Bootstrap classes directly. */
+  --bs-secondary-color: var(--text-muted);
+  --bs-tertiary-color: var(--text-muted);
+  --bs-body-color: var(--text);
+  --bs-card-color: var(--text);
+}
 
 /* ---------------- Global ---------------- */
 body {
-  background-color: #3e3527;
-  color: #ffffff;
-  font-family: 'Fira Code', monospace;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   transition: background 0.3s ease;
+  line-height: 1.65;
+}
+
+main.content {
+  max-width: 1100px;
 }
 
 /* Headings */
 h1, h2, h3, h4, h5, h6 {
-  color: #ffffff;
-  font-weight: 500;
-  border-left: none !important;      /* remove theme blue bar */
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  border-left: none !important;
 }
 
 h1::before, h2::before, h3::before, h4::before {
-  content: none !important;          /* remove pseudo-element */
+  content: none !important;
 }
 
-/* Optional terminal arrow for H2 */
-h2::before {
-  content: "→ ";
-  color: #8b5e3c;                   /* dark earth */
-  padding-right: 0.3em;
+h1 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Small gradient accent under section headings */
+h2 {
+  position: relative;
+  padding-bottom: 0.4em;
+  margin-top: 2.2em;
+}
+
+h2::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 44px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
 }
 
 /* ---------------- Links ---------------- */
 a, a:visited, a small, a time {
-  color: #ffffff !important;
+  color: var(--accent-light) !important;
   text-decoration: none;
 }
 
 a:hover, a:focus {
-  color: #8b5e3c !important;
+  color: var(--accent-2) !important;
 }
 
 /* ---------------- Navbar ---------------- */
 .navbar {
-  background-color: #1e1e1e !important;  /* dark background */
-  border-bottom: 1px solid #333333;
+  background-color: rgba(10, 14, 23, 0.85) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.navbar-brand {
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+  color: var(--text) !important;
 }
 
 .navbar a,
 .navbar a:visited {
-  color: #ffffff !important;
+  color: var(--text-muted) !important;
   background: transparent;
 }
 
@@ -54,96 +111,237 @@ a:hover, a:focus {
 .navbar .active,
 .navbar a:focus,
 .navbar a:active {
-  background-color: #8b5e3c;   /* dark earth */
-  color: #ffffff !important;
-  border-radius: 4px;
-  padding: 0.2em 0.5em;
+  background-color: var(--accent-soft);
+  color: var(--accent-light) !important;
+  border-radius: 6px;
+  padding: 0.3em 0.6em;
   font-weight: 500;
   outline: none;
 }
 
 /* ---------------- Collapsed / Mobile Navbar ---------------- */
 .navbar-collapse.collapse {
-  background-color: #1e1e1e !important;
+  background-color: var(--bg) !important;
 }
 
 .navbar-collapse.collapse a {
-  color: #ffffff !important;
+  color: var(--text-muted) !important;
   display: block;
   padding: 0.5rem 0;
 }
 
 .navbar-collapse.collapse a:hover {
-  background-color: #8b5e3c;
-  color: #ffffff !important;
-  border-radius: 4px;
+  background-color: var(--accent-soft);
+  color: var(--accent-light) !important;
+  border-radius: 6px;
 }
 
-/* ---------------- Listings / Posts ---------------- */
-/* Post cards */
+/* ---------------- Homepage intro (low-key: plain text, no boxed hero) ---------------- */
+.subtitle {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  max-width: 42em;
+  margin-top: -0.3rem;
+}
+
+/* ---------------- Listings / Cards ---------------- */
 .quarto-grid-item {
-  background-color: #262626;
-  border-radius: 10px;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
   padding: 1rem;
-  transition: transform 0.2s ease, background-color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .quarto-grid-item:hover {
-  background-color: #8b5e3c;
-  transform: scale(1.03);
+  background-color: var(--surface);
+  border-color: rgba(201, 130, 46, 0.45);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-glow);
+}
+
+.quarto-grid-item img,
+.quarto-grid-item .thumbnail-image img,
+.quarto-grid-item .card-img-top {
+  border-radius: 10px;
+  object-fit: cover;
 }
 
 /* Listing titles (Latest Posts, etc.) */
-.listing h2, 
-.listing h3, 
+.listing h2,
+.listing h3,
 .listing .listing-title {
-  color: #ffffff !important;
+  color: var(--text) !important;
 }
 
-.listing h2 a, 
-.listing h3 a, 
+.listing h2 a,
+.listing h3 a,
 .listing .listing-title a {
-  color: #ffffff !important;
+  color: var(--text) !important;
 }
 
 .listing h2 a:hover,
 .listing h3 a:hover,
 .listing .listing-title a:hover {
-  color: #8b5e3c !important;
+  color: var(--accent-light) !important;
+}
+
+.listing-description,
+.quarto-listing-description,
+.description,
+.quarto-grid-item .card-text,
+.quarto-grid-item .card-body p {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
 }
 
 /* Post categories / tags */
 .post-categories a, .post-tags a {
-  color: #ffffff !important;
+  color: var(--accent-light) !important;
+}
+
+/* ---------------- Category / Tech-stack Tags (per-card) ---------------- */
+.listing-category,
+.quarto-category {
+  background-color: rgba(148, 163, 184, 0.08) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.03em 0.5em;
+  font-size: 0.62em;
+  font-weight: 400;
+  line-height: 1.6;
+  display: inline-block;
+  margin: 0.08em 0.18em 0.08em 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.listing-category:hover,
+.quarto-category:hover {
+  background-color: var(--accent-soft) !important;
+  color: var(--accent-light) !important;
+  border-color: rgba(201, 130, 46, 0.35);
+  cursor: pointer;
+}
+
+/* ---------------- Category Filter Cloud (the clickable "Categories" list) ---------------- */
+.quarto-listing-category-title {
+  color: var(--text-muted) !important;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5em;
+  border: none !important;
+  background: none !important;
+}
+
+/* Reset the <ul> wrapper itself — it is a list container, not a chip */
+.quarto-listing-category,
+ul.quarto-listing-category {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 0 1rem 0 !important;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+}
+
+.quarto-listing-category .category,
+.quarto-listing-category li.category,
+li.category {
+  background-color: rgba(148, 163, 184, 0.08) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.03em 0.55em;
+  font-size: 0.68em;
+  font-weight: 400;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.quarto-listing-category .category:hover,
+.quarto-listing-category li.category:hover,
+li.category:hover,
+.quarto-listing-category .category.active,
+li.category.active {
+  background-color: var(--accent-soft) !important;
+  color: var(--accent-light) !important;
+  border-color: rgba(201, 130, 46, 0.35);
+}
+
+/* ---------------- About page ---------------- */
+.about-image {
+  width: 10em !important;
+  height: 10em !important;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  object-position: 50% 20%;
+  border: 4px solid var(--accent) !important;
+  border-radius: 50% !important;
+  filter: none;
+}
+
+.about-link {
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.4em 0.9em;
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.about-link:hover {
+  color: var(--accent-light) !important;
+  border-color: var(--accent-light);
+  transform: translateY(-2px);
 }
 
 /* ---------------- Code Blocks ---------------- */
 pre, code {
-  background-color: #1b1b1b;
-  border-radius: 6px;
-  color: #ffffff;
-}
-
-/* Override code keywords / strings for dark earth */
-pre code .token.keyword,
-pre code .token.string {
-  color: #8b5e3c !important;
+  background-color: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
 }
 
 /* ---------------- Cursor ---------------- */
 .blink::after {
   content: "_";
-  color: #ffffff;
+  color: var(--accent-light);
   animation: blink 1s infinite;
 }
 
 @keyframes blink {
-  0%,50%,100% {opacity:1;}
-  25%,75% {opacity:0;}
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0; }
 }
 
 /* ---------------- Text Selection ---------------- */
 ::selection {
-  background: #8b5e3c;
+  background: var(--accent);
   color: #ffffff;
+}
+
+/* ---------------- Scrollbar ---------------- */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface);
+  border-radius: 10px;
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }

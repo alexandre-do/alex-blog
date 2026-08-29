@@ -4,34 +4,146 @@
     "href": "project/posts.html",
     "title": "All Posts",
     "section": "",
-    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\nNo matching items"
+    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html",
+    "href": "project/posts/fine-tuning-llms.html",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Pretrained LLMs are general-purpose. Fine-tuning adapts one to a narrower domain or task using far less data and compute than pretraining from scratch.\n\n\nFull fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like LoRA freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom peft import LoraConfig, get_peft_model\n\nmodel = AutoModelForCausalLM.from_pretrained(\"meta-llama/Llama-3-8b\")\ntokenizer = AutoTokenizer.from_pretrained(\"meta-llama/Llama-3-8b\")\n\nlora_config = LoraConfig(\n    r=16,\n    lora_alpha=32,\n    target_modules=[\"q_proj\", \"v_proj\"],\n    lora_dropout=0.05,\n    task_type=\"CAUSAL_LM\",\n)\n\nmodel = get_peft_model(model, lora_config)\nmodel.print_trainable_parameters()\n\n\n\n\nKeep examples in a consistent instruction/response format.\nFavor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.\nDeduplicate aggressively; repeated examples skew the model more than expected.\n\n\n\n\nTrack validation loss, but don’t stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn’t always mean the outputs are actually better for your task.\nFine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run."
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html#full-fine-tuning-vs-peft",
+    "href": "project/posts/fine-tuning-llms.html#full-fine-tuning-vs-peft",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Full fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like LoRA freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom peft import LoraConfig, get_peft_model\n\nmodel = AutoModelForCausalLM.from_pretrained(\"meta-llama/Llama-3-8b\")\ntokenizer = AutoTokenizer.from_pretrained(\"meta-llama/Llama-3-8b\")\n\nlora_config = LoraConfig(\n    r=16,\n    lora_alpha=32,\n    target_modules=[\"q_proj\", \"v_proj\"],\n    lora_dropout=0.05,\n    task_type=\"CAUSAL_LM\",\n)\n\nmodel = get_peft_model(model, lora_config)\nmodel.print_trainable_parameters()"
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html#data-preparation",
+    "href": "project/posts/fine-tuning-llms.html#data-preparation",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Keep examples in a consistent instruction/response format.\nFavor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.\nDeduplicate aggressively; repeated examples skew the model more than expected."
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html#evaluation",
+    "href": "project/posts/fine-tuning-llms.html#evaluation",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Track validation loss, but don’t stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn’t always mean the outputs are actually better for your task.\nFine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run."
   },
   {
     "objectID": "about.html",
     "href": "about.html",
     "title": "Alexandre DO",
     "section": "",
-    "text": "This is the contents of the about page for my blog."
+    "text": "[TODO: I’m a Machine Learning Engineer / Data Scientist focused on … I care about … and I’m currently working on …]"
   },
   {
-    "objectID": "about.html#about-this-blog",
-    "href": "about.html#about-this-blog",
+    "objectID": "about.html#about-me",
+    "href": "about.html#about-me",
     "title": "Alexandre DO",
     "section": "",
-    "text": "This is the contents of the about page for my blog."
+    "text": "[TODO: I’m a Machine Learning Engineer / Data Scientist focused on … I care about … and I’m currently working on …]"
+  },
+  {
+    "objectID": "about.html#what-i-do",
+    "href": "about.html#what-i-do",
+    "title": "Alexandre DO",
+    "section": "What I Do",
+    "text": "What I Do\n\n\n[TODO: e.g. “Building and deploying production ML models”]\n[TODO: e.g. “Natural language processing and LLM applications”]\n[TODO: e.g. “Data pipelines and MLOps”]"
+  },
+  {
+    "objectID": "about.html#background",
+    "href": "about.html#background",
+    "title": "Alexandre DO",
+    "section": "Background",
+    "text": "Background\n\n[TODO: I studied … at … , and have worked on … at … . See my project write-ups for specific work.]"
   },
   {
     "objectID": "index.html",
     "href": "index.html",
-    "title": "Welcome to my blog",
+    "title": "Home",
     "section": "",
-    "text": "&gt; Machine Learning Engineer passionate about AI, data science, and cutting-edge technologies"
+    "text": "Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "index.html#latest-posts",
     "href": "index.html#latest-posts",
-    "title": "Welcome to my blog",
-    "section": "Latest Posts",
-    "text": "Latest Posts\n\n\n\n\nNo matching items"
+    "title": "Home",
+    "section": "",
+    "text": "Turning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.\n\n\nA typical ML inference stack needs:\n\nAn S3 bucket to store model artifacts\nAn IAM role with least-privilege access for the compute layer\nA compute target — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference\n\n\n\n\nResources:\n  ModelArtifactsBucket:\n    Type: AWS::S3::Bucket\n\n  SageMakerExecutionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: sagemaker.amazonaws.com\n            Action: sts:AssumeRole\n      ManagedPolicyArns:\n        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess\n\n  Model:\n    Type: AWS::SageMaker::Model\n    Properties:\n      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn\n      PrimaryContainer:\n        Image: &lt;ecr-image-uri&gt;\n        ModelDataUrl: !Sub \"s3://${ModelArtifactsBucket}/model.tar.gz\"\n\n  EndpointConfig:\n    Type: AWS::SageMaker::EndpointConfig\n    Properties:\n      ProductionVariants:\n        - ModelName: !GetAtt Model.ModelName\n          VariantName: AllTraffic\n          InitialInstanceCount: 1\n          InstanceType: ml.m5.large\n\n  Endpoint:\n    Type: AWS::SageMaker::Endpoint\n    Properties:\n      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName\n\n\n\naws cloudformation deploy \\\n  --template-file stack.yaml \\\n  --stack-name ml-inference-stack \\\n  --capabilities CAPABILITY_IAM\n\n\n\n\nParameterize the instance type and image URI so the same template works across environments.\nUse one stack per environment (dev/staging/prod) rather than branching logic inside a single template.\nTear down with aws cloudformation delete-stack when you’re done — an idle SageMaker endpoint bills by the hour.\n\nCloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read."
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#core-building-blocks",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#core-building-blocks",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "A typical ML inference stack needs:\n\nAn S3 bucket to store model artifacts\nAn IAM role with least-privilege access for the compute layer\nA compute target — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference"
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#a-minimal-stack",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#a-minimal-stack",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "Resources:\n  ModelArtifactsBucket:\n    Type: AWS::S3::Bucket\n\n  SageMakerExecutionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: sagemaker.amazonaws.com\n            Action: sts:AssumeRole\n      ManagedPolicyArns:\n        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess\n\n  Model:\n    Type: AWS::SageMaker::Model\n    Properties:\n      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn\n      PrimaryContainer:\n        Image: &lt;ecr-image-uri&gt;\n        ModelDataUrl: !Sub \"s3://${ModelArtifactsBucket}/model.tar.gz\"\n\n  EndpointConfig:\n    Type: AWS::SageMaker::EndpointConfig\n    Properties:\n      ProductionVariants:\n        - ModelName: !GetAtt Model.ModelName\n          VariantName: AllTraffic\n          InitialInstanceCount: 1\n          InstanceType: ml.m5.large\n\n  Endpoint:\n    Type: AWS::SageMaker::Endpoint\n    Properties:\n      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName"
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#deploying-the-stack",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#deploying-the-stack",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "aws cloudformation deploy \\\n  --template-file stack.yaml \\\n  --stack-name ml-inference-stack \\\n  --capabilities CAPABILITY_IAM"
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#tips",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#tips",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "Parameterize the instance type and image URI so the same template works across environments.\nUse one stack per environment (dev/staging/prod) rather than branching logic inside a single template.\nTear down with aws cloudformation delete-stack when you’re done — an idle SageMaker endpoint bills by the hour.\n\nCloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read."
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.\n\n\nThe default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}\n\n\n\nA single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")\n\n\n\nA persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")\n\n\n\n\nREST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "REST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
   }
 ]
