@@ -1,7 +1,30 @@
 ---
-title: "alex-blog"
+title: "Home"
+description: "Alexandre DO's personal blog and portfolio — machine learning, data science, and production ML systems."
+title-block: false
+include-in-header:
+  text: |
+    <style>
+    #title-block-header { display: none !important; }
+    </style>
+listing:
+  - id: posts
+    contents: project/posts
+    type: grid
+    fields: [image, date, title, description]
+    sort: "date desc"
+    max-items: 6
+    categories: true
+    feed: true
 ---
 
-This is a Quarto website.
+# Alexandre DO
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+::: {.subtitle}
+Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.
+:::
+
+## Latest Posts
+
+::: {#posts}
+:::

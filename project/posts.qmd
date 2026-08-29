@@ -1,7 +1,22 @@
 ---
-title: "posts"
+title: "All Posts"
+description: "Posts on machine learning, data science, and AI engineering by Alexandre DO."
+include-in-header:
+  text: |
+    <style>
+    #title-block-header { display: none !important; }
+    </style>
+listing:
+  - id: all-posts
+    contents: ./posts
+    type: grid
+    fields: [image, date, title, description]
+    sort: "date desc"
 ---
 
-## Quarto
+# Blog Posts
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+Explore all my posts on machine learning, data science, and AI engineering.
+
+::: {#all-posts}
+:::
