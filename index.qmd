@@ -24,6 +24,17 @@ listing:
 Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.
 :::
 
+## Certifications
+
+```{=html}
+<div class="certifications-badges" style="display: flex; flex-wrap: wrap; gap: 1.5em; align-items: flex-start;">
+<a href="https://www.credly.com/badges/6fa7ec5d-2489-4b94-b7c8-484b21043911/public_url" target="_blank" rel="noopener noreferrer">
+<img src="images/certification_1.png" alt="Certification" style="height: 189px;">
+</a>
+<img src="images/certification_2.png" alt="Certification" style="height: 189px;">
+</div>
+```
+
 ## Latest Posts
 
 ::: {#posts}

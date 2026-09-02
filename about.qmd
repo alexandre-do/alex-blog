@@ -20,17 +20,27 @@ about:
 
 ## About Me
 
-<!-- TODO: Replace with 3-4 sentences introducing yourself: your current role/focus, the kind of problems you like solving, and what got you into data science / ML. -->
-[TODO: I'm a Machine Learning Engineer / Data Scientist focused on ... I care about ... and I'm currently working on ...]
+I'm a **Data Science and Machine Learning Engineer** with 8+ years of experience building and deploying AI and machine learning systems. My work focuses on developing practical, scalable AI solutions that turn complex data into actionable insights.
+
+I hold two Master's degrees in **Applied Mathematics** and **Data Science**, and I'm a graduate of **École polytechnique** and **ENSAE ParisTech** in France.
+
+I'm also **AWS certified**, with certifications in **Data Engineering** and **Generative AI Development – Professional**.
 
 ## What I Do
 
-<!-- TODO: 3-5 bullets on your focus areas / specialties -->
-- [TODO: e.g. "Building and deploying production ML models"]
-- [TODO: e.g. "Natural language processing and LLM applications"]
-- [TODO: e.g. "Data pipelines and MLOps"]
+**2021–2025 · La Javaness — Paris, France · Senior AI Consultant**
 
-## Background
+- Specialized in enterprise AI solutions, including **Generative AI, NLP, and unstructured data** such as images and speech.
+- Worked closely with IT, business, and design teams to deliver end-to-end AI projects.
+- Delivered AI and data science solutions for clients across **public institutions, banking and financial services, transportation, and energy**, generating measurable impact through predictive analytics, automation, and data-driven insights.
 
-<!-- TODO: A short paragraph on education and experience — degree(s), notable roles, and what you've shipped. -->
-[TODO: I studied ... at ... , and have worked on ... at ... . See my [project write-ups](project/posts.qmd) for specific work.]
+**2017–2021 · Société Générale — Paris, France · Senior Data Scientist**
+
+- Specialized in **risk modeling and data science** for financial applications.
+- Developed advanced anomaly detection techniques for financial data.
+- Applied machine learning and statistical modeling to complex financial datasets.
+
+**2016 · Crédit Agricole — Paris, France · Data Scientist**
+
+- Developed advanced **machine learning models for credit scoring**.
+- Applied statistical and machine learning techniques to financial risk assessment.
