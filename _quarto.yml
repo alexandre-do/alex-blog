@@ -1,0 +1,23 @@
+project:
+  type: website
+
+website:
+  title: "Alexandre DO"
+  site-url: https://alexdo.xyz/
+  description: "Alexandre DO's personal blog and portfolio — machine learning, data science, and building production ML systems."
+  favicon: images/favicon.png
+  navbar:
+    right:
+      - text: "Home"
+        href: index.qmd
+      - text: "Posts"
+        href: project/posts.qmd 
+      - text: "About"
+        href: about.qmd       
+      - text: "Art"
+        href: project/art.qmd
+format:
+  html:
+    theme: dark
+    highlight-style: dracula
+    css: styles.css

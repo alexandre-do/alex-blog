@@ -1,6 +1,6 @@
-.DS_Store
 .quarto/
 _site/
+**/*.quarto_ipynb
+.DS_Store
 .python-version
 uv.lock
-*.qmd

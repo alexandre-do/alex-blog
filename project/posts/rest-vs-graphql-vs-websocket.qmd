@@ -1,0 +1,74 @@
+---
+title: "REST vs GraphQL vs WebSocket in Python"
+date: "2025-09-10"
+description: "A practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each."
+image: "images/rest-graphql-websocket.png"
+categories:
+    - Python
+    - API
+    - FastAPI
+---
+
+# REST vs GraphQL vs WebSocket in Python
+
+Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.
+
+## REST
+
+The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/users/{user_id}")
+def get_user(user_id: int):
+    return {"id": user_id, "name": "Alexandre"}
+```
+
+## GraphQL
+
+A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with [Strawberry](https://strawberry.rocks/):
+
+```python
+import strawberry
+from strawberry.fastapi import GraphQLRouter
+
+@strawberry.type
+class User:
+    id: int
+    name: str
+
+@strawberry.type
+class Query:
+    @strawberry.field
+    def user(self, user_id: int) -> User:
+        return User(id=user_id, name="Alexandre")
+
+schema = strawberry.Schema(query=Query)
+app.include_router(GraphQLRouter(schema), prefix="/graphql")
+```
+
+## WebSocket
+
+A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.
+
+```python
+from fastapi import WebSocket
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f"Echo: {data}")
+```
+
+## When to Use Which
+
+- **REST** — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.
+- **GraphQL** — nested or variable data shapes, multiple client types (web/mobile) with different needs.
+- **WebSocket** — real-time features like chat, live dashboards, or notifications.
+
+They're not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it's common to mix them depending on the feature.

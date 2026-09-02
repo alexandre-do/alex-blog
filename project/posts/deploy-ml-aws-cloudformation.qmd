@@ -1,0 +1,81 @@
+---
+title: "Deploying a Machine Learning Project with AWS CloudFormation"
+date: "2026-05-14"
+description: "Turning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack."
+image: "images/deploy-ml-aws-cloudformation.png"
+categories:
+    - AWS
+    - CloudFormation
+    - MLOps
+---
+
+# Deploying a Machine Learning Project with AWS CloudFormation
+
+Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.
+
+## Core Building Blocks
+
+A typical ML inference stack needs:
+
+- An **S3 bucket** to store model artifacts
+- An **IAM role** with least-privilege access for the compute layer
+- A **compute target** — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference
+
+## A Minimal Stack
+
+```yaml
+Resources:
+  ModelArtifactsBucket:
+    Type: AWS::S3::Bucket
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+
+  Model:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      PrimaryContainer:
+        Image: <ecr-image-uri>
+        ModelDataUrl: !Sub "s3://${ModelArtifactsBucket}/model.tar.gz"
+
+  EndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      ProductionVariants:
+        - ModelName: !GetAtt Model.ModelName
+          VariantName: AllTraffic
+          InitialInstanceCount: 1
+          InstanceType: ml.m5.large
+
+  Endpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName
+```
+
+## Deploying the Stack
+
+```bash
+aws cloudformation deploy \
+  --template-file stack.yaml \
+  --stack-name ml-inference-stack \
+  --capabilities CAPABILITY_IAM
+```
+
+## Tips
+
+- Parameterize the instance type and image URI so the same template works across environments.
+- Use one stack per environment (dev/staging/prod) rather than branching logic inside a single template.
+- Tear down with `aws cloudformation delete-stack` when you're done — an idle SageMaker endpoint bills by the hour.
+
+CloudFormation won't replace judgment about architecture, but it turns "how did we deploy this?" from a Slack archaeology exercise into a file you can read.
