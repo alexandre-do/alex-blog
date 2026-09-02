@@ -1,0 +1,49 @@
+---
+title: "Fine-Tuning LLMs"
+date: "2026-01-20"
+description: "A short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning."
+image: "images/fine-tuning-llms.png"
+categories:
+    - LLM
+    - Fine-Tuning
+    - Hugging Face
+---
+
+# Fine-Tuning LLMs
+
+Pretrained LLMs are general-purpose. Fine-tuning adapts one to a narrower domain or task using far less data and compute than pretraining from scratch.
+
+## Full Fine-Tuning vs PEFT
+
+Full fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like **LoRA** freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig, get_peft_model
+
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3-8b")
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3-8b")
+
+lora_config = LoraConfig(
+    r=16,
+    lora_alpha=32,
+    target_modules=["q_proj", "v_proj"],
+    lora_dropout=0.05,
+    task_type="CAUSAL_LM",
+)
+
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+```
+
+## Data Preparation
+
+- Keep examples in a consistent instruction/response format.
+- Favor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.
+- Deduplicate aggressively; repeated examples skew the model more than expected.
+
+## Evaluation
+
+Track validation loss, but don't stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn't always mean the outputs are actually better for your task.
+
+Fine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run.

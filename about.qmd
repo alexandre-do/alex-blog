@@ -1,0 +1,36 @@
+---
+title: "Alexandre DO"
+description: "Machine Learning Engineer focused on AI, data science, and production ML systems."
+image: images/id_photo.png
+about:
+  template: solana
+  image-width: 10em
+  image-shape: round 
+  links:
+    - icon: github
+      text: GitHub
+      href: https://github.com/alexandre-do
+    - icon: linkedin
+      text: LinkedIn
+      href: https://www.linkedin.com/in/alexandre-do-7500/
+    - icon: envelope
+      text: Email
+      href: mailto:alexdo.polytech@gmail.com
+---
+
+## About Me
+
+<!-- TODO: Replace with 3-4 sentences introducing yourself: your current role/focus, the kind of problems you like solving, and what got you into data science / ML. -->
+[TODO: I'm a Machine Learning Engineer / Data Scientist focused on ... I care about ... and I'm currently working on ...]
+
+## What I Do
+
+<!-- TODO: 3-5 bullets on your focus areas / specialties -->
+- [TODO: e.g. "Building and deploying production ML models"]
+- [TODO: e.g. "Natural language processing and LLM applications"]
+- [TODO: e.g. "Data pipelines and MLOps"]
+
+## Background
+
+<!-- TODO: A short paragraph on education and experience — degree(s), notable roles, and what you've shipped. -->
+[TODO: I studied ... at ... , and have worked on ... at ... . See my [project write-ups](project/posts.qmd) for specific work.]
