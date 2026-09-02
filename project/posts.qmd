@@ -1,0 +1,22 @@
+---
+title: "All Posts"
+description: "Posts on machine learning, data science, and AI engineering by Alexandre DO."
+include-in-header:
+  text: |
+    <style>
+    #title-block-header { display: none !important; }
+    </style>
+listing:
+  - id: all-posts
+    contents: ./posts
+    type: grid
+    fields: [image, date, title, description]
+    sort: "date desc"
+---
+
+# Blog Posts
+
+Explore all my posts on machine learning, data science, and AI engineering.
+
+::: {#all-posts}
+:::
