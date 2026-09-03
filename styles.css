@@ -144,6 +144,26 @@ a:hover, a:focus {
   margin-top: -0.3rem;
 }
 
+.subtitle .typewriter-text {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  white-space: pre-wrap;
+  border-right: 2px solid var(--accent-light);
+  padding-right: 2px;
+  animation: typewriter-blink 0.85s step-end infinite;
+}
+
+@keyframes typewriter-blink {
+  from, to { border-color: transparent; }
+  50% { border-color: var(--accent-light); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subtitle .typewriter-text {
+    animation: none;
+    border-right-color: var(--accent-light);
+  }
+}
+
 /* ---------------- Listings / Cards ---------------- */
 .quarto-grid-item {
   background-color: var(--surface);

@@ -20,9 +20,29 @@ listing:
 
 # Alexandre DO
 
-::: {.subtitle}
-Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.
-:::
+```{=html}
+<div class="subtitle">
+<span id="intro-typewriter" class="typewriter-text"></span>
+</div>
+<script>
+(function () {
+  var el = document.getElementById('intro-typewriter');
+  if (!el) return;
+  var text = "Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.";
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = text;
+    return;
+  }
+  var i = 0;
+  (function type() {
+    el.textContent = text.slice(0, i);
+    if (i++ < text.length) {
+      setTimeout(type, 28);
+    }
+  })();
+})();
+</script>
+```
 
 ## Certifications
 

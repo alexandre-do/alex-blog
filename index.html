@@ -217,8 +217,26 @@ window.Quarto = {
 <section id="alexandre-do" class="level1">
 <h1>Alexandre DO</h1>
 <div class="subtitle">
-<p>Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.</p>
+<span id="intro-typewriter" class="typewriter-text"></span>
 </div>
+<script>
+(function () {
+  var el = document.getElementById('intro-typewriter');
+  if (!el) return;
+  var text = "Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.";
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = text;
+    return;
+  }
+  var i = 0;
+  (function type() {
+    el.textContent = text.slice(0, i);
+    if (i++ < text.length) {
+      setTimeout(type, 28);
+    }
+  })();
+})();
+</script>
 <section id="certifications" class="level2">
 <h2 class="anchored" data-anchor-id="certifications">Certifications</h2>
 <div class="certifications-badges" style="display: flex; flex-wrap: wrap; gap: 1.5em; align-items: flex-start;">
