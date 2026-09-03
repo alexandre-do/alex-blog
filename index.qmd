@@ -18,7 +18,7 @@ listing:
     feed: true
 ---
 
-# Alexandre DO
+# Welcome to my blog!
 
 ```{=html}
 <div class="subtitle">
@@ -28,7 +28,7 @@ listing:
 (function () {
   var el = document.getElementById('intro-typewriter');
   if (!el) return;
-  var text = "Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.";
+  var text = "I’m a Machine Learning Engineer passionate about AI, data science, and building production-ready machine learning systems.";
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     el.textContent = text;
     return;
