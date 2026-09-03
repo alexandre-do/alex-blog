@@ -27,6 +27,7 @@ Outside of machine learning and data, I paint and draw as a way to unplug and re
 <figure><a href="art/paintings/paint_4-large.jpg" class="lightbox" data-gallery="paintings" title="Oil painting"><img src="art/paintings/paint_4-thumb.jpg" srcset="art/paintings/paint_4-thumb.jpg 640w, art/paintings/paint_4-large.jpg 1800w" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 33vw" alt="Oil painting 4" loading="lazy"></a></figure>
 <figure><a href="art/paintings/paint_5-large.jpg" class="lightbox" data-gallery="paintings" title="Oil painting"><img src="art/paintings/paint_5-thumb.jpg" srcset="art/paintings/paint_5-thumb.jpg 640w, art/paintings/paint_5-large.jpg 1800w" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 33vw" alt="Oil painting 5" loading="lazy"></a></figure>
 <figure><a href="art/paintings/paint_6-large.jpg" class="lightbox" data-gallery="paintings" title="Oil painting"><img src="art/paintings/paint_6-thumb.jpg" srcset="art/paintings/paint_6-thumb.jpg 640w, art/paintings/paint_6-large.jpg 1800w" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 33vw" alt="Oil painting 6" loading="lazy"></a></figure>
+<figure><a href="art/paintings/paint_7-large.jpg" class="lightbox" data-gallery="paintings" title="Oil painting"><img src="art/paintings/paint_7-thumb.jpg" srcset="art/paintings/paint_7-thumb.jpg 640w, art/paintings/paint_7-large.jpg 1800w" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 33vw" alt="Oil painting 7" loading="lazy"></a></figure>
 </div>
 ```
 
