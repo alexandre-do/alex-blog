@@ -14,7 +14,7 @@ website:
         href: project/posts.qmd 
       - text: "About"
         href: about.qmd       
-      - text: "Art"
+      - text: "Artwork"
         href: project/art.qmd
 format:
   html:

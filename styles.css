@@ -300,6 +300,63 @@ li.category.active {
   transform: translateY(-2px);
 }
 
+/* ---------------- Art gallery ---------------- */
+.art-gallery {
+  column-count: 3;
+  column-gap: 1.25rem;
+}
+
+@media (max-width: 1000px) {
+  .art-gallery {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .art-gallery {
+    column-count: 1;
+  }
+}
+
+.art-gallery figure {
+  margin: 0 0 1.25rem;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+
+.art-gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.art-gallery img:hover {
+  border-color: rgba(201, 130, 46, 0.45);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Lightbox modal (glightbox), scoped via the art-lightbox css-class */
+.art-lightbox.glightbox-clean .gslide-description,
+.art-lightbox .gdesc-inner {
+  background-color: var(--surface) !important;
+}
+
+.art-lightbox .gdesc-inner .gslide-desc,
+.art-lightbox .gdesc-inner .gslide-title {
+  color: var(--text) !important;
+}
+
+.art-lightbox .gclose svg,
+.art-lightbox .gnext svg,
+.art-lightbox .gprev svg {
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+}
+
 /* ---------------- Code Blocks ---------------- */
 pre, code {
   background-color: var(--surface-alt);
