@@ -18,7 +18,7 @@ listing:
     feed: true
 ---
 
-# Welcome to my blog!
+# Ideas, Experiments & Projects in AI
 
 ```{=html}
 <div class="subtitle">
