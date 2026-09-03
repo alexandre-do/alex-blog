@@ -5,7 +5,7 @@ website:
   title: "Alexandre DO"
   site-url: https://alexdo.xyz/
   description: "Alexandre DO's personal blog and portfolio — machine learning, data science, and building production ML systems."
-  favicon: images/favicon.png
+  favicon: images/favicon_id.png
   navbar:
     right:
       - text: "Home"
