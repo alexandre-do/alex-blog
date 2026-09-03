@@ -7,6 +7,13 @@
     "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
   },
   {
+    "objectID": "project/art.html",
+    "href": "project/art.html",
+    "title": "Artwork",
+    "section": "",
+    "text": "Outside of machine learning and data, I paint and draw as a way to unplug and recharge. This page is a growing gallery of my work — click on any piece to view it in full size."
+  },
+  {
     "objectID": "project/posts/fine-tuning-llms.html",
     "href": "project/posts/fine-tuning-llms.html",
     "title": "Fine-Tuning LLMs",
@@ -39,35 +46,28 @@
     "href": "about.html",
     "title": "Alexandre DO",
     "section": "",
-    "text": "[TODO: I’m a Machine Learning Engineer / Data Scientist focused on … I care about … and I’m currently working on …]"
+    "text": "I’m a Data Science and Machine Learning Engineer with 8+ years of experience building and deploying AI and machine learning systems. My work focuses on developing practical, scalable AI solutions that turn complex data into actionable insights.\nI hold two Master’s degrees in Applied Mathematics and Data Science, and I’m a graduate of École polytechnique and ENSAE ParisTech in France.\nI’m also AWS certified, with certifications in Data Engineering and Generative AI Development – Professional."
   },
   {
     "objectID": "about.html#about-me",
     "href": "about.html#about-me",
     "title": "Alexandre DO",
     "section": "",
-    "text": "[TODO: I’m a Machine Learning Engineer / Data Scientist focused on … I care about … and I’m currently working on …]"
+    "text": "I’m a Data Science and Machine Learning Engineer with 8+ years of experience building and deploying AI and machine learning systems. My work focuses on developing practical, scalable AI solutions that turn complex data into actionable insights.\nI hold two Master’s degrees in Applied Mathematics and Data Science, and I’m a graduate of École polytechnique and ENSAE ParisTech in France.\nI’m also AWS certified, with certifications in Data Engineering and Generative AI Development – Professional."
   },
   {
     "objectID": "about.html#what-i-do",
     "href": "about.html#what-i-do",
     "title": "Alexandre DO",
     "section": "What I Do",
-    "text": "What I Do\n\n\n[TODO: e.g. “Building and deploying production ML models”]\n[TODO: e.g. “Natural language processing and LLM applications”]\n[TODO: e.g. “Data pipelines and MLOps”]"
-  },
-  {
-    "objectID": "about.html#background",
-    "href": "about.html#background",
-    "title": "Alexandre DO",
-    "section": "Background",
-    "text": "Background\n\n[TODO: I studied … at … , and have worked on … at … . See my project write-ups for specific work.]"
+    "text": "What I Do\n2021–2025 · La Javaness — Paris, France · Senior AI Consultant\n\nSpecialized in enterprise AI solutions, including Generative AI, NLP, and unstructured data such as images and speech.\nWorked closely with IT, business, and design teams to deliver end-to-end AI projects.\nDelivered AI and data science solutions for clients across public institutions, banking and financial services, transportation, and energy, generating measurable impact through predictive analytics, automation, and data-driven insights.\n\n2017–2021 · Société Générale — Paris, France · Senior Data Scientist\n\nSpecialized in risk modeling and data science for financial applications.\nDeveloped advanced anomaly detection techniques for financial data.\nApplied machine learning and statistical modeling to complex financial datasets.\n\n2016 · Crédit Agricole — Paris, France · Data Scientist\n\nDeveloped advanced machine learning models for credit scoring.\nApplied statistical and machine learning techniques to financial risk assessment."
   },
   {
     "objectID": "index.html",
     "href": "index.html",
     "title": "Home",
     "section": "",
-    "text": "Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+    "text": "Machine Learning Engineer passionate about AI, data science, and building production-ready ML systems.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "index.html#latest-posts",
