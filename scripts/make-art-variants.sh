@@ -44,11 +44,10 @@ process_dir() {
     thumb_target=$(( long_edge < THUMB_MAX ? long_edge : THUMB_MAX ))
     large_target=$(( long_edge < LARGE_MAX ? long_edge : LARGE_MAX ))
 
-    cp "$f" "$thumb_out"
-    sips -Z "$thumb_target" --setProperty formatOptions "$THUMB_QUALITY" "$thumb_out" >/dev/null
-
-    cp "$f" "$large_out"
-    sips -Z "$large_target" --setProperty formatOptions "$LARGE_QUALITY" "$large_out" >/dev/null
+    # -s format jpeg forces real JPEG output even when a photo is HEIC
+    # data saved under a .jpg/.JPG extension (common with iPhone exports).
+    sips -s format jpeg -Z "$thumb_target" --setProperty formatOptions "$THUMB_QUALITY" "$f" --out "$thumb_out" >/dev/null
+    sips -s format jpeg -Z "$large_target" --setProperty formatOptions "$LARGE_QUALITY" "$f" --out "$large_out" >/dev/null
 
     printf "%s -> thumb(%s) large(%s)\n" "$base" "$(du -h "$thumb_out" | cut -f1)" "$(du -h "$large_out" | cut -f1)"
   done
