@@ -7,11 +7,39 @@
     "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
   },
   {
-    "objectID": "project/art.html",
-    "href": "project/art.html",
-    "title": "Artwork",
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html",
+    "title": "REST vs GraphQL vs WebSocket in Python",
     "section": "",
-    "text": "Outside of machine learning and data, I paint and draw as a way to unplug and recharge. This page is a growing gallery of my work — click on any piece to view it in full size."
+    "text": "Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.\n\n\nThe default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}\n\n\n\nA single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")\n\n\n\nA persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")\n\n\n\n\nREST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "REST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
   },
   {
     "objectID": "project/posts/fine-tuning-llms.html",
@@ -112,38 +140,10 @@
     "text": "Parameterize the instance type and image URI so the same template works across environments.\nUse one stack per environment (dev/staging/prod) rather than branching logic inside a single template.\nTear down with aws cloudformation delete-stack when you’re done — an idle SageMaker endpoint bills by the hour.\n\nCloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read."
   },
   {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html",
-    "title": "REST vs GraphQL vs WebSocket in Python",
+    "objectID": "project/art.html",
+    "href": "project/art.html",
+    "title": "Artwork",
     "section": "",
-    "text": "Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.\n\n\nThe default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}\n\n\n\nA single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")\n\n\n\nA persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")\n\n\n\n\nREST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
-  },
-  {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
-    "title": "REST vs GraphQL vs WebSocket in Python",
-    "section": "",
-    "text": "The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}"
-  },
-  {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
-    "title": "REST vs GraphQL vs WebSocket in Python",
-    "section": "",
-    "text": "A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")"
-  },
-  {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
-    "title": "REST vs GraphQL vs WebSocket in Python",
-    "section": "",
-    "text": "A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")"
-  },
-  {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
-    "title": "REST vs GraphQL vs WebSocket in Python",
-    "section": "",
-    "text": "REST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
+    "text": "Outside of machine learning and data, I paint and draw as a way to unplug and recharge. This page is a growing gallery of my work — click on any piece to view it in full size."
   }
 ]

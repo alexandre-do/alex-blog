@@ -10,7 +10,7 @@
 <atom:link href="https://alexdo.xyz/index.xml" rel="self" type="application/rss+xml"/>
 <description>Alexandre DO&#39;s personal blog and portfolio — machine learning, data science, and production ML systems.</description>
 <generator>quarto-1.9.28</generator>
-<lastBuildDate>Thu, 14 May 2026 06:00:00 GMT</lastBuildDate>
+<lastBuildDate>Thu, 14 May 2026 07:00:00 GMT</lastBuildDate>
 <item>
   <title>Deploying a Machine Learning Project with AWS CloudFormation</title>
   <link>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</link>
@@ -383,7 +383,7 @@ font-style: inherit;">--capabilities</span> CAPABILITY_IAM</span></code></pre></
   <category>CloudFormation</category>
   <category>MLOps</category>
   <guid>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</guid>
-  <pubDate>Thu, 14 May 2026 06:00:00 GMT</pubDate>
+  <pubDate>Thu, 14 May 2026 07:00:00 GMT</pubDate>
   <media:content url="https://alexdo.xyz/project/posts/images/deploy-ml-aws-cloudformation.png" medium="image" type="image/png" height="96" width="144"/>
 </item>
 <item>
@@ -481,7 +481,7 @@ font-style: inherit;">=</span> get_peft_model(model, lora_config)</span>
   <category>Fine-Tuning</category>
   <category>Hugging Face</category>
   <guid>https://alexdo.xyz/project/posts/fine-tuning-llms.html</guid>
-  <pubDate>Tue, 20 Jan 2026 07:00:00 GMT</pubDate>
+  <pubDate>Tue, 20 Jan 2026 08:00:00 GMT</pubDate>
   <media:content url="https://alexdo.xyz/project/posts/images/fine-tuning-llms.png" medium="image" type="image/png" height="96" width="144"/>
 </item>
 <item>
@@ -674,7 +674,7 @@ font-style: inherit;">"</span>)</span></code></pre></div></div>
   <category>API</category>
   <category>FastAPI</category>
   <guid>https://alexdo.xyz/project/posts/rest-vs-graphql-vs-websocket.html</guid>
-  <pubDate>Wed, 10 Sep 2025 06:00:00 GMT</pubDate>
+  <pubDate>Wed, 10 Sep 2025 07:00:00 GMT</pubDate>
   <media:content url="https://alexdo.xyz/project/posts/images/rest-graphql-websocket.png" medium="image" type="image/png" height="96" width="144"/>
 </item>
 </channel>
