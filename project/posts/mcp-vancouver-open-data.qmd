@@ -1,0 +1,23 @@
+---
+title: "Building an MCP Server for Vancouver's Open Data"
+date: "2026-09-08"
+description: "Coming soon: exposing the City of Vancouver's Open Data portal to LLMs through a Model Context Protocol server."
+categories:
+    - MCP
+    - Open Data
+    - LLM
+draft: true
+---
+
+# Building an MCP Server for Vancouver's Open Data
+
+*This post is a work in progress.*
+
+## Planned Outline
+
+- What the Model Context Protocol (MCP) is and why it's a good fit for open data
+- Overview of the City of Vancouver's Open Data API
+- Designing MCP tools/resources around key datasets (e.g. property values, permits, transit)
+- Implementation walkthrough
+- Example queries and results
+- Lessons learned and next steps
