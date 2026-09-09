@@ -6,10 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-08">
-<meta name="description" content="Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.">
+<meta name="dcterms.date" content="2025-09-10">
+<meta name="description" content="A practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.">
 
-<title>Building an MCP Server for Vancouver’s Open Data – Alexandre DO</title>
+<title>REST vs GraphQL vs WebSocket in Python – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -163,17 +163,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Building an MCP Server for Vancouver’s Open Data</h1>
+<h1 class="title">REST vs GraphQL vs WebSocket in Python</h1>
   <div class="quarto-categories">
-    <div class="quarto-category">MCP</div>
-    <div class="quarto-category">Open Data</div>
-    <div class="quarto-category">LLM</div>
+    <div class="quarto-category">Python</div>
+    <div class="quarto-category">API</div>
+    <div class="quarto-category">FastAPI</div>
   </div>
   </div>
 
 <div>
   <div class="description">
-    Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.
+    A practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.
   </div>
 </div>
 
@@ -184,7 +184,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 8, 2026</p>
+      <p class="date">September 10, 2025</p>
     </div>
   </div>
   
@@ -196,120 +196,60 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="building-an-mcp-server-for-vancouvers-open-data" class="level1">
-<h1>Building an MCP Server for Vancouver’s Open Data</h1>
-<p>The City of Vancouver publishes hundreds of public datasets — property assessments, building permits, public art, parking meters — through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.</p>
-<section id="why-mcp-fits-open-data" class="level2">
-<h2 class="anchored" data-anchor-id="why-mcp-fits-open-data">Why MCP Fits Open Data</h2>
-<p>The Model Context Protocol standardizes how an LLM discovers and calls external tools. Open data portals are a good match for a few reasons:</p>
-<ul>
-<li><strong>The data is already structured</strong> — each dataset has a stable schema, so tool inputs/outputs map cleanly to typed function signatures.</li>
-<li><strong>Discovery is the hard part.</strong> Most people don’t know a dataset called <code>issued-building-permits</code> exists, let alone its field names. An MCP server can expose search as a tool, so the model finds the right dataset instead of the user having to.</li>
-<li><strong>No auth complexity.</strong> Vancouver’s portal is fully public and read-only, so the server doesn’t need to manage credentials or write access — it’s a thin, safe translation layer.</li>
-</ul>
+<section id="rest-vs-graphql-vs-websocket-in-python" class="level1">
+<h1>REST vs GraphQL vs WebSocket in Python</h1>
+<p>Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.</p>
+<section id="rest" class="level2">
+<h2 class="anchored" data-anchor-id="rest">REST</h2>
+<p>The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastapi <span class="im">import</span> FastAPI</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>app <span class="op">=</span> FastAPI()</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="at">@app.get</span>(<span class="st">"/users/</span><span class="sc">{user_id}</span><span class="st">"</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_user(user_id: <span class="bu">int</span>):</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"id"</span>: user_id, <span class="st">"name"</span>: <span class="st">"Alexandre"</span>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="vancouvers-open-data-api" class="level2">
-<h2 class="anchored" data-anchor-id="vancouvers-open-data-api">Vancouver’s Open Data API</h2>
-<p>Vancouver’s portal (<code>opendata.vancouver.ca</code>) runs on Opendatasoft, exposed through a REST API at:</p>
-<pre><code>https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/{dataset_id}/records</code></pre>
-<p>Each dataset accepts <code>where</code> (an SQL-like filter expression), <code>limit</code>, <code>offset</code>, and <code>order_by</code> query params, and returns JSON records with a consistent <code>results</code> envelope. A handful of datasets cover most useful queries:</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 50%">
-<col style="width: 50%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Dataset ID</th>
-<th>Contents</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>property-tax-report</code></td>
-<td>Assessed values by address, year, tax levies</td>
-</tr>
-<tr class="even">
-<td><code>issued-building-permits</code></td>
-<td>Permit type, address, project value, issue date</td>
-</tr>
-<tr class="odd">
-<td><code>public-art</code></td>
-<td>Artwork title, artist, location, install year</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="designing-the-mcp-tools" class="level2">
-<h2 class="anchored" data-anchor-id="designing-the-mcp-tools">Designing the MCP Tools</h2>
-<p>Rather than exposing the raw API 1:1, I mapped it to a small set of task-shaped tools plus a discovery tool:</p>
-<ul>
-<li><code>search_datasets(query)</code> — keyword search over the catalog, returns dataset IDs and descriptions.</li>
-<li><code>get_property_values(address, year)</code> — assessed value lookup for a street address.</li>
-<li><code>get_permits(address, permit_type, since)</code> — building permits filtered by location, type, date.</li>
-<li><code>describe_dataset(dataset_id)</code> — returns field names and types, so the model can build valid <code>where</code> filters for datasets it hasn’t seen before.</li>
-</ul>
-<p>Keeping tools narrow (rather than one generic <code>query(dataset, filter)</code> tool) makes the model’s job easier — it doesn’t need to guess field names, and each tool can validate and sanitize its own inputs.</p>
-</section>
-<section id="implementation" class="level2">
-<h2 class="anchored" data-anchor-id="implementation">Implementation</h2>
-<p>The server is built with the Python MCP SDK’s <code>FastMCP</code>, talking to the Opendatasoft API over <code>httpx</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> mcp.server.fastmcp <span class="im">import</span> FastMCP</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> httpx</span>
+<section id="graphql" class="level2">
+<h2 class="anchored" data-anchor-id="graphql">GraphQL</h2>
+<p>A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with <a href="https://strawberry.rocks/">Strawberry</a>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> strawberry</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strawberry.fastapi <span class="im">import</span> GraphQLRouter</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>mcp <span class="op">=</span> FastMCP(<span class="st">"vancouver-open-data"</span>)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>BASE_URL <span class="op">=</span> <span class="st">"https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets"</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="at">@mcp.tool</span>()</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> search_datasets(query: <span class="bu">str</span>, limit: <span class="bu">int</span> <span class="op">=</span> <span class="dv">10</span>) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]:</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Search the City of Vancouver's open data catalog by keyword."""</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> httpx.AsyncClient() <span class="im">as</span> client:</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        resp <span class="op">=</span> <span class="cf">await</span> client.get(</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>            BASE_URL, params<span class="op">=</span>{<span class="st">"where"</span>: <span class="ss">f'search("</span><span class="sc">{</span>query<span class="sc">}</span><span class="ss">")'</span>, <span class="st">"limit"</span>: limit}</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        resp.raise_for_status()</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> [</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>            {<span class="st">"id"</span>: d[<span class="st">"dataset_id"</span>], <span class="st">"title"</span>: d[<span class="st">"metas"</span>][<span class="st">"default"</span>][<span class="st">"title"</span>]}</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> d <span class="kw">in</span> resp.json()[<span class="st">"results"</span>]</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>        ]</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="at">@mcp.tool</span>()</span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> get_property_values(address: <span class="bu">str</span>, year: <span class="bu">int</span> <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>, limit: <span class="bu">int</span> <span class="op">=</span> <span class="dv">5</span>) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]:</span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Look up assessed property values for a given street address."""</span></span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    where <span class="op">=</span> <span class="ss">f'street_name like "</span><span class="sc">{</span>address<span class="sc">}</span><span class="ss">"'</span></span>
-<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> year:</span>
-<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>        where <span class="op">+=</span> <span class="ss">f" and tax_assessment_year = </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> httpx.AsyncClient() <span class="im">as</span> client:</span>
-<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>        resp <span class="op">=</span> <span class="cf">await</span> client.get(</span>
-<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>BASE_URL<span class="sc">}</span><span class="ss">/property-tax-report/records"</span>,</span>
-<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>            params<span class="op">=</span>{<span class="st">"where"</span>: where, <span class="st">"limit"</span>: limit},</span>
-<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>        resp.raise_for_status()</span>
-<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> resp.json()[<span class="st">"results"</span>]</span>
-<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
-<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>    mcp.run(transport<span class="op">=</span><span class="st">"stdio"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Registering it with Claude Desktop (or any MCP client) is a one-line config entry pointing at the server’s entrypoint over stdio — no separate hosting needed for local use.</p>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="at">@strawberry.type</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> User:</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">id</span>: <span class="bu">int</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    name: <span class="bu">str</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="at">@strawberry.type</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Query:</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">@strawberry.field</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> user(<span class="va">self</span>, user_id: <span class="bu">int</span>) <span class="op">-&gt;</span> User:</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> User(<span class="bu">id</span><span class="op">=</span>user_id, name<span class="op">=</span><span class="st">"Alexandre"</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>schema <span class="op">=</span> strawberry.Schema(query<span class="op">=</span>Query)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>app.include_router(GraphQLRouter(schema), prefix<span class="op">=</span><span class="st">"/graphql"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="example-queries-and-results" class="level2">
-<h2 class="anchored" data-anchor-id="example-queries-and-results">Example Queries and Results</h2>
-<p>Once connected, a prompt like:</p>
-<blockquote class="blockquote">
-<p>“What’s the assessed value trend for 123 Main St over the last few years, and were any permits pulled recently?”</p>
-</blockquote>
-<p>resolves into two tool calls — <code>get_property_values(address="123 Main St")</code> and <code>get_permits(address="123 Main St", since="2023-01-01")</code> — and the model composes the JSON results into a plain-language answer, without the user ever touching the Opendatasoft query syntax.</p>
+<section id="websocket" class="level2">
+<h2 class="anchored" data-anchor-id="websocket">WebSocket</h2>
+<p>A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastapi <span class="im">import</span> WebSocket</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">@app.websocket</span>(<span class="st">"/ws"</span>)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> websocket_endpoint(websocket: WebSocket):</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> websocket.accept()</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">while</span> <span class="va">True</span>:</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>        data <span class="op">=</span> <span class="cf">await</span> websocket.receive_text()</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> websocket.send_text(<span class="ss">f"Echo: </span><span class="sc">{</span>data<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="lessons-learned-and-next-steps" class="level2">
-<h2 class="anchored" data-anchor-id="lessons-learned-and-next-steps">Lessons Learned and Next Steps</h2>
+<section id="when-to-use-which" class="level2">
+<h2 class="anchored" data-anchor-id="when-to-use-which">When to Use Which</h2>
 <ul>
-<li><strong>Schema drift is real.</strong> Field names differ across datasets (<code>street_name</code> vs <code>civic_address</code>), which is why <code>describe_dataset</code> ended up necessary rather than optional — the model needs a way to check before it guesses.</li>
-<li><strong>Narrow tools beat clever ones.</strong> An earlier version exposed a single generic <code>query</code> tool; the model produced malformed <code>where</code> clauses often enough that splitting into task-specific tools was a clear win for reliability.</li>
-<li><strong>Rate limits matter at demo time.</strong> The public API is generous but not unlimited — a thin caching layer in front of <code>get_property_values</code> and <code>get_permits</code> avoided repeat calls during iterative testing.</li>
+<li><strong>REST</strong> — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.</li>
+<li><strong>GraphQL</strong> — nested or variable data shapes, multiple client types (web/mobile) with different needs.</li>
+<li><strong>WebSocket</strong> — real-time features like chat, live dashboards, or notifications.</li>
 </ul>
-<p>Next: expose dataset schemas as MCP <em>resources</em> (not just a tool) so clients can inspect them without a round trip, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up.</p>
+<p>They’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature.</p>
 
 
 </section>

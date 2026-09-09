@@ -6,10 +6,9 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-08">
-<meta name="description" content="Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.">
+<meta name="description" content="Alexandre DO’s personal blog and portfolio — machine learning, data science, and production ML systems.">
 
-<title>Building an MCP Server for Vancouver’s Open Data – Alexandre DO</title>
+<title>Home – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -25,62 +24,29 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
-/* CSS for syntax highlighting */
-html { -webkit-text-size-adjust: 100%; }
-pre > code.sourceCode { white-space: pre; position: relative; }
-pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
-pre > code.sourceCode > span:empty { height: 1.2em; }
-.sourceCode { overflow: visible; }
-code.sourceCode > span { color: inherit; text-decoration: inherit; }
-div.sourceCode { margin: 1em 0; }
-pre.sourceCode { margin: 0; }
-@media screen {
-div.sourceCode { overflow: auto; }
-}
-@media print {
-pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
-}
-pre.numberSource code
-  { counter-reset: source-line 0; }
-pre.numberSource code > span
-  { position: relative; left: -4em; counter-increment: source-line; }
-pre.numberSource code > span > a:first-child::before
-  { content: counter(source-line);
-    position: relative; left: -1em; text-align: right; vertical-align: baseline;
-    border: none; display: inline-block;
-    -webkit-touch-callout: none; -webkit-user-select: none;
-    -khtml-user-select: none; -moz-user-select: none;
-    -ms-user-select: none; user-select: none;
-    padding: 0 4px; width: 4em;
-  }
-pre.numberSource { margin-left: 3em;  padding-left: 4px; }
-div.sourceCode
-  {   }
-@media screen {
-pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
-}
 </style>
 
 
-<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
-<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
-<script src="../../site_libs/clipboard/clipboard.min.js"></script>
-<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
-<script src="../../site_libs/quarto-search/fuse.min.js"></script>
-<script src="../../site_libs/quarto-search/quarto-search.js"></script>
-<meta name="quarto:offset" content="../../">
-<link href="../../images/favicon_id.png" rel="icon" type="image/png">
-<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
-<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="../../site_libs/quarto-html/popper.min.js"></script>
-<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
-<script src="../../site_libs/quarto-html/anchor.min.js"></script>
-<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
-<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
-<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./images/favicon_id.png" rel="icon" type="image/png">
+<script src="site_libs/quarto-listing/list.min.js"></script>
+<script src="site_libs/quarto-listing/quarto-listing.js"></script>
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -108,19 +74,80 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "search-label": "Search"
   }
 }</script>
+<script>
 
+  window.document.addEventListener("DOMContentLoaded", function (_event) {
+    const listingTargetEl = window.document.querySelector('#listing-posts .list');
+    if (!listingTargetEl) {
+      // No listing discovered, do not attach.
+      return; 
+    }
 
-<link rel="stylesheet" href="../../styles.css">
-</head>
+    const options = {
+      valueNames: ['listing-image','listing-date','listing-title','listing-description',{ data: ['index'] },{ data: ['categories'] },{ data: ['listing-date-sort'] },{ data: ['listing-file-modified-sort'] }],
+      
+      searchColumns: ["listing-title","listing-author","listing-date","listing-image","listing-description","listing-categories"],
+    };
 
-<body class="nav-fixed fullcontent quarto-light">
+    window['quarto-listings'] = window['quarto-listings'] || {};
+    window['quarto-listings']['listing-posts'] = new List('listing-posts', options);
+
+    if (window['quarto-listing-loaded']) {
+      window['quarto-listing-loaded']();
+    }
+  });
+
+  window.addEventListener('hashchange',() => {
+    if (window['quarto-listing-loaded']) {
+      window['quarto-listing-loaded']();
+    }
+  })
+  </script>
+<style>
+#title-block-header { display: none !important; }
+</style>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="styles.css">
+<link rel="alternate" type="application/rss+xml" title="Alexandre DO" href="index.xml" data-external="1"></head>
+
+<body class="nav-fixed quarto-light">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
     <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
-    <a class="navbar-brand" href="../../index.html">
+    <a class="navbar-brand" href="./index.html">
     <span class="navbar-title">Alexandre DO</span>
     </a>
   </div>
@@ -131,19 +158,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
-    <a class="nav-link" href="../../index.html"> 
+    <a class="nav-link active" href="./index.html" aria-current="page"> 
 <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../../project/posts.html"> 
+    <a class="nav-link" href="./project/posts.html"> 
 <span class="menu-text">Posts</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../../about.html"> 
+    <a class="nav-link" href="./about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../../project/art.html"> 
+    <a class="nav-link" href="./project/art.html"> 
 <span class="menu-text">Artwork</span></a>
   </li>  
 </ul>
@@ -157,23 +184,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        
+    <h5 class="quarto-listing-category-title">Categories</h5><div class="quarto-listing-category category-default"><div class="category" data-category="">All <span class="quarto-category-count">(4)</span></div><div class="category" data-category="QVBJ">API <span class="quarto-category-count">(1)</span></div><div class="category" data-category="QVdT">AWS <span class="quarto-category-count">(1)</span></div><div class="category" data-category="Q2xvdWRGb3JtYXRpb24=">CloudFormation <span class="quarto-category-count">(1)</span></div><div class="category" data-category="RmFzdEFQSQ==">FastAPI <span class="quarto-category-count">(1)</span></div><div class="category" data-category="RmluZS1UdW5pbmc=">Fine-Tuning <span class="quarto-category-count">(1)</span></div><div class="category" data-category="SHVnZ2luZyUyMEZhY2U=">Hugging Face <span class="quarto-category-count">(1)</span></div><div class="category" data-category="TExN">LLM <span class="quarto-category-count">(2)</span></div><div class="category" data-category="TUNQ">MCP <span class="quarto-category-count">(1)</span></div><div class="category" data-category="TUxPcHM=">MLOps <span class="quarto-category-count">(1)</span></div><div class="category" data-category="T3BlbiUyMERhdGE=">Open Data <span class="quarto-category-count">(1)</span></div><div class="category" data-category="UHl0aG9u">Python <span class="quarto-category-count">(1)</span></div></div></div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Building an MCP Server for Vancouver’s Open Data</h1>
-  <div class="quarto-categories">
-    <div class="quarto-category">MCP</div>
-    <div class="quarto-category">Open Data</div>
-    <div class="quarto-category">LLM</div>
-  </div>
-  </div>
+<h1 class="title">Home</h1>
+</div>
 
 <div>
   <div class="description">
-    Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.
+    Alexandre DO’s personal blog and portfolio — machine learning, data science, and production ML systems.
   </div>
 </div>
 
@@ -181,12 +205,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="quarto-title-meta">
 
     
-    <div>
-    <div class="quarto-title-meta-heading">Published</div>
-    <div class="quarto-title-meta-contents">
-      <p class="date">September 8, 2026</p>
-    </div>
-  </div>
   
     
   </div>
@@ -196,120 +214,130 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="building-an-mcp-server-for-vancouvers-open-data" class="level1">
-<h1>Building an MCP Server for Vancouver’s Open Data</h1>
-<p>The City of Vancouver publishes hundreds of public datasets — property assessments, building permits, public art, parking meters — through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.</p>
-<section id="why-mcp-fits-open-data" class="level2">
-<h2 class="anchored" data-anchor-id="why-mcp-fits-open-data">Why MCP Fits Open Data</h2>
-<p>The Model Context Protocol standardizes how an LLM discovers and calls external tools. Open data portals are a good match for a few reasons:</p>
-<ul>
-<li><strong>The data is already structured</strong> — each dataset has a stable schema, so tool inputs/outputs map cleanly to typed function signatures.</li>
-<li><strong>Discovery is the hard part.</strong> Most people don’t know a dataset called <code>issued-building-permits</code> exists, let alone its field names. An MCP server can expose search as a tool, so the model finds the right dataset instead of the user having to.</li>
-<li><strong>No auth complexity.</strong> Vancouver’s portal is fully public and read-only, so the server doesn’t need to manage credentials or write access — it’s a thin, safe translation layer.</li>
-</ul>
+<section id="ideas-experiments-projects-in-ai" class="level1">
+<h1>Ideas, Experiments &amp; Projects in AI</h1>
+<div class="subtitle">
+<span id="intro-typewriter" class="typewriter-text"></span>
+</div>
+<script>
+(function () {
+  var el = document.getElementById('intro-typewriter');
+  if (!el) return;
+  var text = "I’m a Machine Learning Engineer passionate about AI, data science, and building production-ready machine learning systems.";
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = text;
+    return;
+  }
+  var i = 0;
+  (function type() {
+    el.textContent = text.slice(0, i);
+    if (i++ < text.length) {
+      setTimeout(type, 28);
+    }
+  })();
+})();
+</script>
+<section id="certifications" class="level2">
+<h2 class="anchored" data-anchor-id="certifications">Certifications</h2>
+<div class="certifications-badges" style="display: flex; flex-wrap: wrap; gap: 1.5em; align-items: flex-start;">
+<a href="https://www.credly.com/badges/6fa7ec5d-2489-4b94-b7c8-484b21043911/public_url" target="_blank" rel="noopener noreferrer">
+<img src="images/certification_1.png" alt="Certification" style="height: 189px;">
+</a>
+<img src="images/certification_2.png" alt="Certification" style="height: 189px;">
+</div>
 </section>
-<section id="vancouvers-open-data-api" class="level2">
-<h2 class="anchored" data-anchor-id="vancouvers-open-data-api">Vancouver’s Open Data API</h2>
-<p>Vancouver’s portal (<code>opendata.vancouver.ca</code>) runs on Opendatasoft, exposed through a REST API at:</p>
-<pre><code>https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/{dataset_id}/records</code></pre>
-<p>Each dataset accepts <code>where</code> (an SQL-like filter expression), <code>limit</code>, <code>offset</code>, and <code>order_by</code> query params, and returns JSON records with a consistent <code>results</code> envelope. A handful of datasets cover most useful queries:</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 50%">
-<col style="width: 50%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Dataset ID</th>
-<th>Contents</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>property-tax-report</code></td>
-<td>Assessed values by address, year, tax levies</td>
-</tr>
-<tr class="even">
-<td><code>issued-building-permits</code></td>
-<td>Permit type, address, project value, issue date</td>
-</tr>
-<tr class="odd">
-<td><code>public-art</code></td>
-<td>Artwork title, artist, location, install year</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="designing-the-mcp-tools" class="level2">
-<h2 class="anchored" data-anchor-id="designing-the-mcp-tools">Designing the MCP Tools</h2>
-<p>Rather than exposing the raw API 1:1, I mapped it to a small set of task-shaped tools plus a discovery tool:</p>
-<ul>
-<li><code>search_datasets(query)</code> — keyword search over the catalog, returns dataset IDs and descriptions.</li>
-<li><code>get_property_values(address, year)</code> — assessed value lookup for a street address.</li>
-<li><code>get_permits(address, permit_type, since)</code> — building permits filtered by location, type, date.</li>
-<li><code>describe_dataset(dataset_id)</code> — returns field names and types, so the model can build valid <code>where</code> filters for datasets it hasn’t seen before.</li>
-</ul>
-<p>Keeping tools narrow (rather than one generic <code>query(dataset, filter)</code> tool) makes the model’s job easier — it doesn’t need to guess field names, and each tool can validate and sanitize its own inputs.</p>
-</section>
-<section id="implementation" class="level2">
-<h2 class="anchored" data-anchor-id="implementation">Implementation</h2>
-<p>The server is built with the Python MCP SDK’s <code>FastMCP</code>, talking to the Opendatasoft API over <code>httpx</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> mcp.server.fastmcp <span class="im">import</span> FastMCP</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> httpx</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>mcp <span class="op">=</span> FastMCP(<span class="st">"vancouver-open-data"</span>)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>BASE_URL <span class="op">=</span> <span class="st">"https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets"</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="at">@mcp.tool</span>()</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> search_datasets(query: <span class="bu">str</span>, limit: <span class="bu">int</span> <span class="op">=</span> <span class="dv">10</span>) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]:</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Search the City of Vancouver's open data catalog by keyword."""</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> httpx.AsyncClient() <span class="im">as</span> client:</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        resp <span class="op">=</span> <span class="cf">await</span> client.get(</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>            BASE_URL, params<span class="op">=</span>{<span class="st">"where"</span>: <span class="ss">f'search("</span><span class="sc">{</span>query<span class="sc">}</span><span class="ss">")'</span>, <span class="st">"limit"</span>: limit}</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        resp.raise_for_status()</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> [</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>            {<span class="st">"id"</span>: d[<span class="st">"dataset_id"</span>], <span class="st">"title"</span>: d[<span class="st">"metas"</span>][<span class="st">"default"</span>][<span class="st">"title"</span>]}</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> d <span class="kw">in</span> resp.json()[<span class="st">"results"</span>]</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>        ]</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="at">@mcp.tool</span>()</span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> get_property_values(address: <span class="bu">str</span>, year: <span class="bu">int</span> <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>, limit: <span class="bu">int</span> <span class="op">=</span> <span class="dv">5</span>) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]:</span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Look up assessed property values for a given street address."""</span></span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    where <span class="op">=</span> <span class="ss">f'street_name like "</span><span class="sc">{</span>address<span class="sc">}</span><span class="ss">"'</span></span>
-<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> year:</span>
-<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>        where <span class="op">+=</span> <span class="ss">f" and tax_assessment_year = </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> httpx.AsyncClient() <span class="im">as</span> client:</span>
-<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>        resp <span class="op">=</span> <span class="cf">await</span> client.get(</span>
-<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>BASE_URL<span class="sc">}</span><span class="ss">/property-tax-report/records"</span>,</span>
-<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>            params<span class="op">=</span>{<span class="st">"where"</span>: where, <span class="st">"limit"</span>: limit},</span>
-<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>        resp.raise_for_status()</span>
-<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> resp.json()[<span class="st">"results"</span>]</span>
-<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
-<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>    mcp.run(transport<span class="op">=</span><span class="st">"stdio"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Registering it with Claude Desktop (or any MCP client) is a one-line config entry pointing at the server’s entrypoint over stdio — no separate hosting needed for local use.</p>
-</section>
-<section id="example-queries-and-results" class="level2">
-<h2 class="anchored" data-anchor-id="example-queries-and-results">Example Queries and Results</h2>
-<p>Once connected, a prompt like:</p>
-<blockquote class="blockquote">
-<p>“What’s the assessed value trend for 123 Main St over the last few years, and were any permits pulled recently?”</p>
-</blockquote>
-<p>resolves into two tool calls — <code>get_property_values(address="123 Main St")</code> and <code>get_permits(address="123 Main St", since="2023-01-01")</code> — and the model composes the JSON results into a plain-language answer, without the user ever touching the Opendatasoft query syntax.</p>
-</section>
-<section id="lessons-learned-and-next-steps" class="level2">
-<h2 class="anchored" data-anchor-id="lessons-learned-and-next-steps">Lessons Learned and Next Steps</h2>
-<ul>
-<li><strong>Schema drift is real.</strong> Field names differ across datasets (<code>street_name</code> vs <code>civic_address</code>), which is why <code>describe_dataset</code> ended up necessary rather than optional — the model needs a way to check before it guesses.</li>
-<li><strong>Narrow tools beat clever ones.</strong> An earlier version exposed a single generic <code>query</code> tool; the model produced malformed <code>where</code> clauses often enough that splitting into task-specific tools was a clear win for reliability.</li>
-<li><strong>Rate limits matter at demo time.</strong> The public API is generous but not unlimited — a thin caching layer in front of <code>get_property_values</code> and <code>get_permits</code> avoided repeat calls during iterative testing.</li>
-</ul>
-<p>Next: expose dataset schemas as MCP <em>resources</em> (not just a tool) so clients can inspect them without a round trip, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up.</p>
+<section id="latest-posts" class="level2">
+<h2 class="anchored" data-anchor-id="latest-posts">Latest Posts</h2>
+<div id="listing-posts" class="quarto-listing quarto-listing-container-grid">
+<div class="list grid quarto-listing-cols-3">
+<div class="g-col-1" data-index="0" data-categories="TUNQJTJDT3BlbiUyMERhdGElMkNMTE0=" data-listing-date-sort="1788850800000" data-listing-file-modified-sort="1788914068134" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="5" data-listing-word-count-sort="864">
+<a href="./project/posts/mcp-vancouver-open-data.html" class="quarto-grid-link">
+<div class="quarto-grid-item card h-100 card-left">
+<p class="card-img-top">
+<img loading="lazy" src="./project/posts/images/mcp-vancouver-open-data.png" class="thumbnail-image card-img" style="height: 150px;">
+</p>
+<div class="card-body post-contents">
+<h5 class="no-anchor card-title listing-title">
+Building an MCP Server for Vancouver’s Open Data
+</h5>
+<div class="card-text listing-description delink">
+<p>Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.</p>
+</div>
+<div class="card-attribution card-text-small end">
+<div class="listing-date">
+Sep 8, 2026
+</div>
+</div>
+</div>
+</div></a>
+</div>
+<div class="g-col-1" data-index="1" data-categories="QVdTJTJDQ2xvdWRGb3JtYXRpb24lMkNNTE9wcw==" data-listing-date-sort="1778742000000" data-listing-file-modified-sort="1788390031353" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="390">
+<a href="./project/posts/deploy-ml-aws-cloudformation.html" class="quarto-grid-link">
+<div class="quarto-grid-item card h-100 card-left">
+<p class="card-img-top">
+<img loading="lazy" src="./project/posts/images/deploy-ml-aws-cloudformation.png" class="thumbnail-image card-img" style="height: 150px;">
+</p>
+<div class="card-body post-contents">
+<h5 class="no-anchor card-title listing-title">
+Deploying a Machine Learning Project with AWS CloudFormation
+</h5>
+<div class="card-text listing-description delink">
+<p>Turning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.</p>
+</div>
+<div class="card-attribution card-text-small end">
+<div class="listing-date">
+May 14, 2026
+</div>
+</div>
+</div>
+</div></a>
+</div>
+<div class="g-col-1" data-index="2" data-categories="TExNJTJDRmluZS1UdW5pbmclMkNIdWdnaW5nJTIwRmFjZQ==" data-listing-date-sort="1768896000000" data-listing-file-modified-sort="1788390031353" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="206">
+<a href="./project/posts/fine-tuning-llms.html" class="quarto-grid-link">
+<div class="quarto-grid-item card h-100 card-left">
+<p class="card-img-top">
+<img loading="lazy" src="./project/posts/images/fine-tuning-llms.png" class="thumbnail-image card-img" style="height: 150px;">
+</p>
+<div class="card-body post-contents">
+<h5 class="no-anchor card-title listing-title">
+Fine-Tuning LLMs
+</h5>
+<div class="card-text listing-description delink">
+<p>A short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.</p>
+</div>
+<div class="card-attribution card-text-small end">
+<div class="listing-date">
+Jan 20, 2026
+</div>
+</div>
+</div>
+</div></a>
+</div>
+<div class="g-col-1" data-index="3" data-categories="UHl0aG9uJTJDQVBJJTJDRmFzdEFQSQ==" data-listing-date-sort="1757487600000" data-listing-file-modified-sort="1788390031353" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="256">
+<a href="./project/posts/rest-vs-graphql-vs-websocket.html" class="quarto-grid-link">
+<div class="quarto-grid-item card h-100 card-left">
+<p class="card-img-top">
+<img loading="lazy" src="./project/posts/images/rest-graphql-websocket.png" class="thumbnail-image card-img" style="height: 150px;">
+</p>
+<div class="card-body post-contents">
+<h5 class="no-anchor card-title listing-title">
+REST vs GraphQL vs WebSocket in Python
+</h5>
+<div class="card-text listing-description delink">
+<p>A practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.</p>
+</div>
+<div class="card-attribution card-text-small end">
+<div class="listing-date">
+Sep 10, 2025
+</div>
+</div>
+</div>
+</div></a>
+</div>
+</div>
+<div class="listing-no-matching d-none">No matching items</div>
+</div>
+
 
 
 </section>
