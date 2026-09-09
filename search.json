@@ -4,154 +4,91 @@
     "href": "project/posts.html",
     "title": "All Posts",
     "section": "",
-    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Guardrail Stack for Bedrock\n\n\nA defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.\n\n\n\nJul 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
   },
   {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html",
-    "title": "REST vs GraphQL vs WebSocket in Python",
+    "objectID": "project/posts/guardrail-stack-bedrock.html",
+    "href": "project/posts/guardrail-stack-bedrock.html",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.\n\n\nThe default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}\n\n\n\nA single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")\n\n\n\nA persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")\n\n\n\n\nREST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
+    "text": "Bedrock Guardrails is one control, not the whole story. Securing an LLM service — especially an agentic one built on AgentCore — is a defense-in-depth problem: no single layer catches everything, and the layers that matter most (prompt injection, excessive agency) are ones a traditional AppSec checklist doesn’t cover at all. The following ten layers are how I map that problem when designing a Bedrock or AgentCore architecture, roughly ordered from the network up to governance.\n\n\nThe perimeter. VPC isolation, private subnets, and VPC endpoints (PrivateLink) for Bedrock keep traffic off the public internet entirely. Security groups and NACLs restrict which services can reach model endpoints, and SageMaker-hosted models should sit inside a VPC with no public egress by default.\n\n\n\nLeast-privilege IAM is the layer that fails quietest — an over-broad role doesn’t throw an error, it just sits there as risk. For Bedrock, that means scoping bedrock:InvokeModel to specific model ARNs and using condition keys to restrict by source VPC or tag, rather than granting invoke access account-wide. For AgentCore, the same principle applies per agent identity: its permission boundary should map to the narrowest set of tools and actions that specific agent needs, not a broad shared service role reused across agents.\n\n\n\nTLS in transit and KMS-managed encryption at rest for prompts, completions, embeddings, and vector store content. The harder part isn’t the encryption — it’s the classification decision upstream of it: what should never reach a model at all (PII, secrets, regulated data) versus what can, with customer-managed KMS keys where you need auditable control over who’s able to decrypt.\n\n\n\nThe layer most specific to LLMs, and the one generic AppSec tooling has no answer for. Bedrock Guardrails applies denied topics, content filters, and word/phrase blocklists to incoming prompts before they reach the model. For agentic systems this extends past the user’s own input: content flowing in from tool outputs or retrieved documents needs the same scrutiny, since indirect prompt injection through RAG content or tool results is one of the most common real-world attack paths — and the easiest one to forget, since it doesn’t look like “user input” at the code level.\n\n\n\nGovernance over which teams and roles can invoke which foundation models, version pinning so a model swap doesn’t silently change behavior in production, and — for fine-tuned models — protecting training data and adapter artifacts from leakage or tampering. Rate limiting and quota management belong here too, guarding against denial-of-wallet as much as denial-of-service.\n\n\n\nGuardrails apply on the way out as well as the way in: PII detection and redaction, toxicity and harmful-content filtering, and contextual grounding checks to catch hallucinated or ungrounded output before it reaches a user or a downstream system that will act on it unquestioningly.\n\n\n\nThe layer specific to AgentCore-style architectures, and the one that maps most directly to OWASP’s “excessive agency” risk. Sandbox tool execution, define an explicit action permission boundary per tool, and require human-in-the-loop approval for high-risk actions — payments, deletions, external API calls. The governing rule: an agent should never hold broader permissions than the narrowest task it’s performing at that moment, not the broadest task it might ever perform.\n\n\n\nThe layer that would exist even without an LLM in the picture: authN/authZ at the API Gateway or ALB, WAF rules against injection and abuse patterns, request throttling, and session management tight enough that conversation context can’t be hijacked or leaked across users.\n\n\n\nCloudTrail for API-level audit logs, CloudWatch for runtime monitoring, and — increasingly — logging actual prompts and completions, with redaction, for security review and incident response. This is also where anomaly detection on invocation patterns hooks in, since a compromised credential calling InvokeModel looks identical to a legitimate one until you’re watching volume and pattern, not just auth success.\n\n\n\nData residency controls and model usage policy, tied back to a framework like the OWASP Top 10 for LLM Applications. It’s a useful checklist to map each layer above against, and a fast way to spot gaps:\n\n\n\n\n\n\n\nOWASP LLM Risk\nLayer(s) that address it\n\n\n\n\nPrompt injection\nInput security (4), Agent and tool-use security (7)\n\n\nInsecure output handling\nOutput security (6)\n\n\nTraining data poisoning\nModel-level controls (5)\n\n\nModel denial of service\nModel-level controls (5), Infrastructure and network (1)\n\n\nSupply chain vulnerabilities\nModel-level controls (5), Governance (10)\n\n\nSensitive information disclosure\nData protection (3), Output security (6)\n\n\nInsecure plugin/tool design\nAgent and tool-use security (7)\n\n\nExcessive agency\nIdentity and access management (2), Agent and tool-use security (7)\n\n\nOverreliance\nOutput security (6), Observability and audit (9)\n\n\nModel theft\nIdentity and access management (2), Data protection (3)\n\n\n\n\n\n\nIn practice, the layers teams get right first are the ones that look like traditional infra security — VPC, IAM, TLS — because the tooling and habits already exist. The layers that get skipped are 4 and 7: input security against indirect injection, and tool-use boundaries on agents. Both require reasoning about what the model is allowed to trust, which isn’t a question conventional AppSec review is set up to ask. If you’re auditing an existing Bedrock or AgentCore system and only have time for one pass, start there."
   },
   {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
-    "title": "REST vs GraphQL vs WebSocket in Python",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#infrastructure-and-network",
+    "href": "project/posts/guardrail-stack-bedrock.html#infrastructure-and-network",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}"
+    "text": "The perimeter. VPC isolation, private subnets, and VPC endpoints (PrivateLink) for Bedrock keep traffic off the public internet entirely. Security groups and NACLs restrict which services can reach model endpoints, and SageMaker-hosted models should sit inside a VPC with no public egress by default."
   },
   {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
-    "title": "REST vs GraphQL vs WebSocket in Python",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#identity-and-access-management",
+    "href": "project/posts/guardrail-stack-bedrock.html#identity-and-access-management",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")"
+    "text": "Least-privilege IAM is the layer that fails quietest — an over-broad role doesn’t throw an error, it just sits there as risk. For Bedrock, that means scoping bedrock:InvokeModel to specific model ARNs and using condition keys to restrict by source VPC or tag, rather than granting invoke access account-wide. For AgentCore, the same principle applies per agent identity: its permission boundary should map to the narrowest set of tools and actions that specific agent needs, not a broad shared service role reused across agents."
   },
   {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
-    "title": "REST vs GraphQL vs WebSocket in Python",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#data-protection",
+    "href": "project/posts/guardrail-stack-bedrock.html#data-protection",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")"
+    "text": "TLS in transit and KMS-managed encryption at rest for prompts, completions, embeddings, and vector store content. The harder part isn’t the encryption — it’s the classification decision upstream of it: what should never reach a model at all (PII, secrets, regulated data) versus what can, with customer-managed KMS keys where you need auditable control over who’s able to decrypt."
   },
   {
-    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
-    "href": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
-    "title": "REST vs GraphQL vs WebSocket in Python",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#input-security",
+    "href": "project/posts/guardrail-stack-bedrock.html#input-security",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "REST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
+    "text": "The layer most specific to LLMs, and the one generic AppSec tooling has no answer for. Bedrock Guardrails applies denied topics, content filters, and word/phrase blocklists to incoming prompts before they reach the model. For agentic systems this extends past the user’s own input: content flowing in from tool outputs or retrieved documents needs the same scrutiny, since indirect prompt injection through RAG content or tool results is one of the most common real-world attack paths — and the easiest one to forget, since it doesn’t look like “user input” at the code level."
   },
   {
-    "objectID": "project/posts/fine-tuning-llms.html",
-    "href": "project/posts/fine-tuning-llms.html",
-    "title": "Fine-Tuning LLMs",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#model-level-controls",
+    "href": "project/posts/guardrail-stack-bedrock.html#model-level-controls",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "Pretrained LLMs are general-purpose. Fine-tuning adapts one to a narrower domain or task using far less data and compute than pretraining from scratch.\n\n\nFull fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like LoRA freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom peft import LoraConfig, get_peft_model\n\nmodel = AutoModelForCausalLM.from_pretrained(\"meta-llama/Llama-3-8b\")\ntokenizer = AutoTokenizer.from_pretrained(\"meta-llama/Llama-3-8b\")\n\nlora_config = LoraConfig(\n    r=16,\n    lora_alpha=32,\n    target_modules=[\"q_proj\", \"v_proj\"],\n    lora_dropout=0.05,\n    task_type=\"CAUSAL_LM\",\n)\n\nmodel = get_peft_model(model, lora_config)\nmodel.print_trainable_parameters()\n\n\n\n\nKeep examples in a consistent instruction/response format.\nFavor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.\nDeduplicate aggressively; repeated examples skew the model more than expected.\n\n\n\n\nTrack validation loss, but don’t stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn’t always mean the outputs are actually better for your task.\nFine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run."
+    "text": "Governance over which teams and roles can invoke which foundation models, version pinning so a model swap doesn’t silently change behavior in production, and — for fine-tuned models — protecting training data and adapter artifacts from leakage or tampering. Rate limiting and quota management belong here too, guarding against denial-of-wallet as much as denial-of-service."
   },
   {
-    "objectID": "project/posts/fine-tuning-llms.html#full-fine-tuning-vs-peft",
-    "href": "project/posts/fine-tuning-llms.html#full-fine-tuning-vs-peft",
-    "title": "Fine-Tuning LLMs",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#output-security",
+    "href": "project/posts/guardrail-stack-bedrock.html#output-security",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "Full fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like LoRA freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom peft import LoraConfig, get_peft_model\n\nmodel = AutoModelForCausalLM.from_pretrained(\"meta-llama/Llama-3-8b\")\ntokenizer = AutoTokenizer.from_pretrained(\"meta-llama/Llama-3-8b\")\n\nlora_config = LoraConfig(\n    r=16,\n    lora_alpha=32,\n    target_modules=[\"q_proj\", \"v_proj\"],\n    lora_dropout=0.05,\n    task_type=\"CAUSAL_LM\",\n)\n\nmodel = get_peft_model(model, lora_config)\nmodel.print_trainable_parameters()"
+    "text": "Guardrails apply on the way out as well as the way in: PII detection and redaction, toxicity and harmful-content filtering, and contextual grounding checks to catch hallucinated or ungrounded output before it reaches a user or a downstream system that will act on it unquestioningly."
   },
   {
-    "objectID": "project/posts/fine-tuning-llms.html#data-preparation",
-    "href": "project/posts/fine-tuning-llms.html#data-preparation",
-    "title": "Fine-Tuning LLMs",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#agent-and-tool-use-security",
+    "href": "project/posts/guardrail-stack-bedrock.html#agent-and-tool-use-security",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "Keep examples in a consistent instruction/response format.\nFavor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.\nDeduplicate aggressively; repeated examples skew the model more than expected."
+    "text": "The layer specific to AgentCore-style architectures, and the one that maps most directly to OWASP’s “excessive agency” risk. Sandbox tool execution, define an explicit action permission boundary per tool, and require human-in-the-loop approval for high-risk actions — payments, deletions, external API calls. The governing rule: an agent should never hold broader permissions than the narrowest task it’s performing at that moment, not the broadest task it might ever perform."
   },
   {
-    "objectID": "project/posts/fine-tuning-llms.html#evaluation",
-    "href": "project/posts/fine-tuning-llms.html#evaluation",
-    "title": "Fine-Tuning LLMs",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#application-and-api",
+    "href": "project/posts/guardrail-stack-bedrock.html#application-and-api",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "Track validation loss, but don’t stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn’t always mean the outputs are actually better for your task.\nFine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run."
+    "text": "The layer that would exist even without an LLM in the picture: authN/authZ at the API Gateway or ALB, WAF rules against injection and abuse patterns, request throttling, and session management tight enough that conversation context can’t be hijacked or leaked across users."
   },
   {
-    "objectID": "about.html",
-    "href": "about.html",
-    "title": "Alexandre DO",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#observability-and-audit",
+    "href": "project/posts/guardrail-stack-bedrock.html#observability-and-audit",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "I’m a Data Science and Machine Learning Engineer with 8+ years of experience building and deploying AI and machine learning systems. My work focuses on developing practical, scalable AI solutions that turn complex data into actionable insights.\nI hold two Master’s degrees in Applied Mathematics and Data Science, and I’m a graduate of École polytechnique and ENSAE ParisTech in France.\nI’m also AWS certified, with certifications in Data Engineering and Generative AI Development – Professional."
+    "text": "CloudTrail for API-level audit logs, CloudWatch for runtime monitoring, and — increasingly — logging actual prompts and completions, with redaction, for security review and incident response. This is also where anomaly detection on invocation patterns hooks in, since a compromised credential calling InvokeModel looks identical to a legitimate one until you’re watching volume and pattern, not just auth success."
   },
   {
-    "objectID": "about.html#about-me",
-    "href": "about.html#about-me",
-    "title": "Alexandre DO",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#governance-and-compliance",
+    "href": "project/posts/guardrail-stack-bedrock.html#governance-and-compliance",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "I’m a Data Science and Machine Learning Engineer with 8+ years of experience building and deploying AI and machine learning systems. My work focuses on developing practical, scalable AI solutions that turn complex data into actionable insights.\nI hold two Master’s degrees in Applied Mathematics and Data Science, and I’m a graduate of École polytechnique and ENSAE ParisTech in France.\nI’m also AWS certified, with certifications in Data Engineering and Generative AI Development – Professional."
+    "text": "Data residency controls and model usage policy, tied back to a framework like the OWASP Top 10 for LLM Applications. It’s a useful checklist to map each layer above against, and a fast way to spot gaps:\n\n\n\n\n\n\n\nOWASP LLM Risk\nLayer(s) that address it\n\n\n\n\nPrompt injection\nInput security (4), Agent and tool-use security (7)\n\n\nInsecure output handling\nOutput security (6)\n\n\nTraining data poisoning\nModel-level controls (5)\n\n\nModel denial of service\nModel-level controls (5), Infrastructure and network (1)\n\n\nSupply chain vulnerabilities\nModel-level controls (5), Governance (10)\n\n\nSensitive information disclosure\nData protection (3), Output security (6)\n\n\nInsecure plugin/tool design\nAgent and tool-use security (7)\n\n\nExcessive agency\nIdentity and access management (2), Agent and tool-use security (7)\n\n\nOverreliance\nOutput security (6), Observability and audit (9)\n\n\nModel theft\nIdentity and access management (2), Data protection (3)"
   },
   {
-    "objectID": "about.html#what-i-do",
-    "href": "about.html#what-i-do",
-    "title": "Alexandre DO",
-    "section": "What I Do",
-    "text": "What I Do\n2021–2025 · La Javaness — Paris, France · Senior AI Consultant\n\nSpecialized in enterprise AI solutions, including Generative AI, NLP, and unstructured data such as images and speech.\nWorked closely with IT, business, and design teams to deliver end-to-end AI projects.\nDelivered AI and data science solutions for clients across public institutions, banking and financial services, transportation, and energy, generating measurable impact through predictive analytics, automation, and data-driven insights.\n\n2017–2021 · Société Générale — Paris, France · Senior Data Scientist\n\nSpecialized in risk modeling and data science for financial applications.\nDeveloped advanced anomaly detection techniques for financial data.\nApplied machine learning and statistical modeling to complex financial datasets.\n\n2016 · Crédit Agricole — Paris, France · Data Scientist\n\nDeveloped advanced machine learning models for credit scoring.\nApplied statistical and machine learning techniques to financial risk assessment."
-  },
-  {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "Home",
+    "objectID": "project/posts/guardrail-stack-bedrock.html#where-this-actually-bites",
+    "href": "project/posts/guardrail-stack-bedrock.html#where-this-actually-bites",
+    "title": "The Guardrail Stack for Bedrock",
     "section": "",
-    "text": "Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
-  },
-  {
-    "objectID": "index.html#pinned-posts",
-    "href": "index.html#pinned-posts",
-    "title": "Home",
-    "section": "",
-    "text": "Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
-  },
-  {
-    "objectID": "project/posts/deploy-ml-aws-cloudformation.html",
-    "href": "project/posts/deploy-ml-aws-cloudformation.html",
-    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
-    "section": "",
-    "text": "Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.\n\n\nInfrastructure as Code (IaC) means describing infrastructure — networks, IAM roles, compute, storage — in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:\n\nReproducibility — the same definition produces the same stack in dev, staging, and prod.\nAuditability — changes to infrastructure show up as diffs, not as an entry in someone’s shell history.\nIdempotency — re-applying a template that already matches reality is a no-op; the tool only acts on the delta.\n\nIaC tools split along one main axis: declarative vs. imperative. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (Pulumi in its general-purpose-language mode, or a hand-rolled boto3/Ansible script) describe the steps to get there. Declarative is the norm for cloud infrastructure because the engine can diff current vs. desired state and tell you what will change before it changes it.\nCloudFormation is AWS’s own declarative engine: no install, no state file to manage, and it understands AWS resource types the day they ship. The trade-off is that it only speaks AWS.\n\n\n\n\n\n\n\n\n\n\n\n\n\nCloudFormation\nTerraform\nAzure ARM / Bicep\n\n\n\n\nScope\nAWS only\nMulti-cloud (AWS, Azure, GCP, 100+ providers)\nAzure only\n\n\nLanguage\nYAML/JSON\nHCL\nJSON (ARM) or Bicep (DSL that compiles to ARM)\n\n\nState\nManaged by AWS, no local state file\nState file (local or remote backend: S3, Terraform Cloud) that you must protect and lock\nManaged by Azure\n\n\nDrift detection\nBuilt-in (detect-stack-drift)\nVia terraform plan, needs current state to be accurate\nBuilt-in\n\n\nChange preview\nChange sets\nterraform plan\nWhat-if operations\n\n\nEcosystem\nNative AWS support, SAM for serverless\nLargest ecosystem, most third-party modules, works across clouds\nNative Azure support, best for Azure-centric shops\n\n\nBest fit\nAWS-only teams that want zero extra tooling and tight IAM integration\nTeams running multi-cloud or hybrid infra, or who want one tool for everything\nAzure-only teams already inside the Microsoft stack\n\n\n\nFor an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) — at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.\n\n\n\nA typical ML inference stack needs:\n\nAn S3 bucket to store model artifacts\nAn IAM role with least-privilege access for the compute layer\nA compute target — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference\n\n\n\n\nResources:\n  ModelArtifactsBucket:\n    Type: AWS::S3::Bucket\n\n  SageMakerExecutionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: sagemaker.amazonaws.com\n            Action: sts:AssumeRole\n      ManagedPolicyArns:\n        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess\n\n  Model:\n    Type: AWS::SageMaker::Model\n    Properties:\n      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn\n      PrimaryContainer:\n        Image: &lt;ecr-image-uri&gt;\n        ModelDataUrl: !Sub \"s3://${ModelArtifactsBucket}/model.tar.gz\"\n\n  EndpointConfig:\n    Type: AWS::SageMaker::EndpointConfig\n    Properties:\n      ProductionVariants:\n        - ModelName: !GetAtt Model.ModelName\n          VariantName: AllTraffic\n          InitialInstanceCount: 1\n          InstanceType: ml.m5.large\n\n  Endpoint:\n    Type: AWS::SageMaker::Endpoint\n    Properties:\n      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName\n\n\n\naws cloudformation deploy \\\n  --template-file stack.yaml \\\n  --stack-name ml-inference-stack \\\n  --capabilities CAPABILITY_IAM\n\n\n\n\nParameterize the instance type and image URI so the same template works across environments.\nUse one stack per environment (dev/staging/prod) rather than branching logic inside a single template.\nTear down with aws cloudformation delete-stack when you’re done — an idle SageMaker endpoint bills by the hour.\n\nCloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read."
-  },
-  {
-    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#what-is-infrastructure-as-code",
-    "href": "project/posts/deploy-ml-aws-cloudformation.html#what-is-infrastructure-as-code",
-    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
-    "section": "",
-    "text": "Infrastructure as Code (IaC) means describing infrastructure — networks, IAM roles, compute, storage — in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:\n\nReproducibility — the same definition produces the same stack in dev, staging, and prod.\nAuditability — changes to infrastructure show up as diffs, not as an entry in someone’s shell history.\nIdempotency — re-applying a template that already matches reality is a no-op; the tool only acts on the delta.\n\nIaC tools split along one main axis: declarative vs. imperative. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (Pulumi in its general-purpose-language mode, or a hand-rolled boto3/Ansible script) describe the steps to get there. Declarative is the norm for cloud infrastructure because the engine can diff current vs. desired state and tell you what will change before it changes it.\nCloudFormation is AWS’s own declarative engine: no install, no state file to manage, and it understands AWS resource types the day they ship. The trade-off is that it only speaks AWS."
-  },
-  {
-    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#cloudformation-vs.-terraform-vs.-azure-armbicep",
-    "href": "project/posts/deploy-ml-aws-cloudformation.html#cloudformation-vs.-terraform-vs.-azure-armbicep",
-    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
-    "section": "",
-    "text": "CloudFormation\nTerraform\nAzure ARM / Bicep\n\n\n\n\nScope\nAWS only\nMulti-cloud (AWS, Azure, GCP, 100+ providers)\nAzure only\n\n\nLanguage\nYAML/JSON\nHCL\nJSON (ARM) or Bicep (DSL that compiles to ARM)\n\n\nState\nManaged by AWS, no local state file\nState file (local or remote backend: S3, Terraform Cloud) that you must protect and lock\nManaged by Azure\n\n\nDrift detection\nBuilt-in (detect-stack-drift)\nVia terraform plan, needs current state to be accurate\nBuilt-in\n\n\nChange preview\nChange sets\nterraform plan\nWhat-if operations\n\n\nEcosystem\nNative AWS support, SAM for serverless\nLargest ecosystem, most third-party modules, works across clouds\nNative Azure support, best for Azure-centric shops\n\n\nBest fit\nAWS-only teams that want zero extra tooling and tight IAM integration\nTeams running multi-cloud or hybrid infra, or who want one tool for everything\nAzure-only teams already inside the Microsoft stack\n\n\n\nFor an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) — at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker."
-  },
-  {
-    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#core-building-blocks",
-    "href": "project/posts/deploy-ml-aws-cloudformation.html#core-building-blocks",
-    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
-    "section": "",
-    "text": "A typical ML inference stack needs:\n\nAn S3 bucket to store model artifacts\nAn IAM role with least-privilege access for the compute layer\nA compute target — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference"
-  },
-  {
-    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#a-minimal-stack",
-    "href": "project/posts/deploy-ml-aws-cloudformation.html#a-minimal-stack",
-    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
-    "section": "",
-    "text": "Resources:\n  ModelArtifactsBucket:\n    Type: AWS::S3::Bucket\n\n  SageMakerExecutionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: sagemaker.amazonaws.com\n            Action: sts:AssumeRole\n      ManagedPolicyArns:\n        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess\n\n  Model:\n    Type: AWS::SageMaker::Model\n    Properties:\n      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn\n      PrimaryContainer:\n        Image: &lt;ecr-image-uri&gt;\n        ModelDataUrl: !Sub \"s3://${ModelArtifactsBucket}/model.tar.gz\"\n\n  EndpointConfig:\n    Type: AWS::SageMaker::EndpointConfig\n    Properties:\n      ProductionVariants:\n        - ModelName: !GetAtt Model.ModelName\n          VariantName: AllTraffic\n          InitialInstanceCount: 1\n          InstanceType: ml.m5.large\n\n  Endpoint:\n    Type: AWS::SageMaker::Endpoint\n    Properties:\n      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName"
-  },
-  {
-    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#deploying-the-stack",
-    "href": "project/posts/deploy-ml-aws-cloudformation.html#deploying-the-stack",
-    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
-    "section": "",
-    "text": "aws cloudformation deploy \\\n  --template-file stack.yaml \\\n  --stack-name ml-inference-stack \\\n  --capabilities CAPABILITY_IAM"
-  },
-  {
-    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#tips",
-    "href": "project/posts/deploy-ml-aws-cloudformation.html#tips",
-    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
-    "section": "",
-    "text": "Parameterize the instance type and image URI so the same template works across environments.\nUse one stack per environment (dev/staging/prod) rather than branching logic inside a single template.\nTear down with aws cloudformation delete-stack when you’re done — an idle SageMaker endpoint bills by the hour.\n\nCloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read."
+    "text": "In practice, the layers teams get right first are the ones that look like traditional infra security — VPC, IAM, TLS — because the tooling and habits already exist. The layers that get skipped are 4 and 7: input security against indirect injection, and tool-use boundaries on agents. Both require reasoning about what the model is allowed to trust, which isn’t a question conventional AppSec review is set up to ask. If you’re auditing an existing Bedrock or AgentCore system and only have time for one pass, start there."
   },
   {
     "objectID": "project/posts/mcp-vancouver-open-data.html",
@@ -215,6 +152,153 @@
     "title": "Building an MCP Server for Vancouver’s Open Data",
     "section": "",
     "text": "Schema drift is real. Field names differ across datasets (street_name vs civic_address), which is why describe_dataset ended up necessary rather than optional — the model needs a way to check before it guesses.\nNarrow tools beat clever ones. An earlier version exposed a single generic query tool; the model produced malformed where clauses often enough that splitting into task-specific tools was a clear win for reliability.\nRate limits matter at demo time. The public API is generous but not unlimited — a thin caching layer in front of get_property_values and get_permits avoided repeat calls during iterative testing.\n\nNext: expose dataset schemas as MCP resources (not just a tool) so clients can inspect them without a round trip, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up."
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.\n\n\nInfrastructure as Code (IaC) means describing infrastructure — networks, IAM roles, compute, storage — in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:\n\nReproducibility — the same definition produces the same stack in dev, staging, and prod.\nAuditability — changes to infrastructure show up as diffs, not as an entry in someone’s shell history.\nIdempotency — re-applying a template that already matches reality is a no-op; the tool only acts on the delta.\n\nIaC tools split along one main axis: declarative vs. imperative. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (Pulumi in its general-purpose-language mode, or a hand-rolled boto3/Ansible script) describe the steps to get there. Declarative is the norm for cloud infrastructure because the engine can diff current vs. desired state and tell you what will change before it changes it.\nCloudFormation is AWS’s own declarative engine: no install, no state file to manage, and it understands AWS resource types the day they ship. The trade-off is that it only speaks AWS.\n\n\n\n\n\n\n\n\n\n\n\n\n\nCloudFormation\nTerraform\nAzure ARM / Bicep\n\n\n\n\nScope\nAWS only\nMulti-cloud (AWS, Azure, GCP, 100+ providers)\nAzure only\n\n\nLanguage\nYAML/JSON\nHCL\nJSON (ARM) or Bicep (DSL that compiles to ARM)\n\n\nState\nManaged by AWS, no local state file\nState file (local or remote backend: S3, Terraform Cloud) that you must protect and lock\nManaged by Azure\n\n\nDrift detection\nBuilt-in (detect-stack-drift)\nVia terraform plan, needs current state to be accurate\nBuilt-in\n\n\nChange preview\nChange sets\nterraform plan\nWhat-if operations\n\n\nEcosystem\nNative AWS support, SAM for serverless\nLargest ecosystem, most third-party modules, works across clouds\nNative Azure support, best for Azure-centric shops\n\n\nBest fit\nAWS-only teams that want zero extra tooling and tight IAM integration\nTeams running multi-cloud or hybrid infra, or who want one tool for everything\nAzure-only teams already inside the Microsoft stack\n\n\n\nFor an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) — at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.\n\n\n\nA typical ML inference stack needs:\n\nAn S3 bucket to store model artifacts\nAn IAM role with least-privilege access for the compute layer\nA compute target — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference\n\n\n\n\nResources:\n  ModelArtifactsBucket:\n    Type: AWS::S3::Bucket\n\n  SageMakerExecutionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: sagemaker.amazonaws.com\n            Action: sts:AssumeRole\n      ManagedPolicyArns:\n        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess\n\n  Model:\n    Type: AWS::SageMaker::Model\n    Properties:\n      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn\n      PrimaryContainer:\n        Image: &lt;ecr-image-uri&gt;\n        ModelDataUrl: !Sub \"s3://${ModelArtifactsBucket}/model.tar.gz\"\n\n  EndpointConfig:\n    Type: AWS::SageMaker::EndpointConfig\n    Properties:\n      ProductionVariants:\n        - ModelName: !GetAtt Model.ModelName\n          VariantName: AllTraffic\n          InitialInstanceCount: 1\n          InstanceType: ml.m5.large\n\n  Endpoint:\n    Type: AWS::SageMaker::Endpoint\n    Properties:\n      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName\n\n\n\naws cloudformation deploy \\\n  --template-file stack.yaml \\\n  --stack-name ml-inference-stack \\\n  --capabilities CAPABILITY_IAM\n\n\n\n\nParameterize the instance type and image URI so the same template works across environments.\nUse one stack per environment (dev/staging/prod) rather than branching logic inside a single template.\nTear down with aws cloudformation delete-stack when you’re done — an idle SageMaker endpoint bills by the hour.\n\nCloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read."
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#what-is-infrastructure-as-code",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#what-is-infrastructure-as-code",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "Infrastructure as Code (IaC) means describing infrastructure — networks, IAM roles, compute, storage — in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:\n\nReproducibility — the same definition produces the same stack in dev, staging, and prod.\nAuditability — changes to infrastructure show up as diffs, not as an entry in someone’s shell history.\nIdempotency — re-applying a template that already matches reality is a no-op; the tool only acts on the delta.\n\nIaC tools split along one main axis: declarative vs. imperative. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (Pulumi in its general-purpose-language mode, or a hand-rolled boto3/Ansible script) describe the steps to get there. Declarative is the norm for cloud infrastructure because the engine can diff current vs. desired state and tell you what will change before it changes it.\nCloudFormation is AWS’s own declarative engine: no install, no state file to manage, and it understands AWS resource types the day they ship. The trade-off is that it only speaks AWS."
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#cloudformation-vs.-terraform-vs.-azure-armbicep",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#cloudformation-vs.-terraform-vs.-azure-armbicep",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "CloudFormation\nTerraform\nAzure ARM / Bicep\n\n\n\n\nScope\nAWS only\nMulti-cloud (AWS, Azure, GCP, 100+ providers)\nAzure only\n\n\nLanguage\nYAML/JSON\nHCL\nJSON (ARM) or Bicep (DSL that compiles to ARM)\n\n\nState\nManaged by AWS, no local state file\nState file (local or remote backend: S3, Terraform Cloud) that you must protect and lock\nManaged by Azure\n\n\nDrift detection\nBuilt-in (detect-stack-drift)\nVia terraform plan, needs current state to be accurate\nBuilt-in\n\n\nChange preview\nChange sets\nterraform plan\nWhat-if operations\n\n\nEcosystem\nNative AWS support, SAM for serverless\nLargest ecosystem, most third-party modules, works across clouds\nNative Azure support, best for Azure-centric shops\n\n\nBest fit\nAWS-only teams that want zero extra tooling and tight IAM integration\nTeams running multi-cloud or hybrid infra, or who want one tool for everything\nAzure-only teams already inside the Microsoft stack\n\n\n\nFor an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) — at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker."
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#core-building-blocks",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#core-building-blocks",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "A typical ML inference stack needs:\n\nAn S3 bucket to store model artifacts\nAn IAM role with least-privilege access for the compute layer\nA compute target — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference"
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#a-minimal-stack",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#a-minimal-stack",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "Resources:\n  ModelArtifactsBucket:\n    Type: AWS::S3::Bucket\n\n  SageMakerExecutionRole:\n    Type: AWS::IAM::Role\n    Properties:\n      AssumeRolePolicyDocument:\n        Statement:\n          - Effect: Allow\n            Principal:\n              Service: sagemaker.amazonaws.com\n            Action: sts:AssumeRole\n      ManagedPolicyArns:\n        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess\n\n  Model:\n    Type: AWS::SageMaker::Model\n    Properties:\n      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn\n      PrimaryContainer:\n        Image: &lt;ecr-image-uri&gt;\n        ModelDataUrl: !Sub \"s3://${ModelArtifactsBucket}/model.tar.gz\"\n\n  EndpointConfig:\n    Type: AWS::SageMaker::EndpointConfig\n    Properties:\n      ProductionVariants:\n        - ModelName: !GetAtt Model.ModelName\n          VariantName: AllTraffic\n          InitialInstanceCount: 1\n          InstanceType: ml.m5.large\n\n  Endpoint:\n    Type: AWS::SageMaker::Endpoint\n    Properties:\n      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName"
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#deploying-the-stack",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#deploying-the-stack",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "aws cloudformation deploy \\\n  --template-file stack.yaml \\\n  --stack-name ml-inference-stack \\\n  --capabilities CAPABILITY_IAM"
+  },
+  {
+    "objectID": "project/posts/deploy-ml-aws-cloudformation.html#tips",
+    "href": "project/posts/deploy-ml-aws-cloudformation.html#tips",
+    "title": "Deploying a Machine Learning Project with AWS CloudFormation",
+    "section": "",
+    "text": "Parameterize the instance type and image URI so the same template works across environments.\nUse one stack per environment (dev/staging/prod) rather than branching logic inside a single template.\nTear down with aws cloudformation delete-stack when you’re done — an idle SageMaker endpoint bills by the hour.\n\nCloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read."
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Home",
+    "section": "",
+    "text": "Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "index.html#pinned-posts",
+    "href": "index.html#pinned-posts",
+    "title": "Home",
+    "section": "",
+    "text": "Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "Alexandre DO",
+    "section": "",
+    "text": "I’m a Data Science and Machine Learning Engineer with 8+ years of experience building and deploying AI and machine learning systems. My work focuses on developing practical, scalable AI solutions that turn complex data into actionable insights.\nI hold two Master’s degrees in Applied Mathematics and Data Science, and I’m a graduate of École polytechnique and ENSAE ParisTech in France.\nI’m also AWS certified, with certifications in Data Engineering and Generative AI Development – Professional."
+  },
+  {
+    "objectID": "about.html#about-me",
+    "href": "about.html#about-me",
+    "title": "Alexandre DO",
+    "section": "",
+    "text": "I’m a Data Science and Machine Learning Engineer with 8+ years of experience building and deploying AI and machine learning systems. My work focuses on developing practical, scalable AI solutions that turn complex data into actionable insights.\nI hold two Master’s degrees in Applied Mathematics and Data Science, and I’m a graduate of École polytechnique and ENSAE ParisTech in France.\nI’m also AWS certified, with certifications in Data Engineering and Generative AI Development – Professional."
+  },
+  {
+    "objectID": "about.html#what-i-do",
+    "href": "about.html#what-i-do",
+    "title": "Alexandre DO",
+    "section": "What I Do",
+    "text": "What I Do\n2021–2025 · La Javaness — Paris, France · Senior AI Consultant\n\nSpecialized in enterprise AI solutions, including Generative AI, NLP, and unstructured data such as images and speech.\nWorked closely with IT, business, and design teams to deliver end-to-end AI projects.\nDelivered AI and data science solutions for clients across public institutions, banking and financial services, transportation, and energy, generating measurable impact through predictive analytics, automation, and data-driven insights.\n\n2017–2021 · Société Générale — Paris, France · Senior Data Scientist\n\nSpecialized in risk modeling and data science for financial applications.\nDeveloped advanced anomaly detection techniques for financial data.\nApplied machine learning and statistical modeling to complex financial datasets.\n\n2016 · Crédit Agricole — Paris, France · Data Scientist\n\nDeveloped advanced machine learning models for credit scoring.\nApplied statistical and machine learning techniques to financial risk assessment."
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html",
+    "href": "project/posts/fine-tuning-llms.html",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Pretrained LLMs are general-purpose. Fine-tuning adapts one to a narrower domain or task using far less data and compute than pretraining from scratch.\n\n\nFull fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like LoRA freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom peft import LoraConfig, get_peft_model\n\nmodel = AutoModelForCausalLM.from_pretrained(\"meta-llama/Llama-3-8b\")\ntokenizer = AutoTokenizer.from_pretrained(\"meta-llama/Llama-3-8b\")\n\nlora_config = LoraConfig(\n    r=16,\n    lora_alpha=32,\n    target_modules=[\"q_proj\", \"v_proj\"],\n    lora_dropout=0.05,\n    task_type=\"CAUSAL_LM\",\n)\n\nmodel = get_peft_model(model, lora_config)\nmodel.print_trainable_parameters()\n\n\n\n\nKeep examples in a consistent instruction/response format.\nFavor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.\nDeduplicate aggressively; repeated examples skew the model more than expected.\n\n\n\n\nTrack validation loss, but don’t stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn’t always mean the outputs are actually better for your task.\nFine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run."
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html#full-fine-tuning-vs-peft",
+    "href": "project/posts/fine-tuning-llms.html#full-fine-tuning-vs-peft",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Full fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like LoRA freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom peft import LoraConfig, get_peft_model\n\nmodel = AutoModelForCausalLM.from_pretrained(\"meta-llama/Llama-3-8b\")\ntokenizer = AutoTokenizer.from_pretrained(\"meta-llama/Llama-3-8b\")\n\nlora_config = LoraConfig(\n    r=16,\n    lora_alpha=32,\n    target_modules=[\"q_proj\", \"v_proj\"],\n    lora_dropout=0.05,\n    task_type=\"CAUSAL_LM\",\n)\n\nmodel = get_peft_model(model, lora_config)\nmodel.print_trainable_parameters()"
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html#data-preparation",
+    "href": "project/posts/fine-tuning-llms.html#data-preparation",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Keep examples in a consistent instruction/response format.\nFavor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.\nDeduplicate aggressively; repeated examples skew the model more than expected."
+  },
+  {
+    "objectID": "project/posts/fine-tuning-llms.html#evaluation",
+    "href": "project/posts/fine-tuning-llms.html#evaluation",
+    "title": "Fine-Tuning LLMs",
+    "section": "",
+    "text": "Track validation loss, but don’t stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn’t always mean the outputs are actually better for your task.\nFine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run."
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.\n\n\nThe default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}\n\n\n\nA single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")\n\n\n\nA persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")\n\n\n\n\nREST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#rest",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"name\": \"Alexandre\"}"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#graphql",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with Strawberry:\nimport strawberry\nfrom strawberry.fastapi import GraphQLRouter\n\n@strawberry.type\nclass User:\n    id: int\n    name: str\n\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, user_id: int) -&gt; User:\n        return User(id=user_id, name=\"Alexandre\")\n\nschema = strawberry.Schema(query=Query)\napp.include_router(GraphQLRouter(schema), prefix=\"/graphql\")"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#websocket",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.\nfrom fastapi import WebSocket\n\n@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")"
+  },
+  {
+    "objectID": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
+    "href": "project/posts/rest-vs-graphql-vs-websocket.html#when-to-use-which",
+    "title": "REST vs GraphQL vs WebSocket in Python",
+    "section": "",
+    "text": "REST — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.\nGraphQL — nested or variable data shapes, multiple client types (web/mobile) with different needs.\nWebSocket — real-time features like chat, live dashboards, or notifications.\n\nThey’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature."
   },
   {
     "objectID": "project/art.html",
