@@ -20,3 +20,15 @@ The perimeter. VPC isolation, private subnets, and VPC endpoints (PrivateLink) f
 ## 2. Identity and Access Management
 
 Least-privilege IAM is the layer that fails quietest — an over-broad role doesn't throw an error, it just sits there as risk. For Bedrock, that means scoping `bedrock:InvokeModel` to specific model ARNs and using condition keys to restrict by source VPC or tag, rather than granting invoke access account-wide. For AgentCore, the same principle applies per agent identity: its permission boundary should map to the narrowest set of tools and actions that specific agent needs, not a broad shared service role reused across agents.
+
+## 3. Data Protection
+
+TLS in transit and KMS-managed encryption at rest for prompts, completions, embeddings, and vector store content. The harder part isn't the encryption — it's the classification decision upstream of it: what should never reach a model at all (PII, secrets, regulated data) versus what can, with customer-managed KMS keys where you need auditable control over who's able to decrypt.
+
+## 4. Input Security
+
+The layer most specific to LLMs, and the one generic AppSec tooling has no answer for. Bedrock Guardrails applies denied topics, content filters, and word/phrase blocklists to incoming prompts before they reach the model. For agentic systems this extends past the user's own input: content flowing in from tool outputs or retrieved documents needs the same scrutiny, since indirect prompt injection through RAG content or tool results is one of the most common real-world attack paths — and the easiest one to forget, since it doesn't look like "user input" at the code level.
+
+## 5. Model-Level Controls
+
+Governance over which teams and roles can invoke which foundation models, version pinning so a model swap doesn't silently change behavior in production, and — for fine-tuned models — protecting training data and adapter artifacts from leakage or tampering. Rate limiting and quota management belong here too, guarding against denial-of-wallet as much as denial-of-service.
