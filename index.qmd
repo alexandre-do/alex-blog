@@ -9,11 +9,13 @@ include-in-header:
     </style>
 listing:
   - id: posts
-    contents: project/posts
+    contents:
+      - project/posts/mcp-vancouver-open-data.qmd
+      - project/posts/deploy-ml-aws-cloudformation.qmd
+      - project/posts/rest-vs-graphql-vs-websocket.qmd
     type: grid
     fields: [image, date, title, description]
     sort: "date desc"
-    max-items: 6
     categories: true
     feed: true
 ---
@@ -55,7 +57,7 @@ listing:
 </div>
 ```
 
-## Latest Posts
+## Pinned Posts
 
 ::: {#posts}
 :::
