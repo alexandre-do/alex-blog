@@ -1,0 +1,22 @@
+---
+title: "The Guardrail Stack for Bedrock"
+date: "2026-07-14"
+description: "A defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks."
+image: "images/guardrail-stack-bedrock.png"
+categories:
+    - AWS
+    - Bedrock
+    - LLM
+---
+
+# The Guardrail Stack for Bedrock
+
+Bedrock Guardrails is one control, not the whole story. Securing an LLM service — especially an agentic one built on AgentCore — is a defense-in-depth problem: no single layer catches everything, and the layers that matter most (prompt injection, excessive agency) are ones a traditional AppSec checklist doesn't cover at all. The following ten layers are how I map that problem when designing a Bedrock or AgentCore architecture, roughly ordered from the network up to governance.
+
+## 1. Infrastructure and Network
+
+The perimeter. VPC isolation, private subnets, and VPC endpoints (PrivateLink) for Bedrock keep traffic off the public internet entirely. Security groups and NACLs restrict which services can reach model endpoints, and SageMaker-hosted models should sit inside a VPC with no public egress by default.
+
+## 2. Identity and Access Management
+
+Least-privilege IAM is the layer that fails quietest — an over-broad role doesn't throw an error, it just sits there as risk. For Bedrock, that means scoping `bedrock:InvokeModel` to specific model ARNs and using condition keys to restrict by source VPC or tag, rather than granting invoke access account-wide. For AgentCore, the same principle applies per agent identity: its permission boundary should map to the narrowest set of tools and actions that specific agent needs, not a broad shared service role reused across agents.
