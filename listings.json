@@ -2,6 +2,7 @@
   {
     "listing": "/project/posts.html",
     "items": [
+      "/project/posts/watermarking-libraries.html",
       "/project/posts/mcp-vancouver-open-data.html",
       "/project/posts/guardrail-stack-bedrock.html",
       "/project/posts/deploy-ml-aws-cloudformation.html",

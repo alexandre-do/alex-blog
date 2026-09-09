@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-09-09">
+<meta name="description" content="How text, image, and audio watermarking for generative models actually works, why robustness against removal is the hard part, and which libraries to reach for.">
+
+<title>Watermarking Libraries: A Practical Guide – Alexandre DO</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../images/favicon_id.png" rel="icon" type="image/png">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="../../styles.css">
+</head>
+
+<body class="nav-fixed fullcontent quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">Alexandre DO</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/posts.html"> 
+<span class="menu-text">Posts</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/art.html"> 
+<span class="menu-text">Artwork</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Watermarking Libraries: A Practical Guide</h1>
+  <div class="quarto-categories">
+    <div class="quarto-category">LLM</div>
+    <div class="quarto-category">Generative AI</div>
+    <div class="quarto-category">Tooling</div>
+  </div>
+  </div>
+
+<div>
+  <div class="description">
+    How text, image, and audio watermarking for generative models actually works, why robustness against removal is the hard part, and which libraries to reach for.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">September 9, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="watermarking-libraries-a-practical-guide" class="level1">
+<h1>Watermarking Libraries: A Practical Guide</h1>
+<p>As generated text, images, and audio become harder to distinguish from human-made content, watermarking has become the default technical answer to “was this AI-generated?” The idea is simple — embed a signal at generation time that a detector can later recognize — but the mechanism differs a lot by modality, and the real design constraint isn’t embedding the signal, it’s making it survive. This post covers how each modality’s watermarking actually works, then which libraries implement it — with a closer look at text, since that’s the modality most people building on top of LLMs will touch.</p>
+<section id="why-watermark-at-all" class="level2">
+<h2 class="anchored" data-anchor-id="why-watermark-at-all">Why Watermark at All</h2>
+<p>The motivating cases are provenance and misuse detection: labeling AI-generated content for platform policy, catching academic dishonesty, tracing deepfakes back to the model that made them, and giving downstream systems (search engines, content moderation, other models scraping training data) a way to know what they’re looking at. It’s a softer control than the input/output filtering in something like a <a href="../../project/posts/guardrail-stack-bedrock.html">guardrail stack</a> — watermarking doesn’t stop generation, it labels what already happened.</p>
+</section>
+<section id="text-watermarking" class="level2">
+<h2 class="anchored" data-anchor-id="text-watermarking">Text Watermarking</h2>
+<p>Text is the hardest modality to watermark, because there’s no redundant channel to hide a signal in the way there is in pixels or audio samples — every token is visible, meaningful content.</p>
+<p>The dominant approach (Kirchenbauer et al.’s green-red list scheme, and variants of it used in production systems) works at the logit level during sampling:</p>
+<ol type="1">
+<li>Before sampling each token, use a hash of the preceding tokens to seed a pseudorandom split of the vocabulary into a “green” list and a “red” list.</li>
+<li>Bias the logits to favor green-list tokens — a soft boost, not a hard restriction, so output quality doesn’t visibly degrade.</li>
+<li>A detector with the same hashing scheme can count green-vs-red token ratios in a text sample and compute a statistical test: naturally-written text splits roughly 50/50, watermarked text skews green.</li>
+</ol>
+<p>No embedded payload, no changes to model weights — it’s a sampling-time intervention, which is why it can be toggled per-request cheaply. The cost is a small, usually imperceptible shift in output distribution, and detection requires either the original hashing key or API access to a detector that has it. Google’s SynthID Text is a variant on the same idea.</p>
+</section>
+<section id="image-and-video-watermarking" class="level2">
+<h2 class="anchored" data-anchor-id="image-and-video-watermarking">Image and Video Watermarking</h2>
+<p>Images have more room to hide a signal, and the state of the art (Google DeepMind’s SynthID is the most deployed example) embeds it directly in pixel values in a way that’s statistically invisible to the human eye but recoverable by a matched detector — conceptually similar to spread-spectrum steganography, tuned to survive common transformations. Most practical libraries embed the signal in the frequency domain (DWT/DCT) or via a trained encoder/decoder network.</p>
+<p>Video mostly reduces to per-frame image watermarking plus temporal consistency, so the signal doesn’t flicker or get exploited by frame-dropping.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Library</th>
+<th>Approach</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><a href="https://github.com/ShieldMnt/invisible-watermark"><code>invisible-watermark</code></a> (<code>imwatermark</code>)</td>
+<td>DWT-DCT and RivaGAN encoders</td>
+<td>Used by Stability AI to tag Stable Diffusion outputs; the default choice if you just need “watermark this generated image”</td>
+</tr>
+<tr class="even">
+<td><a href="https://pypi.org/project/blind-watermark/"><code>blind-watermark</code></a></td>
+<td>DWT-DCT-SVD, frequency domain</td>
+<td>Pure Python, survives cropping/resizing reasonably well, good for document/photo watermarking outside of gen-AI pipelines</td>
+</tr>
+<tr class="odd">
+<td><a href="https://github.com/adobe/trustmark">TrustMark</a> (Adobe)</td>
+<td>Learned encoder/decoder</td>
+<td>Built for C2PA-aligned provenance workflows, more robust to common transforms than DWT-based methods</td>
+</tr>
+<tr class="even">
+<td>Pillow / OpenCV</td>
+<td>Direct pixel overlay</td>
+<td>Not a real watermark — just stamping a visible logo or text. Fine for branding, trivially removed, don’t use it for provenance</td>
+</tr>
+</tbody>
+</table>
+<p>Minimal invisible-watermark usage:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> imwatermark <span class="im">import</span> WatermarkEncoder, WatermarkDecoder</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cv2</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>encoder <span class="op">=</span> WatermarkEncoder()</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>encoder.set_watermark(<span class="st">'bytes'</span>, <span class="st">b'my-signal'</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>img <span class="op">=</span> cv2.imread(<span class="st">'input.png'</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>watermarked <span class="op">=</span> encoder.encode(img, <span class="st">'dwtDct'</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>cv2.imwrite(<span class="st">'output.png'</span>, watermarked)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>decoder <span class="op">=</span> WatermarkDecoder(<span class="st">'bytes'</span>, <span class="dv">32</span>)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>watermark <span class="op">=</span> decoder.decode(watermarked, <span class="st">'dwtDct'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="audio-watermarking" class="level2">
+<h2 class="anchored" data-anchor-id="audio-watermarking">Audio Watermarking</h2>
+<p>Audio watermarks typically live in frequency bands outside normal perceptual sensitivity, or use phase manipulation that’s inaudible but detectable algorithmically. The added constraint versus images: the watermark has to survive lossy codecs (MP3, Opus) and analog-ish transformations like playback-and-rerecord, which is a much harsher channel than a PNG getting re-saved.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Library</th>
+<th>Approach</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><a href="https://github.com/facebookresearch/audioseal">AudioSeal</a> (Meta)</td>
+<td>Neural, localized detection</td>
+<td>Detects watermarked segments down to the sample level, fast enough for real-time use</td>
+</tr>
+<tr class="even">
+<td><a href="https://github.com/wavmark/wavmark">WavMark</a></td>
+<td>Neural, payload-carrying</td>
+<td>Encodes up to 32 bits of payload per clip, robust to common re-encoding</td>
+</tr>
+<tr class="odd">
+<td><a href="https://github.com/swesterfeld/audiowmark">audiowmark</a></td>
+<td>Classical, frequency-domain</td>
+<td>Open-source CLI tool, no Python dependency, robust to MP3 re-encoding</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="the-real-problem-robustness" class="level2">
+<h2 class="anchored" data-anchor-id="the-real-problem-robustness">The Real Problem: Robustness</h2>
+<p>Embedding a watermark is the easy 80%. The hard part is surviving the transformations content naturally goes through before anyone tries to detect it:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Attack</th>
+<th>What it does</th>
+<th>Which modality it hurts most</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Paraphrasing / back-translation</td>
+<td>Rewrites text through another model, scrambling the green/red token pattern</td>
+<td>Text</td>
+</tr>
+<tr class="even">
+<td>Cropping, resizing, compression</td>
+<td>Destroys spatial statistics the watermark relies on</td>
+<td>Image</td>
+</tr>
+<tr class="odd">
+<td>Screenshot-and-recompress</td>
+<td>Re-encodes the whole image, stripping pixel-level signal</td>
+<td>Image</td>
+</tr>
+<tr class="even">
+<td>Regeneration attacks</td>
+<td>Feed watermarked output back into a model (same or different) to strip the pattern while preserving meaning</td>
+<td>Text, Image</td>
+</tr>
+<tr class="odd">
+<td>Format conversion / re-recording</td>
+<td>Passes audio through lossy codecs or a speaker-and-mic loop</td>
+<td>Audio</td>
+</tr>
+</tbody>
+</table>
+<p>Text watermarks are the most fragile of the three, precisely because the channel carrying the signal (token choice) is also the entire content — there’s no redundancy to sacrifice. A few sentences of paraphrasing can knock detection confidence down substantially. Image and audio watermarks tend to be more robust because they exploit genuinely redundant channels (pixel-level noise, inaudible frequency bands), but aggressive enough transformation still degrades them.</p>
+<p>This is also why watermarking is a <em>detection aid</em>, not a security control: it’s meant to catch casual and accidental cases, not resist an adversary specifically trying to strip it. Treating it as a substitute for content moderation or authentication is the most common design mistake.</p>
+</section>
+<section id="provenance-standards-c2pa" class="level2">
+<h2 class="anchored" data-anchor-id="provenance-standards-c2pa">Provenance Standards: C2PA</h2>
+<p>Separately from statistical watermarking, the <a href="https://c2pa.org/">C2PA standard</a> (backed by Adobe, Microsoft, OpenAI, and others) takes a metadata-and-signing approach: a cryptographically signed manifest travels with the file, recording generation tool, edit history, and a content hash. It’s not hidden in the pixels — it’s an explicit, verifiable chain of custody, closer to a digital signature than a watermark.</p>
+<p>The two approaches are complementary rather than competing: C2PA metadata is strong when it survives (cryptographically verifiable, tamper-evident) but trivially stripped by re-saving a file without preserving metadata. Statistical watermarking survives common re-encoding but only gives a probabilistic answer. A system that cares about provenance uses both — C2PA for the strong claim when metadata is intact, watermark detection as the fallback when it isn’t.</p>
+</section>
+<section id="text-watermarking-the-practical-focus" class="level2">
+<h2 class="anchored" data-anchor-id="text-watermarking-the-practical-focus">Text Watermarking: The Practical Focus</h2>
+<p>Text is where most people actually need this today — labeling LLM output — and it’s also the modality with the least redundancy to hide a signal in, so the tooling matters more.</p>
+<section id="built-into-hugging-face-transformers" class="level3">
+<h3 class="anchored" data-anchor-id="built-into-hugging-face-transformers">Built into Hugging Face <code>transformers</code></h3>
+<p>The lowest-friction option: no separate package, just a config object passed to <code>generate()</code>. <code>transformers</code> ships two schemes:</p>
+<ul>
+<li><strong><code>WatermarkingConfig</code></strong> — the Kirchenbauer et al.&nbsp;green/red list scheme, tunable via <code>bias</code> and <code>seeding_scheme</code>.</li>
+<li><strong><code>SynthIDTextWatermarkingConfig</code></strong> — Google DeepMind’s SynthID Text, open-sourced and merged upstream.</li>
+</ul>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> (</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    AutoModelForCausalLM,</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    AutoTokenizer,</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    SynthIDTextWatermarkingConfig,</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>tokenizer <span class="op">=</span> AutoTokenizer.from_pretrained(<span class="st">"repo/id"</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> AutoModelForCausalLM.from_pretrained(<span class="st">"repo/id"</span>)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>watermarking_config <span class="op">=</span> SynthIDTextWatermarkingConfig(</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    keys<span class="op">=</span>[<span class="dv">654</span>, <span class="dv">400</span>, <span class="dv">836</span>, <span class="dv">123</span>, <span class="dv">340</span>, <span class="dv">443</span>, <span class="dv">597</span>, <span class="dv">160</span>, <span class="dv">57</span>],  <span class="co"># 20-30 random keys in practice</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    ngram_len<span class="op">=</span><span class="dv">5</span>,  <span class="co"># 5 is a reasonable default, minimum is 2</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>inputs <span class="op">=</span> tokenizer([<span class="st">"Explain how invisible watermarking works."</span>], return_tensors<span class="op">=</span><span class="st">"pt"</span>)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>output <span class="op">=</span> model.generate(<span class="op">**</span>inputs, watermarking_config<span class="op">=</span>watermarking_config, do_sample<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tokenizer.batch_decode(output, skip_special_tokens<span class="op">=</span><span class="va">True</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This is the right starting point if you’re generating text with a model you already load through <code>transformers</code> and just want detectable output with minimal integration work.</p>
+</section>
+<section id="lm-watermarking-the-reference-implementation" class="level3">
+<h3 class="anchored" data-anchor-id="lm-watermarking-the-reference-implementation"><code>lm-watermarking</code> (the reference implementation)</h3>
+<p><a href="https://github.com/jwkirchenbauer/lm-watermarking">jwkirchenbauer/lm-watermarking</a> is the original research implementation of the green/red list scheme, exposed as a <code>LogitsProcessor</code> you drop into generation, plus a matching detector. It exposes more knobs than the <code>transformers</code> built-in (<code>gamma</code> — green list size, <code>delta</code> — logit bias strength, <code>seeding_scheme</code> — how the list is derived), which makes it the better pick when you’re tuning the detectability/quality trade-off yourself rather than taking the defaults.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> extended_watermark_processor <span class="im">import</span> WatermarkLogitsProcessor, WatermarkDetector</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> LogitsProcessorList</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>watermark_processor <span class="op">=</span> WatermarkLogitsProcessor(</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    vocab<span class="op">=</span><span class="bu">list</span>(tokenizer.get_vocab().values()),</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    gamma<span class="op">=</span><span class="fl">0.25</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    delta<span class="op">=</span><span class="fl">2.0</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    seeding_scheme<span class="op">=</span><span class="st">"selfhash"</span>,</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>output <span class="op">=</span> model.generate(</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>inputs, logits_processor<span class="op">=</span>LogitsProcessorList([watermark_processor])</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>detector <span class="op">=</span> WatermarkDetector(</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    vocab<span class="op">=</span><span class="bu">list</span>(tokenizer.get_vocab().values()),</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    gamma<span class="op">=</span><span class="fl">0.25</span>,</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    seeding_scheme<span class="op">=</span><span class="st">"selfhash"</span>,</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    device<span class="op">=</span>model.device,</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    tokenizer<span class="op">=</span>tokenizer,</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> detector.detect(tokenizer.decode(output[<span class="dv">0</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="markllm-compare-schemes-without-committing-to-one" class="level3">
+<h3 class="anchored" data-anchor-id="markllm-compare-schemes-without-committing-to-one">MarkLLM (compare schemes without committing to one)</h3>
+<p><a href="https://github.com/THU-BPM/MarkLLM">THU-BPM/MarkLLM</a> is a unified toolkit bundling roughly ten watermarking algorithms — KGW, a SynthID reimplementation, Unigram, EXP, SIR, and others — behind one API, with built-in detection and visualization. Reach for this when you’re evaluating which scheme fits your use case rather than shipping one from day one; it’s the tool for running an apples-to-apples comparison before committing.</p>
+</section>
+<section id="unigram-watermark" class="level3">
+<h3 class="anchored" data-anchor-id="unigram-watermark">Unigram-Watermark</h3>
+<p><a href="https://github.com/XuandongZhao/Unigram-Watermark">XuandongZhao/Unigram-Watermark</a> fixes the green/red partition instead of reseeding it per n-gram. Detection is more consistent across short generations, at the cost of being an easier pattern to reverse-engineer if an attacker sees enough samples from the same model.</p>
+</section>
+<section id="which-one-to-reach-for" class="level3">
+<h3 class="anchored" data-anchor-id="which-one-to-reach-for">Which One to Reach For</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Library</th>
+<th>Best for</th>
+<th>Effort</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>transformers</code> built-in</td>
+<td>Shipping quickly on a model you already serve via <code>transformers</code></td>
+<td>Lowest</td>
+</tr>
+<tr class="even">
+<td><code>lm-watermarking</code></td>
+<td>Tuning the quality/detectability trade-off yourself</td>
+<td>Medium</td>
+</tr>
+<tr class="odd">
+<td><code>MarkLLM</code></td>
+<td>Comparing multiple schemes before choosing one</td>
+<td>Medium</td>
+</tr>
+<tr class="even">
+<td><code>Unigram-Watermark</code></td>
+<td>Short-generation use cases needing consistent detection</td>
+<td>Low</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="where-this-actually-bites" class="level2">
+<h2 class="anchored" data-anchor-id="where-this-actually-bites">Where This Actually Bites</h2>
+<p>The gap that trips up most watermarking deployments — and every library above inherits it — is treating detection confidence as binary. Watermark detectors return a statistical score, not a yes/no — a short text sample or a heavily cropped image will produce a weak signal even from genuinely watermarked content, and reporting that as a hard “AI-generated: false” is the wrong conclusion. Picking a library solves the integration problem, not the robustness one: a paraphrase or regeneration pass can still knock detection confidence down substantially. If you’re building on top of watermark detection (content moderation, provenance UI, academic integrity tooling), surface the confidence level and the attack surface it’s vulnerable to, not just a pass/fail badge.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/alexdo\.xyz\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
