@@ -32,3 +32,15 @@ The layer most specific to LLMs, and the one generic AppSec tooling has no answe
 ## 5. Model-Level Controls
 
 Governance over which teams and roles can invoke which foundation models, version pinning so a model swap doesn't silently change behavior in production, and — for fine-tuned models — protecting training data and adapter artifacts from leakage or tampering. Rate limiting and quota management belong here too, guarding against denial-of-wallet as much as denial-of-service.
+
+## 6. Output Security
+
+Guardrails apply on the way out as well as the way in: PII detection and redaction, toxicity and harmful-content filtering, and contextual grounding checks to catch hallucinated or ungrounded output before it reaches a user or a downstream system that will act on it unquestioningly.
+
+## 7. Agent and Tool-Use Security
+
+The layer specific to AgentCore-style architectures, and the one that maps most directly to OWASP's "excessive agency" risk. Sandbox tool execution, define an explicit action permission boundary per tool, and require human-in-the-loop approval for high-risk actions — payments, deletions, external API calls. The governing rule: an agent should never hold broader permissions than the narrowest task it's performing at that moment, not the broadest task it might ever perform.
+
+## 8. Application and API
+
+The layer that would exist even without an LLM in the picture: authN/authZ at the API Gateway or ALB, WAF rules against injection and abuse patterns, request throttling, and session management tight enough that conversation context can't be hijacked or leaked across users.
