@@ -44,3 +44,24 @@ The layer specific to AgentCore-style architectures, and the one that maps most 
 ## 8. Application and API
 
 The layer that would exist even without an LLM in the picture: authN/authZ at the API Gateway or ALB, WAF rules against injection and abuse patterns, request throttling, and session management tight enough that conversation context can't be hijacked or leaked across users.
+
+## 9. Observability and Audit
+
+CloudTrail for API-level audit logs, CloudWatch for runtime monitoring, and — increasingly — logging actual prompts and completions, with redaction, for security review and incident response. This is also where anomaly detection on invocation patterns hooks in, since a compromised credential calling `InvokeModel` looks identical to a legitimate one until you're watching volume and pattern, not just auth success.
+
+## 10. Governance and Compliance
+
+Data residency controls and model usage policy, tied back to a framework like the [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/). It's a useful checklist to map each layer above against, and a fast way to spot gaps:
+
+| OWASP LLM Risk | Layer(s) that address it |
+|---|---|
+| Prompt injection | Input security (4), Agent and tool-use security (7) |
+| Insecure output handling | Output security (6) |
+| Training data poisoning | Model-level controls (5) |
+| Model denial of service | Model-level controls (5), Infrastructure and network (1) |
+| Supply chain vulnerabilities | Model-level controls (5), Governance (10) |
+| Sensitive information disclosure | Data protection (3), Output security (6) |
+| Insecure plugin/tool design | Agent and tool-use security (7) |
+| Excessive agency | Identity and access management (2), Agent and tool-use security (7) |
+| Overreliance | Output security (6), Observability and audit (9) |
+| Model theft | Identity and access management (2), Data protection (3) |
