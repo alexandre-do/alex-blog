@@ -12,6 +12,7 @@ listing:
     type: grid
     fields: [image, date, title, description]
     sort: "date desc"
+    categories: true
 ---
 
 # Blog Posts
