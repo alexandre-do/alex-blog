@@ -65,3 +65,7 @@ Data residency controls and model usage policy, tied back to a framework like th
 | Excessive agency | Identity and access management (2), Agent and tool-use security (7) |
 | Overreliance | Output security (6), Observability and audit (9) |
 | Model theft | Identity and access management (2), Data protection (3) |
+
+## Where This Actually Bites
+
+In practice, the layers teams get right first are the ones that look like traditional infra security — VPC, IAM, TLS — because the tooling and habits already exist. The layers that get skipped are 4 and 7: input security against indirect injection, and tool-use boundaries on agents. Both require reasoning about *what the model is allowed to trust*, which isn't a question conventional AppSec review is set up to ask. If you're auditing an existing Bedrock or AgentCore system and only have time for one pass, start there.
