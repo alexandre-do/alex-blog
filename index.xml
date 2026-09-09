@@ -10,7 +10,331 @@
 <atom:link href="https://alexdo.xyz/index.xml" rel="self" type="application/rss+xml"/>
 <description>Alexandre DO&#39;s personal blog and portfolio — machine learning, data science, and production ML systems.</description>
 <generator>quarto-1.9.28</generator>
-<lastBuildDate>Thu, 14 May 2026 07:00:00 GMT</lastBuildDate>
+<lastBuildDate>Tue, 08 Sep 2026 07:00:00 GMT</lastBuildDate>
+<item>
+  <title>Building an MCP Server for Vancouver’s Open Data</title>
+  <link>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</link>
+  <description><![CDATA[ 
+
+
+
+
+<section id="building-an-mcp-server-for-vancouvers-open-data" class="level1">
+<h1>Building an MCP Server for Vancouver’s Open Data</h1>
+<p>The City of Vancouver publishes hundreds of public datasets — property assessments, building permits, public art, parking meters — through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.</p>
+<section id="why-mcp-fits-open-data" class="level2">
+<h2 class="anchored" data-anchor-id="why-mcp-fits-open-data">Why MCP Fits Open Data</h2>
+<p>The Model Context Protocol standardizes how an LLM discovers and calls external tools. Open data portals are a good match for a few reasons:</p>
+<ul>
+<li><strong>The data is already structured</strong> — each dataset has a stable schema, so tool inputs/outputs map cleanly to typed function signatures.</li>
+<li><strong>Discovery is the hard part.</strong> Most people don’t know a dataset called <code>issued-building-permits</code> exists, let alone its field names. An MCP server can expose search as a tool, so the model finds the right dataset instead of the user having to.</li>
+<li><strong>No auth complexity.</strong> Vancouver’s portal is fully public and read-only, so the server doesn’t need to manage credentials or write access — it’s a thin, safe translation layer.</li>
+</ul>
+</section>
+<section id="vancouvers-open-data-api" class="level2">
+<h2 class="anchored" data-anchor-id="vancouvers-open-data-api">Vancouver’s Open Data API</h2>
+<p>Vancouver’s portal (<code>opendata.vancouver.ca</code>) runs on Opendatasoft, exposed through a REST API at:</p>
+<pre><code>https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/{dataset_id}/records</code></pre>
+<p>Each dataset accepts <code>where</code> (an SQL-like filter expression), <code>limit</code>, <code>offset</code>, and <code>order_by</code> query params, and returns JSON records with a consistent <code>results</code> envelope. A handful of datasets cover most useful queries:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Dataset ID</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>property-tax-report</code></td>
+<td>Assessed values by address, year, tax levies</td>
+</tr>
+<tr class="even">
+<td><code>issued-building-permits</code></td>
+<td>Permit type, address, project value, issue date</td>
+</tr>
+<tr class="odd">
+<td><code>public-art</code></td>
+<td>Artwork title, artist, location, install year</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="designing-the-mcp-tools" class="level2">
+<h2 class="anchored" data-anchor-id="designing-the-mcp-tools">Designing the MCP Tools</h2>
+<p>Rather than exposing the raw API 1:1, I mapped it to a small set of task-shaped tools plus a discovery tool:</p>
+<ul>
+<li><code>search_datasets(query)</code> — keyword search over the catalog, returns dataset IDs and descriptions.</li>
+<li><code>get_property_values(address, year)</code> — assessed value lookup for a street address.</li>
+<li><code>get_permits(address, permit_type, since)</code> — building permits filtered by location, type, date.</li>
+<li><code>describe_dataset(dataset_id)</code> — returns field names and types, so the model can build valid <code>where</code> filters for datasets it hasn’t seen before.</li>
+</ul>
+<p>Keeping tools narrow (rather than one generic <code>query(dataset, filter)</code> tool) makes the model’s job easier — it doesn’t need to guess field names, and each tool can validate and sanitize its own inputs.</p>
+</section>
+<section id="implementation" class="level2">
+<h2 class="anchored" data-anchor-id="implementation">Implementation</h2>
+<p>The server is built with the Python MCP SDK’s <code>FastMCP</code>, talking to the Opendatasoft API over <code>httpx</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">from</span> mcp.server.fastmcp <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> FastMCP</span>
+<span id="cb2-2"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> httpx</span>
+<span id="cb2-3"></span>
+<span id="cb2-4">mcp <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> FastMCP(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"vancouver-open-data"</span>)</span>
+<span id="cb2-5">BASE_URL <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets"</span></span>
+<span id="cb2-6"></span>
+<span id="cb2-7"></span>
+<span id="cb2-8"><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">@mcp.tool</span>()</span>
+<span id="cb2-9"><span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">async</span> <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">def</span> search_datasets(query: <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">str</span>, limit: <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">int</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">10</span>) <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-&gt;</span> <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">list</span>[<span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">dict</span>]:</span>
+<span id="cb2-10">    <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">"""Search the City of Vancouver's open data catalog by keyword."""</span></span>
+<span id="cb2-11">    <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">async</span> <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">with</span> httpx.AsyncClient() <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">as</span> client:</span>
+<span id="cb2-12">        resp <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">await</span> client.get(</span>
+<span id="cb2-13">            BASE_URL, params<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>{<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"where"</span>: <span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f'search("</span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>query<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">")'</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"limit"</span>: limit}</span>
+<span id="cb2-14">        )</span>
+<span id="cb2-15">        resp.raise_for_status()</span>
+<span id="cb2-16">        <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">return</span> [</span>
+<span id="cb2-17">            {<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"id"</span>: d[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"dataset_id"</span>], <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"title"</span>: d[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"metas"</span>][<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"default"</span>][<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"title"</span>]}</span>
+<span id="cb2-18">            <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">for</span> d <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">in</span> resp.json()[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"results"</span>]</span>
+<span id="cb2-19">        ]</span>
+<span id="cb2-20"></span>
+<span id="cb2-21"></span>
+<span id="cb2-22"><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">@mcp.tool</span>()</span>
+<span id="cb2-23"><span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">async</span> <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">def</span> get_property_values(address: <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">str</span>, year: <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">int</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">|</span> <span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">None</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">None</span>, limit: <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">int</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">5</span>) <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-&gt;</span> <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">list</span>[<span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">dict</span>]:</span>
+<span id="cb2-24">    <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">"""Look up assessed property values for a given street address."""</span></span>
+<span id="cb2-25">    where <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f'street_name like "</span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>address<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"'</span></span>
+<span id="cb2-26">    <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">if</span> year:</span>
+<span id="cb2-27">        where <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+=</span> <span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f" and tax_assessment_year = </span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>year<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"</span></span>
+<span id="cb2-28">    <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">async</span> <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">with</span> httpx.AsyncClient() <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">as</span> client:</span>
+<span id="cb2-29">        resp <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">await</span> client.get(</span>
+<span id="cb2-30">            <span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"</span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>BASE_URL<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">/property-tax-report/records"</span>,</span>
+<span id="cb2-31">            params<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>{<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"where"</span>: where, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"limit"</span>: limit},</span>
+<span id="cb2-32">        )</span>
+<span id="cb2-33">        resp.raise_for_status()</span>
+<span id="cb2-34">        <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">return</span> resp.json()[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"results"</span>]</span>
+<span id="cb2-35"></span>
+<span id="cb2-36"></span>
+<span id="cb2-37"><span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">if</span> <span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">__name__</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"__main__"</span>:</span>
+<span id="cb2-38">    mcp.run(transport<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"stdio"</span>)</span></code></pre></div></div>
+<p>Registering it with Claude Desktop (or any MCP client) is a one-line config entry pointing at the server’s entrypoint over stdio — no separate hosting needed for local use.</p>
+</section>
+<section id="example-queries-and-results" class="level2">
+<h2 class="anchored" data-anchor-id="example-queries-and-results">Example Queries and Results</h2>
+<p>Once connected, a prompt like:</p>
+<blockquote class="blockquote">
+<p>“What’s the assessed value trend for 123 Main St over the last few years, and were any permits pulled recently?”</p>
+</blockquote>
+<p>resolves into two tool calls — <code>get_property_values(address="123 Main St")</code> and <code>get_permits(address="123 Main St", since="2023-01-01")</code> — and the model composes the JSON results into a plain-language answer, without the user ever touching the Opendatasoft query syntax.</p>
+</section>
+<section id="lessons-learned-and-next-steps" class="level2">
+<h2 class="anchored" data-anchor-id="lessons-learned-and-next-steps">Lessons Learned and Next Steps</h2>
+<ul>
+<li><strong>Schema drift is real.</strong> Field names differ across datasets (<code>street_name</code> vs <code>civic_address</code>), which is why <code>describe_dataset</code> ended up necessary rather than optional — the model needs a way to check before it guesses.</li>
+<li><strong>Narrow tools beat clever ones.</strong> An earlier version exposed a single generic <code>query</code> tool; the model produced malformed <code>where</code> clauses often enough that splitting into task-specific tools was a clear win for reliability.</li>
+<li><strong>Rate limits matter at demo time.</strong> The public API is generous but not unlimited — a thin caching layer in front of <code>get_property_values</code> and <code>get_permits</code> avoided repeat calls during iterative testing.</li>
+</ul>
+<p>Next: expose dataset schemas as MCP <em>resources</em> (not just a tool) so clients can inspect them without a round trip, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up.</p>
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>MCP</category>
+  <category>Open Data</category>
+  <category>LLM</category>
+  <guid>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</guid>
+  <pubDate>Tue, 08 Sep 2026 07:00:00 GMT</pubDate>
+</item>
 <item>
   <title>Deploying a Machine Learning Project with AWS CloudFormation</title>
   <link>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</link>

@@ -2,6 +2,7 @@
   {
     "listing": "/project/posts.html",
     "items": [
+      "/project/posts/mcp-vancouver-open-data.html",
       "/project/posts/deploy-ml-aws-cloudformation.html",
       "/project/posts/fine-tuning-llms.html",
       "/project/posts/rest-vs-graphql-vs-websocket.html"
@@ -10,6 +11,7 @@
   {
     "listing": "/index.html",
     "items": [
+      "/project/posts/mcp-vancouver-open-data.html",
       "/project/posts/deploy-ml-aws-cloudformation.html",
       "/project/posts/fine-tuning-llms.html",
       "/project/posts/rest-vs-graphql-vs-websocket.html"

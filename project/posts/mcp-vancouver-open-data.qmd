@@ -1,23 +1,112 @@
 ---
 title: "Building an MCP Server for Vancouver's Open Data"
 date: "2026-09-08"
-description: "Coming soon: exposing the City of Vancouver's Open Data portal to LLMs through a Model Context Protocol server."
+description: "Exposing the City of Vancouver's Open Data portal to LLMs through a Model Context Protocol server."
+image: "images/mcp-vancouver-open-data.png"
 categories:
     - MCP
     - Open Data
     - LLM
-draft: true
 ---
 
 # Building an MCP Server for Vancouver's Open Data
 
-*This post is a work in progress.*
+The City of Vancouver publishes hundreds of public datasets — property assessments, building permits, public art, parking meters — through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.
 
-## Planned Outline
+## Why MCP Fits Open Data
 
-- What the Model Context Protocol (MCP) is and why it's a good fit for open data
-- Overview of the City of Vancouver's Open Data API
-- Designing MCP tools/resources around key datasets (e.g. property values, permits, transit)
-- Implementation walkthrough
-- Example queries and results
-- Lessons learned and next steps
+The Model Context Protocol standardizes how an LLM discovers and calls external tools. Open data portals are a good match for a few reasons:
+
+- **The data is already structured** — each dataset has a stable schema, so tool inputs/outputs map cleanly to typed function signatures.
+- **Discovery is the hard part.** Most people don't know a dataset called `issued-building-permits` exists, let alone its field names. An MCP server can expose search as a tool, so the model finds the right dataset instead of the user having to.
+- **No auth complexity.** Vancouver's portal is fully public and read-only, so the server doesn't need to manage credentials or write access — it's a thin, safe translation layer.
+
+## Vancouver's Open Data API
+
+Vancouver's portal (`opendata.vancouver.ca`) runs on Opendatasoft, exposed through a REST API at:
+
+```
+https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/{dataset_id}/records
+```
+
+Each dataset accepts `where` (an SQL-like filter expression), `limit`, `offset`, and `order_by` query params, and returns JSON records with a consistent `results` envelope. A handful of datasets cover most useful queries:
+
+| Dataset ID | Contents |
+|---|---|
+| `property-tax-report` | Assessed values by address, year, tax levies |
+| `issued-building-permits` | Permit type, address, project value, issue date |
+| `public-art` | Artwork title, artist, location, install year |
+
+## Designing the MCP Tools
+
+Rather than exposing the raw API 1:1, I mapped it to a small set of task-shaped tools plus a discovery tool:
+
+- `search_datasets(query)` — keyword search over the catalog, returns dataset IDs and descriptions.
+- `get_property_values(address, year)` — assessed value lookup for a street address.
+- `get_permits(address, permit_type, since)` — building permits filtered by location, type, date.
+- `describe_dataset(dataset_id)` — returns field names and types, so the model can build valid `where` filters for datasets it hasn't seen before.
+
+Keeping tools narrow (rather than one generic `query(dataset, filter)` tool) makes the model's job easier — it doesn't need to guess field names, and each tool can validate and sanitize its own inputs.
+
+## Implementation
+
+The server is built with the Python MCP SDK's `FastMCP`, talking to the Opendatasoft API over `httpx`:
+
+```python
+from mcp.server.fastmcp import FastMCP
+import httpx
+
+mcp = FastMCP("vancouver-open-data")
+BASE_URL = "https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets"
+
+
+@mcp.tool()
+async def search_datasets(query: str, limit: int = 10) -> list[dict]:
+    """Search the City of Vancouver's open data catalog by keyword."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            BASE_URL, params={"where": f'search("{query}")', "limit": limit}
+        )
+        resp.raise_for_status()
+        return [
+            {"id": d["dataset_id"], "title": d["metas"]["default"]["title"]}
+            for d in resp.json()["results"]
+        ]
+
+
+@mcp.tool()
+async def get_property_values(address: str, year: int | None = None, limit: int = 5) -> list[dict]:
+    """Look up assessed property values for a given street address."""
+    where = f'street_name like "{address}"'
+    if year:
+        where += f" and tax_assessment_year = {year}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{BASE_URL}/property-tax-report/records",
+            params={"where": where, "limit": limit},
+        )
+        resp.raise_for_status()
+        return resp.json()["results"]
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+```
+
+Registering it with Claude Desktop (or any MCP client) is a one-line config entry pointing at the server's entrypoint over stdio — no separate hosting needed for local use.
+
+## Example Queries and Results
+
+Once connected, a prompt like:
+
+> "What's the assessed value trend for 123 Main St over the last few years, and were any permits pulled recently?"
+
+resolves into two tool calls — `get_property_values(address="123 Main St")` and `get_permits(address="123 Main St", since="2023-01-01")` — and the model composes the JSON results into a plain-language answer, without the user ever touching the Opendatasoft query syntax.
+
+## Lessons Learned and Next Steps
+
+- **Schema drift is real.** Field names differ across datasets (`street_name` vs `civic_address`), which is why `describe_dataset` ended up necessary rather than optional — the model needs a way to check before it guesses.
+- **Narrow tools beat clever ones.** An earlier version exposed a single generic `query` tool; the model produced malformed `where` clauses often enough that splitting into task-specific tools was a clear win for reliability.
+- **Rate limits matter at demo time.** The public API is generous but not unlimited — a thin caching layer in front of `get_property_values` and `get_permits` avoided repeat calls during iterative testing.
+
+Next: expose dataset schemas as MCP *resources* (not just a tool) so clients can inspect them without a round trip, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up.
