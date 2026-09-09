@@ -199,6 +199,81 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="deploying-a-machine-learning-project-with-aws-cloudformation" class="level1">
 <h1>Deploying a Machine Learning Project with AWS CloudFormation</h1>
 <p>Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.</p>
+<section id="what-is-infrastructure-as-code" class="level2">
+<h2 class="anchored" data-anchor-id="what-is-infrastructure-as-code">What Is Infrastructure as Code?</h2>
+<p>Infrastructure as Code (IaC) means describing infrastructure — networks, IAM roles, compute, storage — in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:</p>
+<ul>
+<li><strong>Reproducibility</strong> — the same definition produces the same stack in dev, staging, and prod.</li>
+<li><strong>Auditability</strong> — changes to infrastructure show up as diffs, not as an entry in someone’s shell history.</li>
+<li><strong>Idempotency</strong> — re-applying a template that already matches reality is a no-op; the tool only acts on the delta.</li>
+</ul>
+<p>IaC tools split along one main axis: <strong>declarative vs.&nbsp;imperative</strong>. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (Pulumi in its general-purpose-language mode, or a hand-rolled boto3/Ansible script) describe the steps to get there. Declarative is the norm for cloud infrastructure because the engine can diff current vs.&nbsp;desired state and tell you what will change <em>before</em> it changes it.</p>
+<p>CloudFormation is AWS’s own declarative engine: no install, no state file to manage, and it understands AWS resource types the day they ship. The trade-off is that it only speaks AWS.</p>
+</section>
+<section id="cloudformation-vs.-terraform-vs.-azure-armbicep" class="level2">
+<h2 class="anchored" data-anchor-id="cloudformation-vs.-terraform-vs.-azure-armbicep">CloudFormation vs.&nbsp;Terraform vs.&nbsp;Azure ARM/Bicep</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>CloudFormation</strong></th>
+<th><strong>Terraform</strong></th>
+<th><strong>Azure ARM / Bicep</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Scope</td>
+<td>AWS only</td>
+<td>Multi-cloud (AWS, Azure, GCP, 100+ providers)</td>
+<td>Azure only</td>
+</tr>
+<tr class="even">
+<td>Language</td>
+<td>YAML/JSON</td>
+<td>HCL</td>
+<td>JSON (ARM) or Bicep (DSL that compiles to ARM)</td>
+</tr>
+<tr class="odd">
+<td>State</td>
+<td>Managed by AWS, no local state file</td>
+<td>State file (local or remote backend: S3, Terraform Cloud) that you must protect and lock</td>
+<td>Managed by Azure</td>
+</tr>
+<tr class="even">
+<td>Drift detection</td>
+<td>Built-in (<code>detect-stack-drift</code>)</td>
+<td>Via <code>terraform plan</code>, needs current state to be accurate</td>
+<td>Built-in</td>
+</tr>
+<tr class="odd">
+<td>Change preview</td>
+<td>Change sets</td>
+<td><code>terraform plan</code></td>
+<td>What-if operations</td>
+</tr>
+<tr class="even">
+<td>Ecosystem</td>
+<td>Native AWS support, SAM for serverless</td>
+<td>Largest ecosystem, most third-party modules, works across clouds</td>
+<td>Native Azure support, best for Azure-centric shops</td>
+</tr>
+<tr class="odd">
+<td>Best fit</td>
+<td>AWS-only teams that want zero extra tooling and tight IAM integration</td>
+<td>Teams running multi-cloud or hybrid infra, or who want one tool for everything</td>
+<td>Azure-only teams already inside the Microsoft stack</td>
+</tr>
+</tbody>
+</table>
+<p>For an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) — at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.</p>
+</section>
 <section id="core-building-blocks" class="level2">
 <h2 class="anchored" data-anchor-id="core-building-blocks">Core Building Blocks</h2>
 <p>A typical ML inference stack needs:</p>
