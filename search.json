@@ -4,89 +4,89 @@
     "href": "project/posts.html",
     "title": "All Posts",
     "section": "",
-    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Agentic Stack on AWS: Notes for the Generative AI Developer Exam\n\n\nAgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right…\n\n\n\nSep 1, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Guardrail Stack for Bedrock\n\n\nA defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.\n\n\n\nJul 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\n\n\n\n\n\n\n\nWatermarking Libraries: A Practical Guide\n\n\nHow text, image, and audio watermarking for generative models actually works, why robustness against removal is the hard part, and which libraries to reach for.\n\n\n\nMay 9, 2025\n\n\n\n\n\n\nNo matching items"
+    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Agentic Stack on AWS: Notes for the Generative AI Developer Exam\n\n\nAgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right…\n\n\n\nSep 1, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam\n\n\nA defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.\n\n\n\nJul 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\n\n\n\n\n\n\n\nWatermarking Libraries: A Practical Guide\n\n\nHow text, image, and audio watermarking for generative models actually works, why robustness against removal is the hard part, and which libraries to reach for.\n\n\n\nMay 9, 2025\n\n\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html",
     "href": "project/posts/guardrail-stack-bedrock.html",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "Bedrock Guardrails is one control, not the whole story. Securing an LLM service — especially an agentic one built on AgentCore — is a defense-in-depth problem: no single layer catches everything, and the layers that matter most (prompt injection, excessive agency) are ones a traditional AppSec checklist doesn’t cover at all. The following ten layers are how I map that problem when designing a Bedrock or AgentCore architecture, roughly ordered from the network up to governance.\n\n\nThe perimeter. VPC isolation, private subnets, and VPC endpoints (PrivateLink) for Bedrock keep traffic off the public internet entirely. Security groups and NACLs restrict which services can reach model endpoints, and SageMaker-hosted models should sit inside a VPC with no public egress by default.\n\n\n\nLeast-privilege IAM is the layer that fails quietest — an over-broad role doesn’t throw an error, it just sits there as risk. For Bedrock, that means scoping bedrock:InvokeModel to specific model ARNs and using condition keys to restrict by source VPC or tag, rather than granting invoke access account-wide. For AgentCore, the same principle applies per agent identity: its permission boundary should map to the narrowest set of tools and actions that specific agent needs, not a broad shared service role reused across agents.\n\n\n\nTLS in transit and KMS-managed encryption at rest for prompts, completions, embeddings, and vector store content. The harder part isn’t the encryption — it’s the classification decision upstream of it: what should never reach a model at all (PII, secrets, regulated data) versus what can, with customer-managed KMS keys where you need auditable control over who’s able to decrypt.\n\n\n\nThe layer most specific to LLMs, and the one generic AppSec tooling has no answer for. Bedrock Guardrails applies denied topics, content filters, and word/phrase blocklists to incoming prompts before they reach the model. For agentic systems this extends past the user’s own input: content flowing in from tool outputs or retrieved documents needs the same scrutiny, since indirect prompt injection through RAG content or tool results is one of the most common real-world attack paths — and the easiest one to forget, since it doesn’t look like “user input” at the code level.\n\n\n\nGovernance over which teams and roles can invoke which foundation models, version pinning so a model swap doesn’t silently change behavior in production, and — for fine-tuned models — protecting training data and adapter artifacts from leakage or tampering. Rate limiting and quota management belong here too, guarding against denial-of-wallet as much as denial-of-service.\n\n\n\nGuardrails apply on the way out as well as the way in: PII detection and redaction, toxicity and harmful-content filtering, and contextual grounding checks to catch hallucinated or ungrounded output before it reaches a user or a downstream system that will act on it unquestioningly.\n\n\n\nThe layer specific to AgentCore-style architectures, and the one that maps most directly to OWASP’s “excessive agency” risk. Sandbox tool execution, define an explicit action permission boundary per tool, and require human-in-the-loop approval for high-risk actions — payments, deletions, external API calls. The governing rule: an agent should never hold broader permissions than the narrowest task it’s performing at that moment, not the broadest task it might ever perform.\n\n\n\nThe layer that would exist even without an LLM in the picture: authN/authZ at the API Gateway or ALB, WAF rules against injection and abuse patterns, request throttling, and session management tight enough that conversation context can’t be hijacked or leaked across users.\n\n\n\nCloudTrail for API-level audit logs, CloudWatch for runtime monitoring, and — increasingly — logging actual prompts and completions, with redaction, for security review and incident response. This is also where anomaly detection on invocation patterns hooks in, since a compromised credential calling InvokeModel looks identical to a legitimate one until you’re watching volume and pattern, not just auth success.\n\n\n\nData residency controls and model usage policy, tied back to a framework like the OWASP Top 10 for LLM Applications. It’s a useful checklist to map each layer above against, and a fast way to spot gaps:\n\n\n\n\n\n\n\nOWASP LLM Risk\nLayer(s) that address it\n\n\n\n\nPrompt injection\nInput security (4), Agent and tool-use security (7)\n\n\nInsecure output handling\nOutput security (6)\n\n\nTraining data poisoning\nModel-level controls (5)\n\n\nModel denial of service\nModel-level controls (5), Infrastructure and network (1)\n\n\nSupply chain vulnerabilities\nModel-level controls (5), Governance (10)\n\n\nSensitive information disclosure\nData protection (3), Output security (6)\n\n\nInsecure plugin/tool design\nAgent and tool-use security (7)\n\n\nExcessive agency\nIdentity and access management (2), Agent and tool-use security (7)\n\n\nOverreliance\nOutput security (6), Observability and audit (9)\n\n\nModel theft\nIdentity and access management (2), Data protection (3)\n\n\n\n\n\n\nIn practice, the layers teams get right first are the ones that look like traditional infra security — VPC, IAM, TLS — because the tooling and habits already exist. The layers that get skipped are 4 and 7: input security against indirect injection, and tool-use boundaries on agents. Both require reasoning about what the model is allowed to trust, which isn’t a question conventional AppSec review is set up to ask. If you’re auditing an existing Bedrock or AgentCore system and only have time for one pass, start there."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#infrastructure-and-network",
     "href": "project/posts/guardrail-stack-bedrock.html#infrastructure-and-network",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "The perimeter. VPC isolation, private subnets, and VPC endpoints (PrivateLink) for Bedrock keep traffic off the public internet entirely. Security groups and NACLs restrict which services can reach model endpoints, and SageMaker-hosted models should sit inside a VPC with no public egress by default."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#identity-and-access-management",
     "href": "project/posts/guardrail-stack-bedrock.html#identity-and-access-management",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "Least-privilege IAM is the layer that fails quietest — an over-broad role doesn’t throw an error, it just sits there as risk. For Bedrock, that means scoping bedrock:InvokeModel to specific model ARNs and using condition keys to restrict by source VPC or tag, rather than granting invoke access account-wide. For AgentCore, the same principle applies per agent identity: its permission boundary should map to the narrowest set of tools and actions that specific agent needs, not a broad shared service role reused across agents."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#data-protection",
     "href": "project/posts/guardrail-stack-bedrock.html#data-protection",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "TLS in transit and KMS-managed encryption at rest for prompts, completions, embeddings, and vector store content. The harder part isn’t the encryption — it’s the classification decision upstream of it: what should never reach a model at all (PII, secrets, regulated data) versus what can, with customer-managed KMS keys where you need auditable control over who’s able to decrypt."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#input-security",
     "href": "project/posts/guardrail-stack-bedrock.html#input-security",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "The layer most specific to LLMs, and the one generic AppSec tooling has no answer for. Bedrock Guardrails applies denied topics, content filters, and word/phrase blocklists to incoming prompts before they reach the model. For agentic systems this extends past the user’s own input: content flowing in from tool outputs or retrieved documents needs the same scrutiny, since indirect prompt injection through RAG content or tool results is one of the most common real-world attack paths — and the easiest one to forget, since it doesn’t look like “user input” at the code level."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#model-level-controls",
     "href": "project/posts/guardrail-stack-bedrock.html#model-level-controls",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "Governance over which teams and roles can invoke which foundation models, version pinning so a model swap doesn’t silently change behavior in production, and — for fine-tuned models — protecting training data and adapter artifacts from leakage or tampering. Rate limiting and quota management belong here too, guarding against denial-of-wallet as much as denial-of-service."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#output-security",
     "href": "project/posts/guardrail-stack-bedrock.html#output-security",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "Guardrails apply on the way out as well as the way in: PII detection and redaction, toxicity and harmful-content filtering, and contextual grounding checks to catch hallucinated or ungrounded output before it reaches a user or a downstream system that will act on it unquestioningly."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#agent-and-tool-use-security",
     "href": "project/posts/guardrail-stack-bedrock.html#agent-and-tool-use-security",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "The layer specific to AgentCore-style architectures, and the one that maps most directly to OWASP’s “excessive agency” risk. Sandbox tool execution, define an explicit action permission boundary per tool, and require human-in-the-loop approval for high-risk actions — payments, deletions, external API calls. The governing rule: an agent should never hold broader permissions than the narrowest task it’s performing at that moment, not the broadest task it might ever perform."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#application-and-api",
     "href": "project/posts/guardrail-stack-bedrock.html#application-and-api",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "The layer that would exist even without an LLM in the picture: authN/authZ at the API Gateway or ALB, WAF rules against injection and abuse patterns, request throttling, and session management tight enough that conversation context can’t be hijacked or leaked across users."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#observability-and-audit",
     "href": "project/posts/guardrail-stack-bedrock.html#observability-and-audit",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "CloudTrail for API-level audit logs, CloudWatch for runtime monitoring, and — increasingly — logging actual prompts and completions, with redaction, for security review and incident response. This is also where anomaly detection on invocation patterns hooks in, since a compromised credential calling InvokeModel looks identical to a legitimate one until you’re watching volume and pattern, not just auth success."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#governance-and-compliance",
     "href": "project/posts/guardrail-stack-bedrock.html#governance-and-compliance",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "Data residency controls and model usage policy, tied back to a framework like the OWASP Top 10 for LLM Applications. It’s a useful checklist to map each layer above against, and a fast way to spot gaps:\n\n\n\n\n\n\n\nOWASP LLM Risk\nLayer(s) that address it\n\n\n\n\nPrompt injection\nInput security (4), Agent and tool-use security (7)\n\n\nInsecure output handling\nOutput security (6)\n\n\nTraining data poisoning\nModel-level controls (5)\n\n\nModel denial of service\nModel-level controls (5), Infrastructure and network (1)\n\n\nSupply chain vulnerabilities\nModel-level controls (5), Governance (10)\n\n\nSensitive information disclosure\nData protection (3), Output security (6)\n\n\nInsecure plugin/tool design\nAgent and tool-use security (7)\n\n\nExcessive agency\nIdentity and access management (2), Agent and tool-use security (7)\n\n\nOverreliance\nOutput security (6), Observability and audit (9)\n\n\nModel theft\nIdentity and access management (2), Data protection (3)"
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html#where-this-actually-bites",
     "href": "project/posts/guardrail-stack-bedrock.html#where-this-actually-bites",
-    "title": "The Guardrail Stack for Bedrock",
+    "title": "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam",
     "section": "",
     "text": "In practice, the layers teams get right first are the ones that look like traditional infra security — VPC, IAM, TLS — because the tooling and habits already exist. The layers that get skipped are 4 and 7: input security against indirect injection, and tool-use boundaries on agents. Both require reasoning about what the model is allowed to trust, which isn’t a question conventional AppSec review is set up to ask. If you’re auditing an existing Bedrock or AgentCore system and only have time for one pass, start there."
   },

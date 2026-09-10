@@ -9,7 +9,7 @@
 <meta name="dcterms.date" content="2026-07-14">
 <meta name="description" content="A defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.">
 
-<title>The Guardrail Stack for Bedrock – Alexandre DO</title>
+<title>The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -128,7 +128,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">The Guardrail Stack for Bedrock</h1>
+<h1 class="title">The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam</h1>
   <div class="quarto-categories">
     <div class="quarto-category">AWS</div>
     <div class="quarto-category">Bedrock</div>
@@ -161,8 +161,8 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="the-guardrail-stack-for-bedrock" class="level1">
-<h1>The Guardrail Stack for Bedrock</h1>
+<section id="the-guardrail-stack-for-bedrock-notes-for-the-generative-ai-developer-exam" class="level1">
+<h1>The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam</h1>
 <p>Bedrock Guardrails is one control, not the whole story. Securing an LLM service — especially an agentic one built on AgentCore — is a defense-in-depth problem: no single layer catches everything, and the layers that matter most (prompt injection, excessive agency) are ones a traditional AppSec checklist doesn’t cover at all. The following ten layers are how I map that problem when designing a Bedrock or AgentCore architecture, roughly ordered from the network up to governance.</p>
 <section id="infrastructure-and-network" class="level2">
 <h2 class="anchored" data-anchor-id="infrastructure-and-network">1. Infrastructure and Network</h2>
