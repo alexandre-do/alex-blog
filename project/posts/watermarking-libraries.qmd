@@ -1,6 +1,6 @@
 ---
 title: "Watermarking Libraries: A Practical Guide"
-date: "2026-09-09"
+date: "2025-05-09"
 description: "How text, image, and audio watermarking for generative models actually works, why robustness against removal is the hard part, and which libraries to reach for."
 image: "images/watermarking-libraries.png"
 categories:

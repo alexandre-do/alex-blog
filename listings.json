@@ -2,12 +2,12 @@
   {
     "listing": "/project/posts.html",
     "items": [
-      "/project/posts/watermarking-libraries.html",
       "/project/posts/mcp-vancouver-open-data.html",
       "/project/posts/guardrail-stack-bedrock.html",
       "/project/posts/deploy-ml-aws-cloudformation.html",
       "/project/posts/fine-tuning-llms.html",
-      "/project/posts/rest-vs-graphql-vs-websocket.html"
+      "/project/posts/rest-vs-graphql-vs-websocket.html",
+      "/project/posts/watermarking-libraries.html"
     ]
   },
   {
