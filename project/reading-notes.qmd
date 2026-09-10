@@ -1,0 +1,23 @@
+---
+title: "Reading Notes"
+description: "Personal notes on articles, papers, and lectures I've read or watched."
+include-in-header:
+  text: |
+    <style>
+    #title-block-header { display: none !important; }
+    </style>
+listing:
+  - id: all-reading-notes
+    contents: ./reading-notes
+    type: grid
+    fields: [date, title, description]
+    sort: "date desc"
+    categories: true
+---
+
+# Reading Notes
+
+Short write-ups of articles, papers, and lectures I've gone through, with my own takeaways.
+
+::: {#all-reading-notes}
+:::
