@@ -1,0 +1,34 @@
+---
+title: "Scaling Laws for LLMs: Kaplan vs. Chinchilla"
+date: "2026-09-10"
+description: "Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al. (2020) and Chinchilla (2022) — and why so many early large models were undertrained."
+categories:
+    - LLM
+    - Scaling Laws
+    - Research
+source-title: "Training Compute-Optimal Large Language Models (Chinchilla)"
+source-url: "https://arxiv.org/abs/2203.15556"
+source-author: "Hoffmann et al., DeepMind, 2022"
+---
+
+# Scaling Laws for LLMs: Kaplan vs. Chinchilla
+
+> **Source:** [{{< meta source-title >}}]({{< meta source-url >}}) — {{< meta source-author >}}
+
+For comparison, this note also references the earlier [Kaplan et al., "Scaling Laws for Neural Language Models" (2020)](https://arxiv.org/abs/2001.08361), which the Chinchilla paper directly revises.
+
+## Kaplan's rule (2020)
+
+Given a fixed compute budget, Kaplan et al. found that loss improves most by growing model size aggressively while under-scaling the amount of training data — practically, this meant training very large models on comparatively few tokens. This rule shaped a generation of models (GPT-3 at 175B parameters trained on ~300B tokens is the canonical example): go big on parameters first, worry about data later.
+
+## Chinchilla's correction (2022)
+
+Hoffmann et al. re-ran the scaling experiments more carefully and found the original fit was off. The compute-optimal rule is closer to scaling model size (N) and training tokens (D) *at roughly the same rate* with compute (C):
+
+$$N \propto C^{0.5}, \quad D \propto C^{0.5}$$
+
+To prove it, they trained Chinchilla — 70B parameters on ~1.4T tokens — and it outperformed Gopher, a 280B-parameter model trained on far fewer tokens, despite using the same compute budget. A model 4x smaller beat one 4x larger, purely by being trained on proportionally more data.
+
+## Takeaway
+
+"Bigger is better" was subtly wrong on its own — it's "bigger *and proportionally more data* is better." Most pre-2022 large models were undertrained relative to their parameter count: they'd hit diminishing returns on parameters long before they'd seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn't "how big can the model be" but "what's the compute-optimal split between size and data" — and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default.
