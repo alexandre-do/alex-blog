@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-09-01">
+<meta name="description" content="AgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right piece.">
+
+<title>The Agentic Stack on AWS: Notes for the Generative AI Developer Exam – Alexandre DO</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../images/favicon_id.png" rel="icon" type="image/png">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="../../styles.css">
+</head>
+
+<body class="nav-fixed fullcontent quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">Alexandre DO</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/posts.html"> 
+<span class="menu-text">Posts</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/art.html"> 
+<span class="menu-text">Artwork</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">The Agentic Stack on AWS: Notes for the Generative AI Developer Exam</h1>
+  <div class="quarto-categories">
+    <div class="quarto-category">AWS</div>
+    <div class="quarto-category">Bedrock</div>
+    <div class="quarto-category">Agents</div>
+  </div>
+  </div>
+
+<div>
+  <div class="description">
+    AgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right piece.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">September 1, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="the-agentic-stack-on-aws-notes-for-the-generative-ai-developer-exam" class="level1">
+<h1>The Agentic Stack on AWS: Notes for the Generative AI Developer Exam</h1>
+<p>AWS’s agent tooling looks like a pile of overlapping options — AgentCore Runtime, Strands, Agent Squad, LangChain, LangGraph, Step Functions — until you notice they’re not five answers to one question. They’re answers to five different questions, stacked at different depths: how a model reasons within one call, who writes the reason-act-observe loop, where that loop actually runs, how a request gets routed to the right specialist agent, and what guarantees retries and audit trail around the whole thing. Most confusion about “which one do I use” disappears once you identify which depth a requirement is actually describing.</p>
+<section id="the-five-layers" class="level2">
+<h2 class="anchored" data-anchor-id="the-five-layers">The Five Layers</h2>
+<p>The layer numbers below are depth, not sequence — L0 lives inside a single model call, L4 wraps everything else.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Question it answers</th>
+<th>Who lives there</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>L0 — Reasoning pattern</strong></td>
+<td>How does the model think within one call or turn?</td>
+<td>Chain-of-Thought, ReAct, Reflection, Plan-and-execute — prompt-level, not a service</td>
+</tr>
+<tr class="even">
+<td><strong>L1 — Agent loop / framework</strong></td>
+<td>Who writes the reason → act → observe → repeat cycle?</td>
+<td>Strands Agents, LangGraph, LangChain, Bedrock Agents (managed)</td>
+</tr>
+<tr class="odd">
+<td><strong>L2 — Runtime / hosting</strong></td>
+<td>Where does that agent process run, with what identity, memory and tools?</td>
+<td>AgentCore Runtime (+ Memory, Identity, Gateway, Observability), Lambda, Fargate/EKS</td>
+</tr>
+<tr class="even">
+<td><strong>L3 — Multi-agent routing</strong></td>
+<td>Which of my already-built specialist agents should take this request?</td>
+<td>Agent Squad, Strands supervisor/swarm/graph, Bedrock multi-agent collaboration</td>
+</tr>
+<tr class="odd">
+<td><strong>L4 — Durable outer workflow</strong></td>
+<td>What guarantees retries, approvals, audit trail and week-long execution?</td>
+<td>AWS Step Functions, EventBridge, SQS</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="reading-the-question" class="level2">
+<h2 class="anchored" data-anchor-id="reading-the-question">Reading the Question</h2>
+<p>Scenario descriptions are usually written around one distinguishing constraint. These are the tells:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>The scenario says…</th>
+<th>The layer being tested</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>“…the sequence of steps is not known in advance / the agent must decide which tools to call”</td>
+<td><strong>L1 — Strands or LangGraph.</strong> Model-driven loop, not Step Functions.</td>
+</tr>
+<tr class="even">
+<td>“…must be auditable, retried, resumed after a human approval, run for days”</td>
+<td><strong>L4 — Step Functions Standard</strong> with <code>waitForTaskToken</code>.</td>
+</tr>
+<tr class="odd">
+<td>“…we already have agents built in LangGraph and CrewAI, need them in production with session isolation and identity”</td>
+<td><strong>L2 — AgentCore Runtime.</strong> Framework- and model-agnostic hosting.</td>
+</tr>
+<tr class="even">
+<td>“…one chat entry point, several specialist agents, conversation context must follow the user across them”</td>
+<td><strong>L3 — Agent Squad</strong> (classifier + storage), or a Strands supervisor.</td>
+</tr>
+<tr class="odd">
+<td>“…Lambda’s 15-minute limit is being hit by a long-running agent session”</td>
+<td><strong>L2 — AgentCore Runtime</strong>, up to 8-hour sessions.</td>
+</tr>
+<tr class="even">
+<td>“…minimum custom orchestration code, AWS should own the loop”</td>
+<td><strong>Bedrock Agents</strong> (managed), or the AgentCore <strong>Harness</strong>.</td>
+</tr>
+<tr class="odd">
+<td>“…accuracy on multi-step arithmetic or logic is poor, no tools involved”</td>
+<td><strong>L0 — chain-of-thought</strong>, not an agent framework.</td>
+</tr>
+<tr class="even">
+<td>“…payload between steps exceeds the limit”</td>
+<td><strong>Step Functions’ 256 KB cap.</strong> Pass S3 references, not documents.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="the-five-in-profile" class="level2">
+<h2 class="anchored" data-anchor-id="the-five-in-profile">The Five, in Profile</h2>
+<section id="bedrock-agentcore-runtime-l2-hosting" class="level3">
+<h3 class="anchored" data-anchor-id="bedrock-agentcore-runtime-l2-hosting">Bedrock AgentCore Runtime — L2, hosting</h3>
+<p>A serverless, session-isolated runtime for agents you’ve already written, plus a set of surrounding managed services: Memory, Identity, Gateway, Observability, Code Interpreter, Browser, Policy, Evaluations. It reached general availability in October 2025. The important framing: it does not write your agent, it runs it — and it doesn’t care what wrote it.</p>
+<p>Reach for it when an agent already exists (Strands, LangGraph, CrewAI, LlamaIndex, the OpenAI Agents SDK) and now needs production hosting; when sessions run longer than Lambda’s 15-minute ceiling — Runtime supports up to <strong>8 hours</strong>; when per-user session isolation is a security requirement, since each session gets its own microVM; when you need OAuth/Cognito/IAM agent identity or want to expose Lambdas and REST APIs to the agent as MCP tools through Gateway; or when short- and long-term memory should be managed rather than hand-rolled in DynamoDB.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> bedrock_agentcore <span class="im">import</span> BedrockAgentCoreApp</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands <span class="im">import</span> Agent</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>app <span class="op">=</span> BedrockAgentCoreApp()</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> Agent(tools<span class="op">=</span>[...])</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="at">@app.entrypoint</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> invoke(payload, context):</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> agent(payload[<span class="st">"prompt"</span>])</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># agentcore configure --entrypoint app.py</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># agentcore launch      → ARN</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="co"># InvokeAgentRuntime(runtimeSessionId=...)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The same three steps apply whatever the framework — the container just has to speak the Runtime contract.</p>
+<p><strong>Discriminators:</strong> framework-agnostic <em>and</em> model-agnostic (models inside or outside Bedrock) · 8-hour sessions · microVM session isolation · MCP and A2A support · OTEL/CloudWatch observability built in. <strong>Harness</strong> is the newer managed-loop option, where you declare model + tools + behavior instead of writing the loop yourself.</p>
+</section>
+<section id="strands-agents-l1-model-driven-loop" class="level3">
+<h3 class="anchored" data-anchor-id="strands-agents-l1-model-driven-loop">Strands Agents — L1, model-driven loop</h3>
+<p>AWS’s open-source agent SDK. The whole premise is that the ReAct loop <em>is</em> the framework: give it a model, a system prompt and tools, and the model decides the sequence. A working agent is a few lines of code.</p>
+<p>Reach for it when you want a ReAct-style loop without hand-writing orchestration, want the AWS-native path (written by AWS, deploys straight into AgentCore Runtime, first-class MCP support), or need one of its multi-agent shapes: <em>agents-as-tools</em> (supervisor), <em>swarm</em> (autonomous handoffs), <em>graph</em> (conditional branching, loops), or <em>workflow</em> (fixed DAG, parallel). Observability is part of the core loop, not bolted on — OTEL traces and spans come for free.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands <span class="im">import</span> Agent, tool</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="at">@tool</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_order(order_id: <span class="bu">str</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>:</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Look up an order."""</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ddb.get_item(...)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> Agent(</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    model<span class="op">=</span><span class="st">"anthropic.claude-..."</span>,</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    system_prompt<span class="op">=</span><span class="st">"You are support..."</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    tools<span class="op">=</span>[get_order],</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>agent(<span class="st">"Where is order 4471?"</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="co"># supervisor = agents-as-tools</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>Agent(tools<span class="op">=</span>[billing_agent, tech_agent])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Discriminators:</strong> “model-driven” means the LLM picks the path — you don’t script it · Python and TypeScript · runs on Lambda, Fargate/ECS/EKS, or AgentCore Runtime · multi-agent primitives shipped in 1.0 · return-of-control lets a tool execute client-side for data-residency cases.</p>
+</section>
+<section id="agent-squad-l3-routing" class="level3">
+<h3 class="anchored" data-anchor-id="agent-squad-l3-routing">Agent Squad — L3, routing</h3>
+<p>An AWS Labs open-source orchestrator (formerly Multi-Agent Orchestrator) that classifies an incoming request, routes it to the right specialist agent, and keeps one conversation history across all of them. It does not implement a reasoning loop of its own — it sits on top of agents built elsewhere.</p>
+<p>Reach for it when several agents already exist and one front door needs to pick between them; when the agents are heterogeneous — a Bedrock Agent, a Lex bot, a Lambda, an OpenAI model — and still need shared context; when context has to survive a switch mid-conversation (“now about my bill…”); or when the router itself needs to run anywhere — Lambda, local, another cloud.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>orchestrator <span class="op">=</span> AgentSquad(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  classifier<span class="op">=</span>BedrockClassifier(...),</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  storage<span class="op">=</span>DynamoDbChatStorage(...),</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>orchestrator.add_agent(BedrockLLMAgent(...))   <span class="co"># tech</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>orchestrator.add_agent(LambdaAgent(...))       <span class="co"># billing</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>orchestrator.add_agent(AmazonBedrockAgent(...))<span class="co"># KB</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>orchestrator.route_request(text, user_id, session_id)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Classifier options are Bedrock, Anthropic, or OpenAI; storage can be in-memory, DynamoDB, or Redis/SQL. There’s also a <em>SupervisorAgent</em> mode for agents-as-tools instead of pure routing.</p>
+<p><strong>Discriminators:</strong> intent classification plus conversation persistence are the actual product · Python and TypeScript · streaming and non-streaming · if a scenario describes building the agent’s own tool-calling loop, Agent Squad is the wrong answer — it routes between agents, it doesn’t build one.</p>
+</section>
+<section id="langchain-langgraph-l1-developer-driven-loop" class="level3">
+<h3 class="anchored" data-anchor-id="langchain-langgraph-l1-developer-driven-loop">LangChain &amp; LangGraph — L1, developer-driven loop</h3>
+<p>Two different things under one brand, and AWS documents them separately. <strong>LangChain</strong> is the component library — loaders, retrievers, chains, integrations. <strong>LangGraph</strong> is the stateful graph: nodes, conditional edges, cycles, checkpoints.</p>
+<p>Reach for LangChain for rapid prototyping, RAG plumbing, or reusing a broad pre-built integration ecosystem. Reach for LangGraph when control flow must be explicit and inspectable: complex branching, long-running stateful sessions, checkpointed human-in-the-loop interrupts, multi-agent supervisor graphs — or when portability across clouds and models is a stated requirement. The general rule versus Strands: choose LangGraph when you want to <em>own</em> the topology rather than let the model choose it.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> StateGraph(AgentState)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>g.add_node(<span class="st">"assistant"</span>, call_model)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>g.add_node(<span class="st">"tools"</span>, ToolNode(tools))</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>g.add_edge(START, <span class="st">"assistant"</span>)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>g.add_conditional_edges(</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"assistant"</span>, needs_tool,</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"yes"</span>: <span class="st">"tools"</span>, <span class="st">"no"</span>: END})</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>g.add_edge(<span class="st">"tools"</span>, <span class="st">"assistant"</span>)   <span class="co"># the cycle</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>app <span class="op">=</span> g.<span class="bu">compile</span>(checkpointer<span class="op">=</span>saver)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>That cycle <em>is</em> ReAct, written by hand. Deploy the compiled graph on Lambda, ECS/EKS, or package it into AgentCore Runtime.</p>
+<p><strong>Discriminators:</strong> LangChain is components, LangGraph is a state machine with cycles · both integrate with Bedrock (Claude, Nova) · AWS frames it as “developer-first, explicit chain construction” versus Strands’ “LLM-first” · reflection, plan-and-execute and supervisor patterns are all just extra nodes on the graph.</p>
+</section>
+<section id="aws-step-functions-l4-durable-workflow" class="level3">
+<h3 class="anchored" data-anchor-id="aws-step-functions-l4-durable-workflow">AWS Step Functions — L4, durable workflow</h3>
+<p>The deterministic outer shell. Use it when the sequence is known and you want it explicit, resilient and auditable — not as the tight inner reasoning loop, where every transition costs money and latency.</p>
+<p>Reach for it for durable, resumable execution up to a year (Standard workflows); for human approval gates via the callback pattern (<code>waitForTaskToken</code>, with <code>TimeoutSeconds</code> and <code>HeartbeatSeconds</code>); for fan-out over documents or agents (<code>Map</code>, Distributed Map, <code>Parallel</code>); for built-in retry/catch plus a full execution history as audit and compliance evidence; or for orchestrating <em>across</em> AWS services around the model call — extract, classify, store, notify.</p>
+<pre><code>// optimized integration
+"Task": "arn:aws:states:::bedrock:invokeModel"
+  Input:  { "S3Uri": "s3://in/doc.json" }
+  Output: { "S3Uri": "s3://out/res.json" }
+
+// naive ReAct, exam-flavoured
+Model → Choice("tool_use"?)
+  ├ yes → Lambda(tool) → back to Model
+  └ no  → Succeed
+
+// current AWS-native combo
+Map → bedrock-agentcore:InvokeAgentRuntime</code></pre>
+<p><strong>Discriminators:</strong> a <strong>256 KB</strong> payload limit between states — pass S3 references, treat state as control plane, not data plane · Standard (1 year, callbacks) versus Express (5 minutes, no callbacks, cheaper at volume) · the optimized <code>bedrock:invokeModel</code> integration does <em>not</em> cover Converse or streaming — use the generic SDK integration for those · March 2026 added direct AgentCore SDK integrations; June 2026 added an AgentCore-powered agentic reasoning step (declare model + tools in Workflow Studio, session ID for context, per-invocation overrides), currently in preview.</p>
+</section>
+</section>
+<section id="reasoning-patterns-and-where-each-one-lives" class="level2">
+<h2 class="anchored" data-anchor-id="reasoning-patterns-and-where-each-one-lives">Reasoning Patterns, and Where Each One Lives</h2>
+<p>L0 patterns are prompt-and-control-flow techniques, not services — every one of them is implementable on more than one layer, and the real question is which implementation fits the constraint in front of you.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pattern</th>
+<th>Use it when</th>
+<th>How to apply, by layer</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Chain-of-Thought</strong> — reason before answering, one call</td>
+<td>Multi-step arithmetic, logic, policy decisions where the answer needs derivation. No tools involved.</td>
+<td>Prompt “think step by step”, or few-shot examples showing the reasoning, or the model’s extended-thinking mode. Store the template in Bedrock Prompt Management. Costs more output tokens and latency — <em>chain-of-draft</em> is the terse variant.</td>
+</tr>
+<tr class="even">
+<td><strong>ReAct</strong> — reason → act → observe → repeat</td>
+<td>The task needs external facts or side effects, and the number/order of tool calls is unknown up front.</td>
+<td>Strands: the default agent loop. LangGraph: assistant node ⇄ ToolNode cycle. Bedrock Agents: managed, with action groups. Step Functions: a Choice state looping back to the model — works, but pays a transition per thought.</td>
+</tr>
+<tr class="odd">
+<td><strong>Reflection / self-critique</strong> — generate, critique, revise</td>
+<td>Output quality matters more than latency: code, long-form drafts, anything scored against a rubric.</td>
+<td>Strands: a critic agent used as a tool. LangGraph: a critic node with an edge back to the generator plus a max-iteration guard. Offline: LLM-as-a-Judge in Bedrock Evaluations / AgentCore Evaluations.</td>
+</tr>
+<tr class="even">
+<td><strong>Plan-and-execute</strong> — plan first, then run the steps</td>
+<td>Long horizons where a pure ReAct loop drifts; when the plan itself must be shown to a human before execution.</td>
+<td>LangGraph: planner node → executor loop → replanner. Step Functions: one model call produces the plan, then <code>Map</code> executes it with retries, with an approval gate between the two.</td>
+</tr>
+<tr class="odd">
+<td><strong>Routing</strong> — classify, then dispatch</td>
+<td>Distinct request types needing different tools, costs or models; also cheap-model-first cost optimization.</td>
+<td>Agent Squad classifier (Bedrock/Anthropic/OpenAI). Strands: supervisor with agents-as-tools. Step Functions: <code>Choice</code> on a classification result. Bedrock intelligent prompt routing for pure model-tier selection.</td>
+</tr>
+<tr class="even">
+<td><strong>Parallel sampling / Tree-of-Thought</strong> — explore several branches, then judge</td>
+<td>One-shot, quality-critical answers where independent attempts can be compared, or multi-perspective analysis.</td>
+<td>Step Functions <code>Parallel</code>/<code>Map</code> fan-out then a judge state. Strands <em>swarm</em> for autonomous multi-perspective work. Watch cost — it multiplies token spend by branch count.</td>
+</tr>
+<tr class="odd">
+<td><strong>Human-in-the-loop</strong> — pause for a person</td>
+<td>Irreversible or regulated actions: payments, account changes, clinical or legal output.</td>
+<td>Step Functions <code>waitForTaskToken</code> is the canonical answer. LangGraph: checkpointed interrupt. Strands: return-of-control back to the caller. Bedrock Agents: user confirmation on an action group.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="three-compositions-worth-memorizing" class="level2">
+<h2 class="anchored" data-anchor-id="three-compositions-worth-memorizing">Three Compositions Worth Memorizing</h2>
+<p>Real answers are usually a stack, not a single service. These three combinations are the ones AWS itself publishes.</p>
+<p><strong>The AWS-native default</strong> — Strands Agents writes the ReAct loop, AgentCore Runtime hosts it with 8-hour sessions, AgentCore Gateway turns Lambdas into MCP tools, and AgentCore Memory + Identity handle context and auth. This is the fastest AWS-blessed path from a laptop prototype to a production agent — pick it when the requirement stresses “minimal infrastructure management.”</p>
+<p><strong>Durable enterprise workflow</strong> — Step Functions (Standard) is the outer, auditable process; <code>Map</code> fans out over documents; <code>InvokeAgentRuntime</code> calls the agent per item; <code>waitForTaskToken</code> gates on human approval before commit. Pick this combination when the words are <em>compliance, audit trail, retries, approval, long-running</em>. The agent reasons; Step Functions guarantees.</p>
+<p><strong>Many specialists, one door</strong> — API Gateway is the chat entry point, Agent Squad classifies and keeps DynamoDB history, specialist agents (Strands, Bedrock Agents, or Lex) do the actual work, and AgentCore Runtime hosts each specialist. Pick this when several teams own separate agents and context has to survive the handoff between them.</p>
+</section>
+<section id="traps" class="level2">
+<h2 class="anchored" data-anchor-id="traps">Traps</h2>
+<p>Where these terms get deliberately swapped or conflated:</p>
+<ul>
+<li><strong>Step Functions as the reasoning loop.</strong> It <em>can</em> loop a Choice state back to the model, and that pattern is real — but if the requirement says the path is chosen by the model at runtime, the right tool is Strands or LangGraph. Step Functions is for known sequences.</li>
+<li><strong>Agent Squad mistaken for something that builds an agent.</strong> It routes between agents and keeps history; it does not implement tool-calling reasoning. If nothing in the requirement mentions multiple existing agents, it’s the wrong fit.</li>
+<li><strong>AgentCore Runtime mistaken for a framework.</strong> It’s hosting plus managed services — it doesn’t decide how your agent thinks. “Framework-agnostic” is the phrase to hold onto.</li>
+<li><strong>Bedrock Agents vs.&nbsp;AgentCore.</strong> Bedrock Agents is the fully managed console/API agent — action groups, knowledge bases, AWS owns the loop, least control. AgentCore is the platform for agents <em>you</em> built. Different products, easily conflated.</li>
+<li><strong>LangChain ≠ LangGraph.</strong> “Stateful”, “cycles”, “checkpoint”, “human-in-the-loop interrupt”, or “multi-agent orchestration” all point to LangGraph specifically, not the LangChain component library.</li>
+</ul>
+<p>The one-line version to keep straight: pattern (L0) decides how it thinks, framework (L1) decides who writes the loop, runtime (L2) decides where it runs, router (L3) decides which agent, workflow (L4) decides what is guaranteed.</p>
+</section>
+<section id="sources" class="level2">
+<h2 class="anchored" data-anchor-id="sources">Sources</h2>
+<ul>
+<li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html">What is Amazon Bedrock AgentCore</a> · <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-frameworks/amazon-bedrock-agent-core.html">AWS Prescriptive Guidance: AgentCore</a></li>
+<li><a href="https://aws.amazon.com/blogs/machine-learning/strands-agents-sdk-a-technical-deep-dive-into-agent-architectures-and-observability/">Strands Agents SDK deep dive</a> · <a href="https://strandsagents.com/docs/user-guide/concepts/multi-agent/multi-agent-patterns/">Strands multi-agent patterns</a></li>
+<li><a href="https://awslabs.github.io/agent-squad/">Agent Squad documentation</a></li>
+<li><a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-frameworks/langchain-langgraph.html">AWS Prescriptive Guidance: LangChain and LangGraph</a></li>
+<li><a href="https://aws.amazon.com/about-aws/whats-new/2026/06/aws-step-functions-agentcore/">Step Functions AgentCore agentic reasoning step</a> · <a href="https://hidekazu-konishi.com/entry/step_functions_orchestration_patterns_for_generative_ai.html">Step Functions orchestration patterns for generative AI</a></li>
+<li><a href="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-engineering-guidelines.html">Amazon Bedrock prompt engineering concepts</a></li>
+</ul>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/alexdo\.xyz\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

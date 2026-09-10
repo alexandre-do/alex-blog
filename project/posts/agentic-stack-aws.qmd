@@ -1,0 +1,208 @@
+---
+title: "The Agentic Stack on AWS: Notes for the Generative AI Developer Exam"
+date: "2026-09-01"
+description: "AgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right piece."
+image: "images/agentic-stack-aws.png"
+categories:
+    - AWS
+    - Bedrock
+    - Agents
+---
+
+# The Agentic Stack on AWS: Notes for the Generative AI Developer Exam
+
+AWS's agent tooling looks like a pile of overlapping options — AgentCore Runtime, Strands, Agent Squad, LangChain, LangGraph, Step Functions — until you notice they're not five answers to one question. They're answers to five different questions, stacked at different depths: how a model reasons within one call, who writes the reason-act-observe loop, where that loop actually runs, how a request gets routed to the right specialist agent, and what guarantees retries and audit trail around the whole thing. Most confusion about "which one do I use" disappears once you identify which depth a requirement is actually describing.
+
+## The Five Layers
+
+The layer numbers below are depth, not sequence — L0 lives inside a single model call, L4 wraps everything else.
+
+| Layer | Question it answers | Who lives there |
+|---|---|---|
+| **L0 — Reasoning pattern** | How does the model think within one call or turn? | Chain-of-Thought, ReAct, Reflection, Plan-and-execute — prompt-level, not a service |
+| **L1 — Agent loop / framework** | Who writes the reason → act → observe → repeat cycle? | Strands Agents, LangGraph, LangChain, Bedrock Agents (managed) |
+| **L2 — Runtime / hosting** | Where does that agent process run, with what identity, memory and tools? | AgentCore Runtime (+ Memory, Identity, Gateway, Observability), Lambda, Fargate/EKS |
+| **L3 — Multi-agent routing** | Which of my already-built specialist agents should take this request? | Agent Squad, Strands supervisor/swarm/graph, Bedrock multi-agent collaboration |
+| **L4 — Durable outer workflow** | What guarantees retries, approvals, audit trail and week-long execution? | AWS Step Functions, EventBridge, SQS |
+
+## Reading the Question
+
+Scenario descriptions are usually written around one distinguishing constraint. These are the tells:
+
+| The scenario says… | The layer being tested |
+|---|---|
+| "…the sequence of steps is not known in advance / the agent must decide which tools to call" | **L1 — Strands or LangGraph.** Model-driven loop, not Step Functions. |
+| "…must be auditable, retried, resumed after a human approval, run for days" | **L4 — Step Functions Standard** with `waitForTaskToken`. |
+| "…we already have agents built in LangGraph and CrewAI, need them in production with session isolation and identity" | **L2 — AgentCore Runtime.** Framework- and model-agnostic hosting. |
+| "…one chat entry point, several specialist agents, conversation context must follow the user across them" | **L3 — Agent Squad** (classifier + storage), or a Strands supervisor. |
+| "…Lambda's 15-minute limit is being hit by a long-running agent session" | **L2 — AgentCore Runtime**, up to 8-hour sessions. |
+| "…minimum custom orchestration code, AWS should own the loop" | **Bedrock Agents** (managed), or the AgentCore **Harness**. |
+| "…accuracy on multi-step arithmetic or logic is poor, no tools involved" | **L0 — chain-of-thought**, not an agent framework. |
+| "…payload between steps exceeds the limit" | **Step Functions' 256 KB cap.** Pass S3 references, not documents. |
+
+## The Five, in Profile
+
+### Bedrock AgentCore Runtime — L2, hosting
+
+A serverless, session-isolated runtime for agents you've already written, plus a set of surrounding managed services: Memory, Identity, Gateway, Observability, Code Interpreter, Browser, Policy, Evaluations. It reached general availability in October 2025. The important framing: it does not write your agent, it runs it — and it doesn't care what wrote it.
+
+Reach for it when an agent already exists (Strands, LangGraph, CrewAI, LlamaIndex, the OpenAI Agents SDK) and now needs production hosting; when sessions run longer than Lambda's 15-minute ceiling — Runtime supports up to **8 hours**; when per-user session isolation is a security requirement, since each session gets its own microVM; when you need OAuth/Cognito/IAM agent identity or want to expose Lambdas and REST APIs to the agent as MCP tools through Gateway; or when short- and long-term memory should be managed rather than hand-rolled in DynamoDB.
+
+```python
+from bedrock_agentcore import BedrockAgentCoreApp
+from strands import Agent
+
+app = BedrockAgentCoreApp()
+agent = Agent(tools=[...])
+
+@app.entrypoint
+def invoke(payload, context):
+    return agent(payload["prompt"])
+
+# agentcore configure --entrypoint app.py
+# agentcore launch      → ARN
+# InvokeAgentRuntime(runtimeSessionId=...)
+```
+
+The same three steps apply whatever the framework — the container just has to speak the Runtime contract.
+
+**Discriminators:** framework-agnostic *and* model-agnostic (models inside or outside Bedrock) · 8-hour sessions · microVM session isolation · MCP and A2A support · OTEL/CloudWatch observability built in. **Harness** is the newer managed-loop option, where you declare model + tools + behavior instead of writing the loop yourself.
+
+### Strands Agents — L1, model-driven loop
+
+AWS's open-source agent SDK. The whole premise is that the ReAct loop *is* the framework: give it a model, a system prompt and tools, and the model decides the sequence. A working agent is a few lines of code.
+
+Reach for it when you want a ReAct-style loop without hand-writing orchestration, want the AWS-native path (written by AWS, deploys straight into AgentCore Runtime, first-class MCP support), or need one of its multi-agent shapes: *agents-as-tools* (supervisor), *swarm* (autonomous handoffs), *graph* (conditional branching, loops), or *workflow* (fixed DAG, parallel). Observability is part of the core loop, not bolted on — OTEL traces and spans come for free.
+
+```python
+from strands import Agent, tool
+
+@tool
+def get_order(order_id: str) -> dict:
+    """Look up an order."""
+    return ddb.get_item(...)
+
+agent = Agent(
+    model="anthropic.claude-...",
+    system_prompt="You are support...",
+    tools=[get_order],
+)
+agent("Where is order 4471?")
+
+# supervisor = agents-as-tools
+Agent(tools=[billing_agent, tech_agent])
+```
+
+**Discriminators:** "model-driven" means the LLM picks the path — you don't script it · Python and TypeScript · runs on Lambda, Fargate/ECS/EKS, or AgentCore Runtime · multi-agent primitives shipped in 1.0 · return-of-control lets a tool execute client-side for data-residency cases.
+
+### Agent Squad — L3, routing
+
+An AWS Labs open-source orchestrator (formerly Multi-Agent Orchestrator) that classifies an incoming request, routes it to the right specialist agent, and keeps one conversation history across all of them. It does not implement a reasoning loop of its own — it sits on top of agents built elsewhere.
+
+Reach for it when several agents already exist and one front door needs to pick between them; when the agents are heterogeneous — a Bedrock Agent, a Lex bot, a Lambda, an OpenAI model — and still need shared context; when context has to survive a switch mid-conversation ("now about my bill…"); or when the router itself needs to run anywhere — Lambda, local, another cloud.
+
+```python
+orchestrator = AgentSquad(
+  classifier=BedrockClassifier(...),
+  storage=DynamoDbChatStorage(...),
+)
+orchestrator.add_agent(BedrockLLMAgent(...))   # tech
+orchestrator.add_agent(LambdaAgent(...))       # billing
+orchestrator.add_agent(AmazonBedrockAgent(...))# KB
+
+orchestrator.route_request(text, user_id, session_id)
+```
+
+Classifier options are Bedrock, Anthropic, or OpenAI; storage can be in-memory, DynamoDB, or Redis/SQL. There's also a *SupervisorAgent* mode for agents-as-tools instead of pure routing.
+
+**Discriminators:** intent classification plus conversation persistence are the actual product · Python and TypeScript · streaming and non-streaming · if a scenario describes building the agent's own tool-calling loop, Agent Squad is the wrong answer — it routes between agents, it doesn't build one.
+
+### LangChain & LangGraph — L1, developer-driven loop
+
+Two different things under one brand, and AWS documents them separately. **LangChain** is the component library — loaders, retrievers, chains, integrations. **LangGraph** is the stateful graph: nodes, conditional edges, cycles, checkpoints.
+
+Reach for LangChain for rapid prototyping, RAG plumbing, or reusing a broad pre-built integration ecosystem. Reach for LangGraph when control flow must be explicit and inspectable: complex branching, long-running stateful sessions, checkpointed human-in-the-loop interrupts, multi-agent supervisor graphs — or when portability across clouds and models is a stated requirement. The general rule versus Strands: choose LangGraph when you want to *own* the topology rather than let the model choose it.
+
+```python
+g = StateGraph(AgentState)
+g.add_node("assistant", call_model)
+g.add_node("tools", ToolNode(tools))
+g.add_edge(START, "assistant")
+g.add_conditional_edges(
+    "assistant", needs_tool,
+    {"yes": "tools", "no": END})
+g.add_edge("tools", "assistant")   # the cycle
+app = g.compile(checkpointer=saver)
+```
+
+That cycle *is* ReAct, written by hand. Deploy the compiled graph on Lambda, ECS/EKS, or package it into AgentCore Runtime.
+
+**Discriminators:** LangChain is components, LangGraph is a state machine with cycles · both integrate with Bedrock (Claude, Nova) · AWS frames it as "developer-first, explicit chain construction" versus Strands' "LLM-first" · reflection, plan-and-execute and supervisor patterns are all just extra nodes on the graph.
+
+### AWS Step Functions — L4, durable workflow
+
+The deterministic outer shell. Use it when the sequence is known and you want it explicit, resilient and auditable — not as the tight inner reasoning loop, where every transition costs money and latency.
+
+Reach for it for durable, resumable execution up to a year (Standard workflows); for human approval gates via the callback pattern (`waitForTaskToken`, with `TimeoutSeconds` and `HeartbeatSeconds`); for fan-out over documents or agents (`Map`, Distributed Map, `Parallel`); for built-in retry/catch plus a full execution history as audit and compliance evidence; or for orchestrating *across* AWS services around the model call — extract, classify, store, notify.
+
+```
+// optimized integration
+"Task": "arn:aws:states:::bedrock:invokeModel"
+  Input:  { "S3Uri": "s3://in/doc.json" }
+  Output: { "S3Uri": "s3://out/res.json" }
+
+// naive ReAct, exam-flavoured
+Model → Choice("tool_use"?)
+  ├ yes → Lambda(tool) → back to Model
+  └ no  → Succeed
+
+// current AWS-native combo
+Map → bedrock-agentcore:InvokeAgentRuntime
+```
+
+**Discriminators:** a **256 KB** payload limit between states — pass S3 references, treat state as control plane, not data plane · Standard (1 year, callbacks) versus Express (5 minutes, no callbacks, cheaper at volume) · the optimized `bedrock:invokeModel` integration does *not* cover Converse or streaming — use the generic SDK integration for those · March 2026 added direct AgentCore SDK integrations; June 2026 added an AgentCore-powered agentic reasoning step (declare model + tools in Workflow Studio, session ID for context, per-invocation overrides), currently in preview.
+
+## Reasoning Patterns, and Where Each One Lives
+
+L0 patterns are prompt-and-control-flow techniques, not services — every one of them is implementable on more than one layer, and the real question is which implementation fits the constraint in front of you.
+
+| Pattern | Use it when | How to apply, by layer |
+|---|---|---|
+| **Chain-of-Thought** — reason before answering, one call | Multi-step arithmetic, logic, policy decisions where the answer needs derivation. No tools involved. | Prompt "think step by step", or few-shot examples showing the reasoning, or the model's extended-thinking mode. Store the template in Bedrock Prompt Management. Costs more output tokens and latency — *chain-of-draft* is the terse variant. |
+| **ReAct** — reason → act → observe → repeat | The task needs external facts or side effects, and the number/order of tool calls is unknown up front. | Strands: the default agent loop. LangGraph: assistant node ⇄ ToolNode cycle. Bedrock Agents: managed, with action groups. Step Functions: a Choice state looping back to the model — works, but pays a transition per thought. |
+| **Reflection / self-critique** — generate, critique, revise | Output quality matters more than latency: code, long-form drafts, anything scored against a rubric. | Strands: a critic agent used as a tool. LangGraph: a critic node with an edge back to the generator plus a max-iteration guard. Offline: LLM-as-a-Judge in Bedrock Evaluations / AgentCore Evaluations. |
+| **Plan-and-execute** — plan first, then run the steps | Long horizons where a pure ReAct loop drifts; when the plan itself must be shown to a human before execution. | LangGraph: planner node → executor loop → replanner. Step Functions: one model call produces the plan, then `Map` executes it with retries, with an approval gate between the two. |
+| **Routing** — classify, then dispatch | Distinct request types needing different tools, costs or models; also cheap-model-first cost optimization. | Agent Squad classifier (Bedrock/Anthropic/OpenAI). Strands: supervisor with agents-as-tools. Step Functions: `Choice` on a classification result. Bedrock intelligent prompt routing for pure model-tier selection. |
+| **Parallel sampling / Tree-of-Thought** — explore several branches, then judge | One-shot, quality-critical answers where independent attempts can be compared, or multi-perspective analysis. | Step Functions `Parallel`/`Map` fan-out then a judge state. Strands *swarm* for autonomous multi-perspective work. Watch cost — it multiplies token spend by branch count. |
+| **Human-in-the-loop** — pause for a person | Irreversible or regulated actions: payments, account changes, clinical or legal output. | Step Functions `waitForTaskToken` is the canonical answer. LangGraph: checkpointed interrupt. Strands: return-of-control back to the caller. Bedrock Agents: user confirmation on an action group. |
+
+## Three Compositions Worth Memorizing
+
+Real answers are usually a stack, not a single service. These three combinations are the ones AWS itself publishes.
+
+**The AWS-native default** — Strands Agents writes the ReAct loop, AgentCore Runtime hosts it with 8-hour sessions, AgentCore Gateway turns Lambdas into MCP tools, and AgentCore Memory + Identity handle context and auth. This is the fastest AWS-blessed path from a laptop prototype to a production agent — pick it when the requirement stresses "minimal infrastructure management."
+
+**Durable enterprise workflow** — Step Functions (Standard) is the outer, auditable process; `Map` fans out over documents; `InvokeAgentRuntime` calls the agent per item; `waitForTaskToken` gates on human approval before commit. Pick this combination when the words are *compliance, audit trail, retries, approval, long-running*. The agent reasons; Step Functions guarantees.
+
+**Many specialists, one door** — API Gateway is the chat entry point, Agent Squad classifies and keeps DynamoDB history, specialist agents (Strands, Bedrock Agents, or Lex) do the actual work, and AgentCore Runtime hosts each specialist. Pick this when several teams own separate agents and context has to survive the handoff between them.
+
+## Traps
+
+Where these terms get deliberately swapped or conflated:
+
+- **Step Functions as the reasoning loop.** It *can* loop a Choice state back to the model, and that pattern is real — but if the requirement says the path is chosen by the model at runtime, the right tool is Strands or LangGraph. Step Functions is for known sequences.
+- **Agent Squad mistaken for something that builds an agent.** It routes between agents and keeps history; it does not implement tool-calling reasoning. If nothing in the requirement mentions multiple existing agents, it's the wrong fit.
+- **AgentCore Runtime mistaken for a framework.** It's hosting plus managed services — it doesn't decide how your agent thinks. "Framework-agnostic" is the phrase to hold onto.
+- **Bedrock Agents vs. AgentCore.** Bedrock Agents is the fully managed console/API agent — action groups, knowledge bases, AWS owns the loop, least control. AgentCore is the platform for agents *you* built. Different products, easily conflated.
+- **LangChain ≠ LangGraph.** "Stateful", "cycles", "checkpoint", "human-in-the-loop interrupt", or "multi-agent orchestration" all point to LangGraph specifically, not the LangChain component library.
+
+The one-line version to keep straight: pattern (L0) decides how it thinks, framework (L1) decides who writes the loop, runtime (L2) decides where it runs, router (L3) decides which agent, workflow (L4) decides what is guaranteed.
+
+## Sources
+
+- [What is Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html) · [AWS Prescriptive Guidance: AgentCore](https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-frameworks/amazon-bedrock-agent-core.html)
+- [Strands Agents SDK deep dive](https://aws.amazon.com/blogs/machine-learning/strands-agents-sdk-a-technical-deep-dive-into-agent-architectures-and-observability/) · [Strands multi-agent patterns](https://strandsagents.com/docs/user-guide/concepts/multi-agent/multi-agent-patterns/)
+- [Agent Squad documentation](https://awslabs.github.io/agent-squad/)
+- [AWS Prescriptive Guidance: LangChain and LangGraph](https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-frameworks/langchain-langgraph.html)
+- [Step Functions AgentCore agentic reasoning step](https://aws.amazon.com/about-aws/whats-new/2026/06/aws-step-functions-agentcore/) · [Step Functions orchestration patterns for generative AI](https://hidekazu-konishi.com/entry/step_functions_orchestration_patterns_for_generative_ai.html)
+- [Amazon Bedrock prompt engineering concepts](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-engineering-guidelines.html)
