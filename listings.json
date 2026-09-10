@@ -1,5 +1,19 @@
 [
   {
+    "listing": "/project/reading-notes.html",
+    "items": [
+      "/project/reading-notes/scaling-laws-llms.html"
+    ]
+  },
+  {
+    "listing": "/index.html",
+    "items": [
+      "/project/posts/mcp-vancouver-open-data.html",
+      "/project/posts/deploy-ml-aws-cloudformation.html",
+      "/project/posts/rest-vs-graphql-vs-websocket.html"
+    ]
+  },
+  {
     "listing": "/project/posts.html",
     "items": [
       "/project/posts/mcp-vancouver-open-data.html",
@@ -9,14 +23,6 @@
       "/project/posts/fine-tuning-llms.html",
       "/project/posts/rest-vs-graphql-vs-websocket.html",
       "/project/posts/watermarking-libraries.html"
-    ]
-  },
-  {
-    "listing": "/index.html",
-    "items": [
-      "/project/posts/mcp-vancouver-open-data.html",
-      "/project/posts/deploy-ml-aws-cloudformation.html",
-      "/project/posts/rest-vs-graphql-vs-websocket.html"
     ]
   }
 ]

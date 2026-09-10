@@ -1,10 +1,38 @@
 [
   {
-    "objectID": "project/posts.html",
-    "href": "project/posts.html",
-    "title": "All Posts",
+    "objectID": "project/reading-notes.html",
+    "href": "project/reading-notes.html",
+    "title": "Reading Notes",
     "section": "",
-    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Agentic Stack on AWS: Notes for the Generative AI Developer Exam\n\n\nAgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right…\n\n\n\nSep 1, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam\n\n\nA defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.\n\n\n\nJul 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\n\n\n\n\n\n\n\nWatermarking Libraries: A Practical Guide\n\n\nHow text, image, and audio watermarking for generative models actually works, why robustness against removal is the hard part, and which libraries to reach for.\n\n\n\nMay 9, 2025\n\n\n\n\n\n\nNo matching items"
+    "text": "Reading Notes\nShort write-ups of articles, papers, and lectures I’ve gone through, with my own takeaways.\n\n\n\n\n\n\n\nScaling Laws for LLMs: Kaplan vs. Chinchilla\n\n\nNotes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al. (2020) and Chinchilla (2022) — and why so many early large models were undertrained.\n\n\n\nSep 10, 2026\n\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "project/reading-notes/scaling-laws-llms.html",
+    "href": "project/reading-notes/scaling-laws-llms.html",
+    "title": "Scaling Laws for LLMs: Kaplan vs. Chinchilla",
+    "section": "",
+    "text": "Source: Training Compute-Optimal Large Language Models (Chinchilla) — Hoffmann et al., DeepMind, 2022\n\nFor comparison, this note also references the earlier Kaplan et al., “Scaling Laws for Neural Language Models” (2020), which the Chinchilla paper directly revises.\n\n\nGiven a fixed compute budget, Kaplan et al. found that loss improves most by growing model size aggressively while under-scaling the amount of training data — practically, this meant training very large models on comparatively few tokens. This rule shaped a generation of models (GPT-3 at 175B parameters trained on ~300B tokens is the canonical example): go big on parameters first, worry about data later.\n\n\n\nHoffmann et al. re-ran the scaling experiments more carefully and found the original fit was off. The compute-optimal rule is closer to scaling model size (N) and training tokens (D) at roughly the same rate with compute (C):\n\\[N \\propto C^{0.5}, \\quad D \\propto C^{0.5}\\]\nTo prove it, they trained Chinchilla — 70B parameters on ~1.4T tokens — and it outperformed Gopher, a 280B-parameter model trained on far fewer tokens, despite using the same compute budget. A model 4x smaller beat one 4x larger, purely by being trained on proportionally more data.\n\n\n\n“Bigger is better” was subtly wrong on its own — it’s “bigger and proportionally more data is better.” Most pre-2022 large models were undertrained relative to their parameter count: they’d hit diminishing returns on parameters long before they’d seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn’t “how big can the model be” but “what’s the compute-optimal split between size and data” — and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default."
+  },
+  {
+    "objectID": "project/reading-notes/scaling-laws-llms.html#kaplans-rule-2020",
+    "href": "project/reading-notes/scaling-laws-llms.html#kaplans-rule-2020",
+    "title": "Scaling Laws for LLMs: Kaplan vs. Chinchilla",
+    "section": "",
+    "text": "Given a fixed compute budget, Kaplan et al. found that loss improves most by growing model size aggressively while under-scaling the amount of training data — practically, this meant training very large models on comparatively few tokens. This rule shaped a generation of models (GPT-3 at 175B parameters trained on ~300B tokens is the canonical example): go big on parameters first, worry about data later."
+  },
+  {
+    "objectID": "project/reading-notes/scaling-laws-llms.html#chinchillas-correction-2022",
+    "href": "project/reading-notes/scaling-laws-llms.html#chinchillas-correction-2022",
+    "title": "Scaling Laws for LLMs: Kaplan vs. Chinchilla",
+    "section": "",
+    "text": "Hoffmann et al. re-ran the scaling experiments more carefully and found the original fit was off. The compute-optimal rule is closer to scaling model size (N) and training tokens (D) at roughly the same rate with compute (C):\n\\[N \\propto C^{0.5}, \\quad D \\propto C^{0.5}\\]\nTo prove it, they trained Chinchilla — 70B parameters on ~1.4T tokens — and it outperformed Gopher, a 280B-parameter model trained on far fewer tokens, despite using the same compute budget. A model 4x smaller beat one 4x larger, purely by being trained on proportionally more data."
+  },
+  {
+    "objectID": "project/reading-notes/scaling-laws-llms.html#takeaway",
+    "href": "project/reading-notes/scaling-laws-llms.html#takeaway",
+    "title": "Scaling Laws for LLMs: Kaplan vs. Chinchilla",
+    "section": "",
+    "text": "“Bigger is better” was subtly wrong on its own — it’s “bigger and proportionally more data is better.” Most pre-2022 large models were undertrained relative to their parameter count: they’d hit diminishing returns on parameters long before they’d seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn’t “how big can the model be” but “what’s the compute-optimal split between size and data” — and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default."
   },
   {
     "objectID": "project/posts/guardrail-stack-bedrock.html",
@@ -425,5 +453,12 @@
     "title": "Artwork",
     "section": "",
     "text": "Outside of machine learning and data, I paint and draw as a way to unplug and recharge. This page is a growing gallery of my work — click on any piece to view it in full size."
+  },
+  {
+    "objectID": "project/posts.html",
+    "href": "project/posts.html",
+    "title": "All Posts",
+    "section": "",
+    "text": "Blog Posts\nExplore all my posts on machine learning, data science, and AI engineering.\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Agentic Stack on AWS: Notes for the Generative AI Developer Exam\n\n\nAgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right…\n\n\n\nSep 1, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nThe Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam\n\n\nA defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.\n\n\n\nJul 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nFine-Tuning LLMs\n\n\nA short, practical walkthrough of fine-tuning a large language model with LoRA instead of full fine-tuning.\n\n\n\nJan 20, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\n\n\n\n\n\n\n\nWatermarking Libraries: A Practical Guide\n\n\nHow text, image, and audio watermarking for generative models actually works, why robustness against removal is the hard part, and which libraries to reach for.\n\n\n\nMay 9, 2025\n\n\n\n\n\n\nNo matching items"
   }
 ]
