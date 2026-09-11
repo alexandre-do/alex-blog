@@ -6,10 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-07-14">
-<meta name="description" content="A defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.">
+<meta name="dcterms.date" content="2017-06-12">
+<meta name="description" content="Notes on the paper that introduced the Transformer architecture — dropping recurrence and convolution entirely in favor of self-attention.">
 
-<title>The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam – Alexandre DO</title>
+<title>Attention Is All You Need: The Transformer – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -73,7 +73,45 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
+<style>
+/* Reading note: keep only two heading levels visible — the page
+   title (from the title block above) and the H2 sections below.
+   Quarto/Pandoc always emits a body-level H1 matching the title
+   when content starts at H2; hide that duplicate here. */
+main#quarto-document-content > section.level1 > h1:first-child {
+  display: none;
+}
+</style>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="../../styles.css">
 </head>
@@ -132,17 +170,17 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam</h1>
+<h1 class="title">Attention Is All You Need: The Transformer</h1>
   <div class="quarto-categories">
-    <div class="quarto-category">AWS</div>
-    <div class="quarto-category">Bedrock</div>
     <div class="quarto-category">LLM</div>
+    <div class="quarto-category">Architecture</div>
+    <div class="quarto-category">Research</div>
   </div>
   </div>
 
 <div>
   <div class="description">
-    A defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks.
+    Notes on the paper that introduced the Transformer architecture — dropping recurrence and convolution entirely in favor of self-attention.
   </div>
 </div>
 
@@ -153,7 +191,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">July 14, 2026</p>
+      <p class="date">June 12, 2017</p>
     </div>
   </div>
   
@@ -165,109 +203,48 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="the-guardrail-stack-for-bedrock-notes-for-the-generative-ai-developer-exam" class="level1">
-<h1>The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam</h1>
-<p>Bedrock Guardrails is one control, not the whole story. Securing an LLM service — especially an agentic one built on AgentCore — is a defense-in-depth problem: no single layer catches everything, and the layers that matter most (prompt injection, excessive agency) are ones a traditional AppSec checklist doesn’t cover at all. The following ten layers are how I map that problem when designing a Bedrock or AgentCore architecture, roughly ordered from the network up to governance.</p>
-<section id="infrastructure-and-network" class="level2">
-<h2 class="anchored" data-anchor-id="infrastructure-and-network">1. Infrastructure and Network</h2>
-<p>The perimeter. VPC isolation, private subnets, and VPC endpoints (PrivateLink) for Bedrock keep traffic off the public internet entirely. Security groups and NACLs restrict which services can reach model endpoints, and SageMaker-hosted models should sit inside a VPC with no public egress by default.</p>
+<blockquote class="blockquote">
+<p><strong>Source:</strong> <a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a> — Vaswani et al., Google Brain / Google Research, 2017</p>
+</blockquote>
+<section id="the-problem-with-rnns-and-cnns" class="level2">
+<h2 class="anchored" data-anchor-id="the-problem-with-rnns-and-cnns">The problem with RNNs and CNNs</h2>
+<p>Before this paper, sequence transduction models (translation, etc.) relied on recurrent networks (RNNs/LSTMs) or convolutions. Recurrence processes tokens one step at a time, which is inherently sequential — it can’t be parallelized across the sequence length during training, and long-range dependencies degrade as the distance between tokens grows. Convolutional approaches parallelize better but still need many layers to relate distant positions.</p>
 </section>
-<section id="identity-and-access-management" class="level2">
-<h2 class="anchored" data-anchor-id="identity-and-access-management">2. Identity and Access Management</h2>
-<p>Least-privilege IAM is the layer that fails quietest — an over-broad role doesn’t throw an error, it just sits there as risk. For Bedrock, that means scoping <code>bedrock:InvokeModel</code> to specific model ARNs and using condition keys to restrict by source VPC or tag, rather than granting invoke access account-wide. For AgentCore, the same principle applies per agent identity: its permission boundary should map to the narrowest set of tools and actions that specific agent needs, not a broad shared service role reused across agents.</p>
+<section id="the-core-idea-self-attention-only" class="level2">
+<h2 class="anchored" data-anchor-id="the-core-idea-self-attention-only">The core idea: self-attention only</h2>
+<p>The Transformer removes recurrence and convolution entirely and relies purely on <strong>attention</strong> to draw global dependencies between input and output. Each token attends directly to every other token in the sequence in a single step, so the number of operations needed to relate two positions is constant rather than growing with distance. This also makes training highly parallelizable, since there’s no sequential dependency between positions.</p>
+<section id="scaled-dot-product-attention" class="level3">
+<h3 class="anchored" data-anchor-id="scaled-dot-product-attention">Scaled dot-product attention</h3>
+<p>For queries <span class="math inline">\(Q\)</span>, keys <span class="math inline">\(K\)</span>, and values <span class="math inline">\(V\)</span>:</p>
+<p><span class="math display">\[\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V\]</span></p>
+<p>The <span class="math inline">\(\sqrt{d_k}\)</span> scaling factor prevents dot products from growing too large in magnitude as dimensionality increases, which would otherwise push the softmax into regions with extremely small gradients.</p>
 </section>
-<section id="data-protection" class="level2">
-<h2 class="anchored" data-anchor-id="data-protection">3. Data Protection</h2>
-<p>TLS in transit and KMS-managed encryption at rest for prompts, completions, embeddings, and vector store content. The harder part isn’t the encryption — it’s the classification decision upstream of it: what should never reach a model at all (PII, secrets, regulated data) versus what can, with customer-managed KMS keys where you need auditable control over who’s able to decrypt.</p>
+<section id="multi-head-attention" class="level3">
+<h3 class="anchored" data-anchor-id="multi-head-attention">Multi-head attention</h3>
+<p>Rather than computing a single attention function, the model projects <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, <span class="math inline">\(V\)</span> into multiple lower-dimensional subspaces (“heads”) and runs attention in parallel across each, then concatenates the results. This lets the model jointly attend to information from different representation subspaces at different positions — one head might track syntactic relationships while another tracks something more semantic.</p>
 </section>
-<section id="input-security" class="level2">
-<h2 class="anchored" data-anchor-id="input-security">4. Input Security</h2>
-<p>The layer most specific to LLMs, and the one generic AppSec tooling has no answer for. Bedrock Guardrails applies denied topics, content filters, and word/phrase blocklists to incoming prompts before they reach the model. For agentic systems this extends past the user’s own input: content flowing in from tool outputs or retrieved documents needs the same scrutiny, since indirect prompt injection through RAG content or tool results is one of the most common real-world attack paths — and the easiest one to forget, since it doesn’t look like “user input” at the code level.</p>
+<section id="positional-encoding" class="level3">
+<h3 class="anchored" data-anchor-id="positional-encoding">Positional encoding</h3>
+<p>Since there’s no recurrence or convolution, the model has no inherent notion of token order. The authors inject position information via sinusoidal positional encodings added to the input embeddings, chosen so the model can easily learn to attend by relative position (since <span class="math inline">\(PE_{pos+k}\)</span> can be expressed as a linear function of <span class="math inline">\(PE_{pos}\)</span>).</p>
 </section>
-<section id="model-level-controls" class="level2">
-<h2 class="anchored" data-anchor-id="model-level-controls">5. Model-Level Controls</h2>
-<p>Governance over which teams and roles can invoke which foundation models, version pinning so a model swap doesn’t silently change behavior in production, and — for fine-tuned models — protecting training data and adapter artifacts from leakage or tampering. Rate limiting and quota management belong here too, guarding against denial-of-wallet as much as denial-of-service.</p>
 </section>
-<section id="output-security" class="level2">
-<h2 class="anchored" data-anchor-id="output-security">6. Output Security</h2>
-<p>Guardrails apply on the way out as well as the way in: PII detection and redaction, toxicity and harmful-content filtering, and contextual grounding checks to catch hallucinated or ungrounded output before it reaches a user or a downstream system that will act on it unquestioningly.</p>
+<section id="architecture" class="level2">
+<h2 class="anchored" data-anchor-id="architecture">Architecture</h2>
+<p>Encoder-decoder stack, each made of identical layers:</p>
+<ul>
+<li><strong>Encoder layer</strong>: multi-head self-attention → feed-forward network, each with a residual connection and layer normalization.</li>
+<li><strong>Decoder layer</strong>: same, plus a masked self-attention (so a position can’t attend to future positions) and a cross-attention layer over the encoder output.</li>
+</ul>
 </section>
-<section id="agent-and-tool-use-security" class="level2">
-<h2 class="anchored" data-anchor-id="agent-and-tool-use-security">7. Agent and Tool-Use Security</h2>
-<p>The layer specific to AgentCore-style architectures, and the one that maps most directly to OWASP’s “excessive agency” risk. Sandbox tool execution, define an explicit action permission boundary per tool, and require human-in-the-loop approval for high-risk actions — payments, deletions, external API calls. The governing rule: an agent should never hold broader permissions than the narrowest task it’s performing at that moment, not the broadest task it might ever perform.</p>
+<section id="results" class="level2">
+<h2 class="anchored" data-anchor-id="results">Results</h2>
+<p>Trained on WMT 2014 English-to-German and English-to-French translation tasks, the Transformer beat the best previously reported models (including ensembles) while requiring significantly less training compute — and importantly, this was measured in an era where compute cost for training was still relatively small compared to what came a few years later.</p>
 </section>
-<section id="application-and-api" class="level2">
-<h2 class="anchored" data-anchor-id="application-and-api">8. Application and API</h2>
-<p>The layer that would exist even without an LLM in the picture: authN/authZ at the API Gateway or ALB, WAF rules against injection and abuse patterns, request throttling, and session management tight enough that conversation context can’t be hijacked or leaked across users.</p>
-</section>
-<section id="observability-and-audit" class="level2">
-<h2 class="anchored" data-anchor-id="observability-and-audit">9. Observability and Audit</h2>
-<p>CloudTrail for API-level audit logs, CloudWatch for runtime monitoring, and — increasingly — logging actual prompts and completions, with redaction, for security review and incident response. This is also where anomaly detection on invocation patterns hooks in, since a compromised credential calling <code>InvokeModel</code> looks identical to a legitimate one until you’re watching volume and pattern, not just auth success.</p>
-</section>
-<section id="governance-and-compliance" class="level2">
-<h2 class="anchored" data-anchor-id="governance-and-compliance">10. Governance and Compliance</h2>
-<p>Data residency controls and model usage policy, tied back to a framework like the <a href="https://owasp.org/www-project-top-10-for-large-language-model-applications/">OWASP Top 10 for LLM Applications</a>. It’s a useful checklist to map each layer above against, and a fast way to spot gaps:</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 50%">
-<col style="width: 50%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>OWASP LLM Risk</th>
-<th>Layer(s) that address it</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Prompt injection</td>
-<td>Input security (4), Agent and tool-use security (7)</td>
-</tr>
-<tr class="even">
-<td>Insecure output handling</td>
-<td>Output security (6)</td>
-</tr>
-<tr class="odd">
-<td>Training data poisoning</td>
-<td>Model-level controls (5)</td>
-</tr>
-<tr class="even">
-<td>Model denial of service</td>
-<td>Model-level controls (5), Infrastructure and network (1)</td>
-</tr>
-<tr class="odd">
-<td>Supply chain vulnerabilities</td>
-<td>Model-level controls (5), Governance (10)</td>
-</tr>
-<tr class="even">
-<td>Sensitive information disclosure</td>
-<td>Data protection (3), Output security (6)</td>
-</tr>
-<tr class="odd">
-<td>Insecure plugin/tool design</td>
-<td>Agent and tool-use security (7)</td>
-</tr>
-<tr class="even">
-<td>Excessive agency</td>
-<td>Identity and access management (2), Agent and tool-use security (7)</td>
-</tr>
-<tr class="odd">
-<td>Overreliance</td>
-<td>Output security (6), Observability and audit (9)</td>
-</tr>
-<tr class="even">
-<td>Model theft</td>
-<td>Identity and access management (2), Data protection (3)</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="where-this-actually-bites" class="level2">
-<h2 class="anchored" data-anchor-id="where-this-actually-bites">Where This Actually Bites</h2>
-<p>In practice, the layers teams get right first are the ones that look like traditional infra security — VPC, IAM, TLS — because the tooling and habits already exist. The layers that get skipped are 4 and 7: input security against indirect injection, and tool-use boundaries on agents. Both require reasoning about <em>what the model is allowed to trust</em>, which isn’t a question conventional AppSec review is set up to ask. If you’re auditing an existing Bedrock or AgentCore system and only have time for one pass, start there.</p>
+<section id="takeaway" class="level2">
+<h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
+<p>This paper is the architectural ancestor of essentially every modern LLM (GPT, BERT, etc.). The key shift wasn’t just “attention helps” — attention mechanisms already existed as an add-on to RNNs — it was proving that attention <em>alone</em>, with no recurrence at all, is sufficient and actually superior once you account for parallelization. That parallelizability is arguably the more consequential half of the paper’s legacy: it’s what made it feasible to scale models to the sizes explored later (see <a href="../../project/reading-notes/scaling-laws-llms.html">scaling laws</a>), since training no longer bottlenecks on sequential computation over the sequence length.</p>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

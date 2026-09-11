@@ -84,9 +84,9 @@ ul.task-list li input[type="checkbox"] {
     }
 
     const options = {
-      valueNames: ['listing-date','listing-title','listing-description',{ data: ['index'] },{ data: ['categories'] },{ data: ['listing-date-sort'] },{ data: ['listing-file-modified-sort'] }],
+      valueNames: ['listing-date','listing-title',{ data: ['index'] },{ data: ['categories'] },{ data: ['listing-date-sort'] },{ data: ['listing-file-modified-sort'] }],
       
-      searchColumns: ["listing-title","listing-author","listing-date","listing-image","listing-description","listing-categories"],
+      searchColumns: ["listing-date","listing-title","listing-author","listing-image","listing-description","listing-categories"],
     };
 
     window['quarto-listings'] = window['quarto-listings'] || {};
@@ -166,16 +166,16 @@ window.Quarto = {
 <span class="menu-text">Posts</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link active" href="../project/reading-notes.html" aria-current="page"> 
-<span class="menu-text">Reading Notes</span></a>
-  </li>  
-  <li class="nav-item">
     <a class="nav-link" href="../about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../project/art.html"> 
 <span class="menu-text">Artwork</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link active" href="../project/reading-notes.html" aria-current="page"> 
+<span class="menu-text">Reading Notes</span></a>
   </li>  
 </ul>
           </div> <!-- /navcollapse -->
@@ -190,7 +190,7 @@ window.Quarto = {
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
         
-    <h5 class="quarto-listing-category-title">Categories</h5><div class="quarto-listing-category category-default"><div class="category" data-category="">All <span class="quarto-category-count">(1)</span></div><div class="category" data-category="TExN">LLM <span class="quarto-category-count">(1)</span></div><div class="category" data-category="UmVzZWFyY2g=">Research <span class="quarto-category-count">(1)</span></div><div class="category" data-category="U2NhbGluZyUyMExhd3M=">Scaling Laws <span class="quarto-category-count">(1)</span></div></div></div>
+    <h5 class="quarto-listing-category-title">Categories</h5><div class="quarto-listing-category category-default"><div class="category" data-category="">All <span class="quarto-category-count">(2)</span></div><div class="category" data-category="QXJjaGl0ZWN0dXJl">Architecture <span class="quarto-category-count">(1)</span></div><div class="category" data-category="TExN">LLM <span class="quarto-category-count">(2)</span></div><div class="category" data-category="UmVzZWFyY2g=">Research <span class="quarto-category-count">(2)</span></div><div class="category" data-category="U2NhbGluZyUyMExhd3M=">Scaling Laws <span class="quarto-category-count">(1)</span></div></div></div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -221,25 +221,35 @@ window.Quarto = {
 <section id="reading-notes" class="level1">
 <h1>Reading Notes</h1>
 <p>Short write-ups of articles, papers, and lectures I’ve gone through, with my own takeaways.</p>
-<div id="listing-all-reading-notes" class="quarto-listing quarto-listing-container-grid">
-<div class="list grid quarto-listing-cols-3">
-<div class="g-col-1" data-index="0" data-categories="TExNJTJDU2NhbGluZyUyMExhd3MlMkNSZXNlYXJjaA==" data-listing-date-sort="1789023600000" data-listing-file-modified-sort="1789078913219" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="289">
-<a href="../project/reading-notes/scaling-laws-llms.html" class="quarto-grid-link">
-<div class="quarto-grid-item card h-100 card-left">
-<div class="card-body post-contents">
-<h5 class="no-anchor card-title listing-title" data-anchor-id="reading-notes">
-Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla
-</h5>
-<div class="card-text listing-description delink">
-<p>Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) — and why so many early large models were undertrained.</p>
+<div id="listing-all-reading-notes" class="quarto-listing quarto-listing-container-default">
+<div class="list quarto-listing-default">
+<div class="quarto-post image-right" data-index="0" data-categories="TExNJTJDU2NhbGluZyUyMExhd3MlMkNSZXNlYXJjaA==" data-listing-date-sort="1648537200000" data-listing-file-modified-sort="1789096593451" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="286">
+<div class="body">
+<h3 class="no-anchor listing-title" data-anchor-id="reading-notes">
+<a href="../project/reading-notes/scaling-laws-llms.html" class="no-external">Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla</a>
+</h3>
 </div>
-<div class="card-attribution card-text-small end">
+<div class="metadata">
+<a href="../project/reading-notes/scaling-laws-llms.html" class="no-external">
 <div class="listing-date">
-Sep 10, 2026
+Mar 29, 2022
+</div>
+</a>
 </div>
 </div>
+<div class="quarto-post image-right" data-index="1" data-categories="TExNJTJDQXJjaGl0ZWN0dXJlJTJDUmVzZWFyY2g=" data-listing-date-sort="1497250800000" data-listing-file-modified-sort="1789105279258" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="3" data-listing-word-count-sort="484">
+<div class="body">
+<h3 class="no-anchor listing-title">
+<a href="../project/reading-notes/attention-is-all-you-need.html" class="no-external">Attention Is All You Need: The Transformer</a>
+</h3>
 </div>
-</div></a>
+<div class="metadata">
+<a href="../project/reading-notes/attention-is-all-you-need.html" class="no-external">
+<div class="listing-date">
+Jun 12, 2017
+</div>
+</a>
+</div>
 </div>
 </div>
 <div class="listing-no-matching d-none">No matching items</div>

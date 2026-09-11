@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-10">
+<meta name="dcterms.date" content="2022-03-29">
 <meta name="description" content="Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) — and why so many early large models were undertrained.">
 
 <title>Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla – Alexandre DO</title>
@@ -73,6 +73,15 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
+<style>
+/* Reading note: keep only two heading levels visible — the page
+   title (from the title block above) and the H2 sections below.
+   Quarto/Pandoc always emits a body-level H1 matching the title
+   when content starts at H2; hide that duplicate here. */
+main#quarto-document-content > section.level1 > h1:first-child {
+  display: none;
+}
+</style>
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -133,16 +142,16 @@ window.Quarto = {
 <span class="menu-text">Posts</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../../project/reading-notes.html"> 
-<span class="menu-text">Reading Notes</span></a>
-  </li>  
-  <li class="nav-item">
     <a class="nav-link" href="../../about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../../project/art.html"> 
 <span class="menu-text">Artwork</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/reading-notes.html"> 
+<span class="menu-text">Reading Notes</span></a>
   </li>  
 </ul>
           </div> <!-- /navcollapse -->
@@ -182,7 +191,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 10, 2026</p>
+      <p class="date">March 29, 2022</p>
     </div>
   </div>
   
@@ -194,8 +203,6 @@ window.Quarto = {
 </header>
 
 
-<section id="scaling-laws-for-llms-kaplan-vs.-chinchilla" class="level1">
-<h1>Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla</h1>
 <blockquote class="blockquote">
 <p><strong>Source:</strong> <a href="https://arxiv.org/abs/2203.15556">Training Compute-Optimal Large Language Models (Chinchilla)</a> — Hoffmann et al., DeepMind, 2022</p>
 </blockquote>
@@ -215,7 +222,6 @@ window.Quarto = {
 <p>“Bigger is better” was subtly wrong on its own — it’s “bigger <em>and proportionally more data</em> is better.” Most pre-2022 large models were undertrained relative to their parameter count: they’d hit diminishing returns on parameters long before they’d seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn’t “how big can the model be” but “what’s the compute-optimal split between size and data” — and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default.</p>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->
