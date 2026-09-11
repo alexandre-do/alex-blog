@@ -136,6 +136,51 @@ a:hover, a:focus {
   border-radius: 6px;
 }
 
+/* ---------------- Homepage hero banner ---------------- */
+.home-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 3rem 2rem 2rem;
+  margin: 0.5rem 0 2rem;
+  aspect-ratio: 540 / 216.09;
+}
+
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image: url('images/Drawing-of-Alan-Turing.png');
+  background-size: cover;
+  background-position: center 29.6%;
+  opacity: 0.95;
+}
+
+.home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(27, 22, 17, 0.42);
+}
+
+.home-hero h1 {
+  margin-top: 0;
+}
+
+.home-hero-credit {
+  position: absolute;
+  left: 2rem;
+  bottom: 1rem;
+  margin: 0;
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
 /* ---------------- Homepage intro (low-key: plain text, no boxed hero) ---------------- */
 .subtitle {
   color: var(--text-muted);

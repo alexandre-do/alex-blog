@@ -193,14 +193,21 @@
     "href": "index.html",
     "title": "Home",
     "section": "",
-    "text": "Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+    "text": "\"Hockey, or Watching the Daisies Grow\" — a drawing of Alan Turing by his mother, 1923."
+  },
+  {
+    "objectID": "index.html#certifications",
+    "href": "index.html#certifications",
+    "title": "Home",
+    "section": "Certifications",
+    "text": "Certifications"
   },
   {
     "objectID": "index.html#pinned-posts",
     "href": "index.html#pinned-posts",
     "title": "Home",
-    "section": "",
-    "text": "Exposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
+    "section": "Pinned Posts",
+    "text": "Pinned Posts\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nREST vs GraphQL vs WebSocket in Python\n\n\nA practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.\n\n\n\nSep 10, 2025\n\n\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "project/posts/deploy-ml-aws-cloudformation.html",
