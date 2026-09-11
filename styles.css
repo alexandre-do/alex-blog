@@ -194,6 +194,67 @@ a:hover, a:focus {
   color: var(--text) !important;
 }
 
+/* Reading notes listing: minimal archive-style rows — a muted,
+   monospace date followed by the title as the sole accent, no card
+   chrome, a hairline divider between entries. Single-line title
+   truncated with an ellipsis. */
+.quarto-post {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.6em 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.quarto-post:first-of-type {
+  border-top: 1px solid var(--border);
+}
+
+.quarto-post .thumbnail,
+.quarto-post .listing-image {
+  display: none;
+}
+
+.quarto-post .metadata {
+  order: -1;
+  flex: none;
+  width: auto;
+}
+
+.quarto-post .body {
+  min-width: 0;
+  flex: 1;
+}
+
+.quarto-post .body .listing-title {
+  font-size: 1.02em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.quarto-post .body .listing-title a {
+  color: var(--text) !important;
+}
+
+.quarto-post .body .listing-title a:hover {
+  color: var(--accent-light) !important;
+}
+
+.quarto-post .metadata .listing-date,
+.quarto-post .metadata a {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  color: var(--text-muted) !important;
+  white-space: nowrap;
+}
+
+.quarto-post .metadata a:hover {
+  color: var(--accent-light) !important;
+}
+
 .listing h2 a,
 .listing h3 a,
 .listing .listing-title a {
@@ -375,6 +436,18 @@ li.category.active {
 .art-lightbox .gnext svg,
 .art-lightbox .gprev svg {
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+}
+
+/* ---------------- Blockquotes (source citations, etc.) ---------------- */
+blockquote {
+  margin: 1.2em 0;
+  padding: 0.2em 0 0.2em 1em;
+  border-left: 3px solid var(--accent);
+  color: var(--text-muted);
+}
+
+blockquote p {
+  margin: 0.3em 0;
 }
 
 /* ---------------- Code Blocks ---------------- */
