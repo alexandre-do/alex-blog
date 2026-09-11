@@ -11,6 +11,8 @@ categories:
 
 # Watermarking Libraries: A Practical Guide
 
+![](images/watermarking-libraries.png){.post-banner fig-alt="Watermarking Libraries: A Practical Guide"}
+
 As generated text, images, and audio become harder to distinguish from human-made content, watermarking has become the default technical answer to "was this AI-generated?" The idea is simple — embed a signal at generation time that a detector can later recognize — but the mechanism differs a lot by modality, and the real design constraint isn't embedding the signal, it's making it survive. This post covers how each modality's watermarking actually works, then which libraries implement it — with a closer look at text, since that's the modality most people building on top of LLMs will touch.
 
 ## Why Watermark at All

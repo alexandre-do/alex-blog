@@ -11,6 +11,8 @@ categories:
 
 # Building an MCP Server for Vancouver's Open Data
 
+![](images/mcp-vancouver-open-data.png){.post-banner fig-alt="Building an MCP Server for Vancouver's Open Data"}
+
 The City of Vancouver publishes hundreds of public datasets — property assessments, building permits, public art, parking meters — through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.
 
 ## Why MCP Fits Open Data
