@@ -1,6 +1,6 @@
 ---
 title: "Scaling Laws for LLMs: Kaplan vs. Chinchilla"
-date: "2026-09-10"
+date: "2022-03-29"
 description: "Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al. (2020) and Chinchilla (2022) — and why so many early large models were undertrained."
 categories:
     - LLM
@@ -9,9 +9,18 @@ categories:
 source-title: "Training Compute-Optimal Large Language Models (Chinchilla)"
 source-url: "https://arxiv.org/abs/2203.15556"
 source-author: "Hoffmann et al., DeepMind, 2022"
+include-in-header:
+  text: |
+    <style>
+    /* Reading note: keep only two heading levels visible — the page
+       title (from the title block above) and the H2 sections below.
+       Quarto/Pandoc always emits a body-level H1 matching the title
+       when content starts at H2; hide that duplicate here. */
+    main#quarto-document-content > section.level1 > h1:first-child {
+      display: none;
+    }
+    </style>
 ---
-
-# Scaling Laws for LLMs: Kaplan vs. Chinchilla
 
 > **Source:** [{{< meta source-title >}}]({{< meta source-url >}}) — {{< meta source-author >}}
 
