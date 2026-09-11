@@ -11,6 +11,8 @@ categories:
 
 # The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam
 
+![](images/guardrail-stack-bedrock.png){.post-banner fig-alt="The Guardrail Stack for Bedrock"}
+
 Bedrock Guardrails is one control, not the whole story. Securing an LLM service — especially an agentic one built on AgentCore — is a defense-in-depth problem: no single layer catches everything, and the layers that matter most (prompt injection, excessive agency) are ones a traditional AppSec checklist doesn't cover at all. The following ten layers are how I map that problem when designing a Bedrock or AgentCore architecture, roughly ordered from the network up to governance.
 
 ## 1. Infrastructure and Network

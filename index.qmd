@@ -19,6 +19,10 @@ listing:
     feed: true
 ---
 
+```{=html}
+<div class="home-hero">
+```
+
 # Ideas, Experiments & Projects in AI
 
 ```{=html}
@@ -43,6 +47,8 @@ listing:
   })();
 })();
 </script>
+<p class="home-hero-credit">"Hockey, or Watching the Daisies Grow" — a drawing of Alan Turing by his mother, 1923.</p>
+</div>
 ```
 
 ## Certifications

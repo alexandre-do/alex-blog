@@ -11,6 +11,8 @@ categories:
 
 # Deploying a Machine Learning Project with AWS CloudFormation
 
+![](images/deploy-ml-aws-cloudformation.png){.post-banner fig-alt="Deploying a Machine Learning Project with AWS CloudFormation"}
+
 Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.
 
 ## What Is Infrastructure as Code?

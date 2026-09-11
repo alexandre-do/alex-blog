@@ -11,11 +11,13 @@ website:
       - text: "Home"
         href: index.qmd
       - text: "Posts"
-        href: project/posts.qmd 
+        href: project/posts.qmd
       - text: "About"
-        href: about.qmd       
+        href: about.qmd
       - text: "Artwork"
         href: project/art.qmd
+      - text: "Reading Notes"
+        href: project/reading-notes.qmd
 format:
   html:
     theme: dark

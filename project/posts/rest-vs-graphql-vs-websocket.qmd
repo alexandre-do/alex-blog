@@ -11,6 +11,8 @@ categories:
 
 # REST vs GraphQL vs WebSocket in Python
 
+![](images/rest-graphql-websocket.png){.post-banner fig-alt="REST vs GraphQL vs WebSocket in Python"}
+
 Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.
 
 ## REST

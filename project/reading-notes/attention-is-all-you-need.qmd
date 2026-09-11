@@ -1,0 +1,64 @@
+---
+title: "Attention Is All You Need: The Transformer"
+date: "2017-06-12"
+description: "Notes on the paper that introduced the Transformer architecture — dropping recurrence and convolution entirely in favor of self-attention."
+categories:
+    - LLM
+    - Architecture
+    - Research
+source-title: "Attention Is All You Need"
+source-url: "https://arxiv.org/abs/1706.03762"
+source-author: "Vaswani et al., Google Brain / Google Research, 2017"
+include-in-header:
+  text: |
+    <style>
+    /* Reading note: keep only two heading levels visible — the page
+       title (from the title block above) and the H2 sections below.
+       Quarto/Pandoc always emits a body-level H1 matching the title
+       when content starts at H2; hide that duplicate here. */
+    main#quarto-document-content > section.level1 > h1:first-child {
+      display: none;
+    }
+    </style>
+---
+
+> **Source:** [{{< meta source-title >}}]({{< meta source-url >}}) — {{< meta source-author >}}
+
+## The problem with RNNs and CNNs
+
+Before this paper, sequence transduction models (translation, etc.) relied on recurrent networks (RNNs/LSTMs) or convolutions. Recurrence processes tokens one step at a time, which is inherently sequential — it can't be parallelized across the sequence length during training, and long-range dependencies degrade as the distance between tokens grows. Convolutional approaches parallelize better but still need many layers to relate distant positions.
+
+## The core idea: self-attention only
+
+The Transformer removes recurrence and convolution entirely and relies purely on **attention** to draw global dependencies between input and output. Each token attends directly to every other token in the sequence in a single step, so the number of operations needed to relate two positions is constant rather than growing with distance. This also makes training highly parallelizable, since there's no sequential dependency between positions.
+
+### Scaled dot-product attention
+
+For queries $Q$, keys $K$, and values $V$:
+
+$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
+
+The $\sqrt{d_k}$ scaling factor prevents dot products from growing too large in magnitude as dimensionality increases, which would otherwise push the softmax into regions with extremely small gradients.
+
+### Multi-head attention
+
+Rather than computing a single attention function, the model projects $Q$, $K$, $V$ into multiple lower-dimensional subspaces ("heads") and runs attention in parallel across each, then concatenates the results. This lets the model jointly attend to information from different representation subspaces at different positions — one head might track syntactic relationships while another tracks something more semantic.
+
+### Positional encoding
+
+Since there's no recurrence or convolution, the model has no inherent notion of token order. The authors inject position information via sinusoidal positional encodings added to the input embeddings, chosen so the model can easily learn to attend by relative position (since $PE_{pos+k}$ can be expressed as a linear function of $PE_{pos}$).
+
+## Architecture
+
+Encoder-decoder stack, each made of identical layers:
+
+- **Encoder layer**: multi-head self-attention → feed-forward network, each with a residual connection and layer normalization.
+- **Decoder layer**: same, plus a masked self-attention (so a position can't attend to future positions) and a cross-attention layer over the encoder output.
+
+## Results
+
+Trained on WMT 2014 English-to-German and English-to-French translation tasks, the Transformer beat the best previously reported models (including ensembles) while requiring significantly less training compute — and importantly, this was measured in an era where compute cost for training was still relatively small compared to what came a few years later.
+
+## Takeaway
+
+This paper is the architectural ancestor of essentially every modern LLM (GPT, BERT, etc.). The key shift wasn't just "attention helps" — attention mechanisms already existed as an add-on to RNNs — it was proving that attention *alone*, with no recurrence at all, is sufficient and actually superior once you account for parallelization. That parallelizability is arguably the more consequential half of the paper's legacy: it's what made it feasible to scale models to the sizes explored later (see [scaling laws](scaling-laws-llms.qmd)), since training no longer bottlenecks on sequential computation over the sequence length.

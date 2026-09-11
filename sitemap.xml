@@ -1,47 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://alexdo.xyz/project/posts.html</loc>
-    <lastmod>2026-09-09T05:54:10.094Z</lastmod>
+    <loc>https://alexdo.xyz/project/reading-notes.html</loc>
+    <lastmod>2026-09-11T16:56:53.101Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/guardrail-stack-bedrock.html</loc>
-    <lastmod>2026-09-10T01:46:36.832Z</lastmod>
+    <loc>https://alexdo.xyz/project/reading-notes/scaling-laws-llms.html</loc>
+    <lastmod>2026-09-11T03:16:33.451Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/agentic-stack-aws.html</loc>
-    <lastmod>2026-09-10T01:34:00.327Z</lastmod>
+    <loc>https://alexdo.xyz/project/art.html</loc>
+    <lastmod>2026-09-03T05:07:33.800Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</loc>
-    <lastmod>2026-09-09T01:21:38.258Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/watermarking-libraries.html</loc>
+    <lastmod>2026-09-11T17:18:48.630Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</loc>
-    <lastmod>2026-09-09T01:52:29.208Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/rest-vs-graphql-vs-websocket.html</loc>
+    <lastmod>2026-09-11T17:18:47.403Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/index.html</loc>
-    <lastmod>2026-09-09T05:54:09.102Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/fine-tuning-llms.html</loc>
+    <lastmod>2026-09-11T17:18:43.356Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/about.html</loc>
     <lastmod>2026-09-02T23:00:31.377Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/fine-tuning-llms.html</loc>
-    <lastmod>2026-09-02T23:00:31.353Z</lastmod>
+    <loc>https://alexdo.xyz/index.html</loc>
+    <lastmod>2026-09-11T18:41:29.048Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/rest-vs-graphql-vs-websocket.html</loc>
-    <lastmod>2026-09-02T23:00:31.353Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</loc>
+    <lastmod>2026-09-11T17:18:42.226Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/watermarking-libraries.html</loc>
-    <lastmod>2026-09-09T05:59:38.562Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</loc>
+    <lastmod>2026-09-11T17:18:46.086Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/art.html</loc>
-    <lastmod>2026-09-03T05:07:33.800Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/agentic-stack-aws.html</loc>
+    <lastmod>2026-09-11T17:18:33.618Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/guardrail-stack-bedrock.html</loc>
+    <lastmod>2026-09-11T17:18:44.821Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/reading-notes/attention-is-all-you-need.html</loc>
+    <lastmod>2026-09-11T05:41:19.258Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts.html</loc>
+    <lastmod>2026-09-11T17:18:29.935Z</lastmod>
   </url>
 </urlset>

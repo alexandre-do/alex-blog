@@ -111,6 +111,10 @@ ul.task-list li input[type="checkbox"] {
     <a class="nav-link" href="../../project/art.html"> 
 <span class="menu-text">Artwork</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/reading-notes.html"> 
+<span class="menu-text">Reading Notes</span></a>
+  </li>  
 </ul>
           </div> <!-- /navcollapse -->
             <div class="quarto-navbar-tools">
@@ -163,6 +167,7 @@ ul.task-list li input[type="checkbox"] {
 
 <section id="the-guardrail-stack-for-bedrock-notes-for-the-generative-ai-developer-exam" class="level1">
 <h1>The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam</h1>
+<p><img src="images/guardrail-stack-bedrock.png" class="post-banner img-fluid" alt="The Guardrail Stack for Bedrock"></p>
 <p>Bedrock Guardrails is one control, not the whole story. Securing an LLM service — especially an agentic one built on AgentCore — is a defense-in-depth problem: no single layer catches everything, and the layers that matter most (prompt injection, excessive agency) are ones a traditional AppSec checklist doesn’t cover at all. The following ten layers are how I map that problem when designing a Bedrock or AgentCore architecture, roughly ordered from the network up to governance.</p>
 <section id="infrastructure-and-network" class="level2">
 <h2 class="anchored" data-anchor-id="infrastructure-and-network">1. Infrastructure and Network</h2>

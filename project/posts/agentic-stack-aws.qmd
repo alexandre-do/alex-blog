@@ -11,6 +11,8 @@ categories:
 
 # The Agentic Stack on AWS: Notes for the Generative AI Developer Exam
 
+![](images/agentic-stack-aws.png){.post-banner fig-alt="The Agentic Stack on AWS"}
+
 AWS's agent tooling looks like a pile of overlapping options — AgentCore Runtime, Strands, Agent Squad, LangChain, LangGraph, Step Functions — until you notice they're not five answers to one question. They're answers to five different questions, stacked at different depths: how a model reasons within one call, who writes the reason-act-observe loop, where that loop actually runs, how a request gets routed to the right specialist agent, and what guarantees retries and audit trail around the whole thing. Most confusion about "which one do I use" disappears once you identify which depth a requirement is actually describing.
 
 ## The Five Layers

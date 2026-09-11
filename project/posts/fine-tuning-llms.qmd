@@ -11,6 +11,8 @@ categories:
 
 # Fine-Tuning LLMs
 
+![](images/fine-tuning-llms.png){.post-banner fig-alt="Fine-Tuning LLMs"}
+
 Pretrained LLMs are general-purpose. Fine-tuning adapts one to a narrower domain or task using far less data and compute than pretraining from scratch.
 
 ## Full Fine-Tuning vs PEFT

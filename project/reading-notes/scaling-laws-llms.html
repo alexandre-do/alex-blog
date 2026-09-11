@@ -6,9 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="description" content="Posts on machine learning, data science, and AI engineering by Alexandre DO.">
+<meta name="dcterms.date" content="2022-03-29">
+<meta name="description" content="Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) — and why so many early large models were undertrained.">
 
-<title>All Posts – Alexandre DO</title>
+<title>Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -27,26 +28,24 @@ ul.task-list li input[type="checkbox"] {
 </style>
 
 
-<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
-<script src="../site_libs/quarto-nav/headroom.min.js"></script>
-<script src="../site_libs/clipboard/clipboard.min.js"></script>
-<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
-<script src="../site_libs/quarto-search/fuse.min.js"></script>
-<script src="../site_libs/quarto-search/quarto-search.js"></script>
-<meta name="quarto:offset" content="../">
-<link href="../images/favicon_id.png" rel="icon" type="image/png">
-<script src="../site_libs/quarto-listing/list.min.js"></script>
-<script src="../site_libs/quarto-listing/quarto-listing.js"></script>
-<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
-<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="../site_libs/quarto-html/popper.min.js"></script>
-<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
-<script src="../site_libs/quarto-html/anchor.min.js"></script>
-<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
-<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
-<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../images/favicon_id.png" rel="icon" type="image/png">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -74,37 +73,14 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
-<script>
-
-  window.document.addEventListener("DOMContentLoaded", function (_event) {
-    const listingTargetEl = window.document.querySelector('#listing-all-posts .list');
-    if (!listingTargetEl) {
-      // No listing discovered, do not attach.
-      return; 
-    }
-
-    const options = {
-      valueNames: ['listing-date','listing-title',{ data: ['index'] },{ data: ['categories'] },{ data: ['listing-date-sort'] },{ data: ['listing-file-modified-sort'] }],
-      
-      searchColumns: ["listing-date","listing-title","listing-author","listing-image","listing-description","listing-categories"],
-    };
-
-    window['quarto-listings'] = window['quarto-listings'] || {};
-    window['quarto-listings']['listing-all-posts'] = new List('listing-all-posts', options);
-
-    if (window['quarto-listing-loaded']) {
-      window['quarto-listing-loaded']();
-    }
-  });
-
-  window.addEventListener('hashchange',() => {
-    if (window['quarto-listing-loaded']) {
-      window['quarto-listing-loaded']();
-    }
-  })
-  </script>
 <style>
-#title-block-header { display: none !important; }
+/* Reading note: keep only two heading levels visible — the page
+   title (from the title block above) and the H2 sections below.
+   Quarto/Pandoc always emits a body-level H1 matching the title
+   when content starts at H2; hide that duplicate here. */
+main#quarto-document-content > section.level1 > h1:first-child {
+  display: none;
+}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
@@ -137,17 +113,17 @@ window.Quarto = {
 };
 </script>
 
-<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../../styles.css">
 </head>
 
-<body class="nav-fixed quarto-light">
+<body class="nav-fixed fullcontent quarto-light">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
     <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
-    <a class="navbar-brand" href="../index.html">
+    <a class="navbar-brand" href="../../index.html">
     <span class="navbar-title">Alexandre DO</span>
     </a>
   </div>
@@ -158,23 +134,23 @@ window.Quarto = {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
-    <a class="nav-link" href="../index.html"> 
+    <a class="nav-link" href="../../index.html"> 
 <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link active" href="../project/posts.html" aria-current="page"> 
+    <a class="nav-link" href="../../project/posts.html"> 
 <span class="menu-text">Posts</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../about.html"> 
+    <a class="nav-link" href="../../about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../project/art.html"> 
+    <a class="nav-link" href="../../project/art.html"> 
 <span class="menu-text">Artwork</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../project/reading-notes.html"> 
+    <a class="nav-link" href="../../project/reading-notes.html"> 
 <span class="menu-text">Reading Notes</span></a>
   </li>  
 </ul>
@@ -188,20 +164,23 @@ window.Quarto = {
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        
-    <h5 class="quarto-listing-category-title">Categories</h5><div class="quarto-listing-category category-default"><div class="category" data-category="">All <span class="quarto-category-count">(7)</span></div><div class="category" data-category="QWdlbnRz">Agents <span class="quarto-category-count">(1)</span></div><div class="category" data-category="QVBJ">API <span class="quarto-category-count">(1)</span></div><div class="category" data-category="QVdT">AWS <span class="quarto-category-count">(3)</span></div><div class="category" data-category="QmVkcm9jaw==">Bedrock <span class="quarto-category-count">(2)</span></div><div class="category" data-category="Q2xvdWRGb3JtYXRpb24=">CloudFormation <span class="quarto-category-count">(1)</span></div><div class="category" data-category="RmFzdEFQSQ==">FastAPI <span class="quarto-category-count">(1)</span></div><div class="category" data-category="RmluZS1UdW5pbmc=">Fine-Tuning <span class="quarto-category-count">(1)</span></div><div class="category" data-category="R2VuZXJhdGl2ZSUyMEFJ">Generative AI <span class="quarto-category-count">(1)</span></div><div class="category" data-category="SHVnZ2luZyUyMEZhY2U=">Hugging Face <span class="quarto-category-count">(1)</span></div><div class="category" data-category="TExN">LLM <span class="quarto-category-count">(4)</span></div><div class="category" data-category="TUNQ">MCP <span class="quarto-category-count">(1)</span></div><div class="category" data-category="TUxPcHM=">MLOps <span class="quarto-category-count">(1)</span></div><div class="category" data-category="T3BlbiUyMERhdGE=">Open Data <span class="quarto-category-count">(1)</span></div><div class="category" data-category="UHl0aG9u">Python <span class="quarto-category-count">(1)</span></div><div class="category" data-category="VG9vbGluZw==">Tooling <span class="quarto-category-count">(1)</span></div></div></div>
+    
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">All Posts</h1>
-</div>
+<h1 class="title">Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla</h1>
+  <div class="quarto-categories">
+    <div class="quarto-category">LLM</div>
+    <div class="quarto-category">Scaling Laws</div>
+    <div class="quarto-category">Research</div>
+  </div>
+  </div>
 
 <div>
   <div class="description">
-    Posts on machine learning, data science, and AI engineering by Alexandre DO.
+    Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) — and why so many early large models were undertrained.
   </div>
 </div>
 
@@ -209,6 +188,12 @@ window.Quarto = {
 <div class="quarto-title-meta">
 
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">March 29, 2022</p>
+    </div>
+  </div>
   
     
   </div>
@@ -218,113 +203,23 @@ window.Quarto = {
 </header>
 
 
-<section id="blog-posts" class="level1">
-<h1>Blog Posts</h1>
-<p>Explore all my posts on machine learning, data science, and AI engineering.</p>
-<div id="listing-all-posts" class="quarto-listing quarto-listing-container-default">
-<div class="list quarto-listing-default">
-<div class="quarto-post image-right" data-index="0" data-categories="TUNQJTJDT3BlbiUyMERhdGElMkNMTE0=" data-listing-date-sort="1788850800000" data-listing-file-modified-sort="1789147126086" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="9" data-listing-word-count-sort="1657">
-<div class="body">
-<h3 class="no-anchor listing-title" data-anchor-id="blog-posts">
-<a href="../project/posts/mcp-vancouver-open-data.html" class="no-external">Building an MCP Server for Vancouver’s Open Data</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/posts/mcp-vancouver-open-data.html" class="no-external">
-<div class="listing-date">
-Sep 8, 2026
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="1" data-categories="QVdTJTJDQmVkcm9jayUyQ0FnZW50cw==" data-listing-date-sort="1788246000000" data-listing-file-modified-sort="1789147113618" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="12" data-listing-word-count-sort="2390">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/posts/agentic-stack-aws.html" class="no-external">The Agentic Stack on AWS: Notes for the Generative AI Developer Exam</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/posts/agentic-stack-aws.html" class="no-external">
-<div class="listing-date">
-Sep 1, 2026
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="2" data-categories="QVdTJTJDQmVkcm9jayUyQ0xMTQ==" data-listing-date-sort="1784012400000" data-listing-file-modified-sort="1789147124821" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="5" data-listing-word-count-sort="906">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/posts/guardrail-stack-bedrock.html" class="no-external">The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/posts/guardrail-stack-bedrock.html" class="no-external">
-<div class="listing-date">
-Jul 14, 2026
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="3" data-categories="QVdTJTJDQ2xvdWRGb3JtYXRpb24lMkNNTE9wcw==" data-listing-date-sort="1778742000000" data-listing-file-modified-sort="1789147122226" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="5" data-listing-word-count-sort="865">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/posts/deploy-ml-aws-cloudformation.html" class="no-external">Deploying a Machine Learning Project with AWS CloudFormation</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/posts/deploy-ml-aws-cloudformation.html" class="no-external">
-<div class="listing-date">
-May 14, 2026
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="4" data-categories="TExNJTJDRmluZS1UdW5pbmclMkNIdWdnaW5nJTIwRmFjZQ==" data-listing-date-sort="1768896000000" data-listing-file-modified-sort="1789147123356" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="208">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/posts/fine-tuning-llms.html" class="no-external">Fine-Tuning LLMs</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/posts/fine-tuning-llms.html" class="no-external">
-<div class="listing-date">
-Jan 20, 2026
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="5" data-categories="UHl0aG9uJTJDQVBJJTJDRmFzdEFQSQ==" data-listing-date-sort="1757487600000" data-listing-file-modified-sort="1789147127403" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="263">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/posts/rest-vs-graphql-vs-websocket.html" class="no-external">REST vs GraphQL vs WebSocket in Python</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/posts/rest-vs-graphql-vs-websocket.html" class="no-external">
-<div class="listing-date">
-Sep 10, 2025
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="6" data-categories="TExNJTJDR2VuZXJhdGl2ZSUyMEFJJTJDVG9vbGluZw==" data-listing-date-sort="1746774000000" data-listing-file-modified-sort="1789147128630" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="9" data-listing-word-count-sort="1644">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/posts/watermarking-libraries.html" class="no-external">Watermarking Libraries: A Practical Guide</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/posts/watermarking-libraries.html" class="no-external">
-<div class="listing-date">
-May 9, 2025
-</div>
-</a>
-</div>
-</div>
-</div>
-<div class="listing-no-matching d-none">No matching items</div>
-</div>
-
+<blockquote class="blockquote">
+<p><strong>Source:</strong> <a href="https://arxiv.org/abs/2203.15556">Training Compute-Optimal Large Language Models (Chinchilla)</a> — Hoffmann et al., DeepMind, 2022</p>
+</blockquote>
+<p>For comparison, this note also references the earlier <a href="https://arxiv.org/abs/2001.08361">Kaplan et al., “Scaling Laws for Neural Language Models” (2020)</a>, which the Chinchilla paper directly revises.</p>
+<section id="kaplans-rule-2020" class="level2">
+<h2 class="anchored" data-anchor-id="kaplans-rule-2020">Kaplan’s rule (2020)</h2>
+<p>Given a fixed compute budget, Kaplan et al.&nbsp;found that loss improves most by growing model size aggressively while under-scaling the amount of training data — practically, this meant training very large models on comparatively few tokens. This rule shaped a generation of models (GPT-3 at 175B parameters trained on ~300B tokens is the canonical example): go big on parameters first, worry about data later.</p>
+</section>
+<section id="chinchillas-correction-2022" class="level2">
+<h2 class="anchored" data-anchor-id="chinchillas-correction-2022">Chinchilla’s correction (2022)</h2>
+<p>Hoffmann et al.&nbsp;re-ran the scaling experiments more carefully and found the original fit was off. The compute-optimal rule is closer to scaling model size (N) and training tokens (D) <em>at roughly the same rate</em> with compute (C):</p>
+<p><span class="math display">\[N \propto C^{0.5}, \quad D \propto C^{0.5}\]</span></p>
+<p>To prove it, they trained Chinchilla — 70B parameters on ~1.4T tokens — and it outperformed Gopher, a 280B-parameter model trained on far fewer tokens, despite using the same compute budget. A model 4x smaller beat one 4x larger, purely by being trained on proportionally more data.</p>
+</section>
+<section id="takeaway" class="level2">
+<h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
+<p>“Bigger is better” was subtly wrong on its own — it’s “bigger <em>and proportionally more data</em> is better.” Most pre-2022 large models were undertrained relative to their parameter count: they’d hit diminishing returns on parameters long before they’d seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn’t “how big can the model be” but “what’s the compute-optimal split between size and data” — and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default.</p>
 
 
 </section>
