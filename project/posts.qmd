@@ -9,8 +9,8 @@ include-in-header:
 listing:
   - id: all-posts
     contents: ./posts
-    type: grid
-    fields: [image, date, title, description]
+    type: default
+    fields: [date, title]
     sort: "date desc"
     categories: true
 ---
