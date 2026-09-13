@@ -1,5 +1,5 @@
 ---
-title: "Eight Ways In: Notes for the Generative AI Developer Exam"
+title: "Eight Ways In: Notes for AWS Certification"
 date: "2024-06-01"
 description: "Every AWS authentication method answers one question — who is this principal? Eight of them cover almost every real scenario, from IAM Identity Center down to the bearer tokens behind agent identity."
 image: "images/aws-authentication-methods.png"
@@ -9,7 +9,7 @@ categories:
     - Security
 ---
 
-# Eight Ways In: Notes for the Generative AI Developer Exam
+# Eight Ways In: Notes for AWS Certification
 
 ![](images/aws-authentication-methods.png){.post-banner fig-alt="Eight Ways In — AWS authentication"}
 

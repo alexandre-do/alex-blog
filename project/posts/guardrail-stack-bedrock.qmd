@@ -1,5 +1,5 @@
 ---
-title: "The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam"
+title: "The Guardrail Stack for Bedrock: Notes for AWS Certification"
 date: "2026-07-14"
 description: "A defense-in-depth model for securing LLM services on Bedrock and AgentCore, from VPC endpoints down to output-side hallucination checks."
 image: "images/guardrail-stack-bedrock.png"
@@ -9,7 +9,7 @@ categories:
     - LLM
 ---
 
-# The Guardrail Stack for Bedrock: Notes for the Generative AI Developer Exam
+# The Guardrail Stack for Bedrock: Notes for AWS Certification
 
 ![](images/guardrail-stack-bedrock.png){.post-banner fig-alt="The Guardrail Stack for Bedrock"}
 
