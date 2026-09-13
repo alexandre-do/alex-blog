@@ -1,5 +1,5 @@
 ---
-title: "The Agentic Stack on AWS: Notes for the Generative AI Developer Exam"
+title: "The Agentic Stack on AWS: Notes for AWS Certification"
 date: "2026-09-01"
 description: "AgentCore Runtime, Strands, Agent Squad, LangChain/LangGraph and Step Functions answer five different questions, not one — a layer-by-layer field guide to picking the right piece."
 image: "images/agentic-stack-aws.png"
@@ -9,7 +9,7 @@ categories:
     - Agents
 ---
 
-# The Agentic Stack on AWS: Notes for the Generative AI Developer Exam
+# The Agentic Stack on AWS: Notes for AWS Certification
 
 ![](images/agentic-stack-aws.png){.post-banner fig-alt="The Agentic Stack on AWS"}
 
