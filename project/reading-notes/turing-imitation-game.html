@@ -6,9 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="description" content="Personal notes on articles, papers, and lectures I’ve read or watched.">
+<meta name="dcterms.date" content="1950-10-01">
+<meta name="description" content="Notes on Turing’s 1950 paper ‘Computing Machinery and Intelligence’ — the game he substituted for ‘can machines think?’, the prediction everyone misquotes, and how the test holds up against GPT-4.5.">
 
-<title>Reading Notes – Alexandre DO</title>
+<title>The Imitation Game: What Turing Actually Proposed – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -27,26 +28,24 @@ ul.task-list li input[type="checkbox"] {
 </style>
 
 
-<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
-<script src="../site_libs/quarto-nav/headroom.min.js"></script>
-<script src="../site_libs/clipboard/clipboard.min.js"></script>
-<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
-<script src="../site_libs/quarto-search/fuse.min.js"></script>
-<script src="../site_libs/quarto-search/quarto-search.js"></script>
-<meta name="quarto:offset" content="../">
-<link href="../images/favicon_id.png" rel="icon" type="image/png">
-<script src="../site_libs/quarto-listing/list.min.js"></script>
-<script src="../site_libs/quarto-listing/quarto-listing.js"></script>
-<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
-<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="../site_libs/quarto-html/popper.min.js"></script>
-<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
-<script src="../site_libs/quarto-html/anchor.min.js"></script>
-<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
-<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
-<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../images/favicon_id.png" rel="icon" type="image/png">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -74,80 +73,31 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
-<script>
-
-  window.document.addEventListener("DOMContentLoaded", function (_event) {
-    const listingTargetEl = window.document.querySelector('#listing-all-reading-notes .list');
-    if (!listingTargetEl) {
-      // No listing discovered, do not attach.
-      return; 
-    }
-
-    const options = {
-      valueNames: ['listing-date','listing-title',{ data: ['index'] },{ data: ['categories'] },{ data: ['listing-date-sort'] },{ data: ['listing-file-modified-sort'] }],
-      
-      searchColumns: ["listing-date","listing-title","listing-author","listing-image","listing-description","listing-categories"],
-    };
-
-    window['quarto-listings'] = window['quarto-listings'] || {};
-    window['quarto-listings']['listing-all-reading-notes'] = new List('listing-all-reading-notes', options);
-
-    if (window['quarto-listing-loaded']) {
-      window['quarto-listing-loaded']();
-    }
-  });
-
-  window.addEventListener('hashchange',() => {
-    if (window['quarto-listing-loaded']) {
-      window['quarto-listing-loaded']();
-    }
-  })
-  </script>
+<script src="../../site_libs/quarto-diagram/mermaid.min.js"></script>
+<script src="../../site_libs/quarto-diagram/mermaid-init.js"></script>
+<link href="../../site_libs/quarto-diagram/mermaid.css" rel="stylesheet">
 <style>
-#title-block-header { display: none !important; }
+/* Reading note: keep only two heading levels visible — the page
+   title (from the title block above) and the H2 sections below.
+   Quarto/Pandoc always emits a body-level H1 matching the title
+   when content starts at H2; hide that duplicate here. */
+main#quarto-document-content > section.level1 > h1:first-child {
+  display: none;
+}
 </style>
 
-  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
-
-<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../../styles.css">
 </head>
 
-<body class="nav-fixed quarto-light">
+<body class="nav-fixed fullcontent quarto-light">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
     <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
-    <a class="navbar-brand" href="../index.html">
+    <a class="navbar-brand" href="../../index.html">
     <span class="navbar-title">Alexandre DO</span>
     </a>
   </div>
@@ -158,23 +108,23 @@ window.Quarto = {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
-    <a class="nav-link" href="../index.html"> 
+    <a class="nav-link" href="../../index.html"> 
 <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../project/posts.html"> 
+    <a class="nav-link" href="../../project/posts.html"> 
 <span class="menu-text">Posts</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../about.html"> 
+    <a class="nav-link" href="../../about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../project/art.html"> 
+    <a class="nav-link" href="../../project/art.html"> 
 <span class="menu-text">Artwork</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link active" href="../project/reading-notes.html" aria-current="page"> 
+    <a class="nav-link" href="../../project/reading-notes.html"> 
 <span class="menu-text">Reading Notes</span></a>
   </li>  
 </ul>
@@ -188,20 +138,24 @@ window.Quarto = {
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        
-    <h5 class="quarto-listing-category-title">Categories</h5><div class="quarto-listing-category category-default"><div class="category" data-category="">All <span class="quarto-category-count">(3)</span></div><div class="category" data-category="QUk=">AI <span class="quarto-category-count">(1)</span></div><div class="category" data-category="QXJjaGl0ZWN0dXJl">Architecture <span class="quarto-category-count">(1)</span></div><div class="category" data-category="SGlzdG9yeQ==">History <span class="quarto-category-count">(1)</span></div><div class="category" data-category="TExN">LLM <span class="quarto-category-count">(2)</span></div><div class="category" data-category="UmVzZWFyY2g=">Research <span class="quarto-category-count">(3)</span></div><div class="category" data-category="U2NhbGluZyUyMExhd3M=">Scaling Laws <span class="quarto-category-count">(1)</span></div><div class="category" data-category="VHVyaW5nJTIwVGVzdA==">Turing Test <span class="quarto-category-count">(1)</span></div></div></div>
+    
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Reading Notes</h1>
-</div>
+<h1 class="title">The Imitation Game: What Turing Actually Proposed</h1>
+  <div class="quarto-categories">
+    <div class="quarto-category">AI</div>
+    <div class="quarto-category">Turing Test</div>
+    <div class="quarto-category">History</div>
+    <div class="quarto-category">Research</div>
+  </div>
+  </div>
 
 <div>
   <div class="description">
-    Personal notes on articles, papers, and lectures I’ve read or watched.
+    Notes on Turing’s 1950 paper ‘Computing Machinery and Intelligence’ — the game he substituted for ‘can machines think?’, the prediction everyone misquotes, and how the test holds up against GPT-4.5.
   </div>
 </div>
 
@@ -209,6 +163,12 @@ window.Quarto = {
 <div class="quarto-title-meta">
 
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">October 1, 1950</p>
+    </div>
+  </div>
   
     
   </div>
@@ -218,57 +178,73 @@ window.Quarto = {
 </header>
 
 
-<section id="reading-notes" class="level1">
-<h1>Reading Notes</h1>
-<p>Short write-ups of articles, papers, and lectures I’ve gone through, with my own takeaways.</p>
-<div id="listing-all-reading-notes" class="quarto-listing quarto-listing-container-default">
-<div class="list quarto-listing-default">
-<div class="quarto-post image-right" data-index="0" data-categories="TExNJTJDU2NhbGluZyUyMExhd3MlMkNSZXNlYXJjaA==" data-listing-date-sort="1648537200000" data-listing-file-modified-sort="1789096593451" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="2" data-listing-word-count-sort="286">
-<div class="body">
-<h3 class="no-anchor listing-title" data-anchor-id="reading-notes">
-<a href="../project/reading-notes/scaling-laws-llms.html" class="no-external">Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/reading-notes/scaling-laws-llms.html" class="no-external">
-<div class="listing-date">
-Mar 29, 2022
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="1" data-categories="TExNJTJDQXJjaGl0ZWN0dXJlJTJDUmVzZWFyY2g=" data-listing-date-sort="1497250800000" data-listing-file-modified-sort="1789105279258" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="3" data-listing-word-count-sort="484">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/reading-notes/attention-is-all-you-need.html" class="no-external">Attention Is All You Need: The Transformer</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/reading-notes/attention-is-all-you-need.html" class="no-external">
-<div class="listing-date">
-Jun 12, 2017
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="2" data-categories="QUklMkNUdXJpbmclMjBUZXN0JTJDSGlzdG9yeSUyQ1Jlc2VhcmNo" data-listing-date-sort="-607536000000" data-listing-file-modified-sort="1789280299246" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="7" data-listing-word-count-sort="1211">
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="../project/reading-notes/turing-imitation-game.html" class="no-external">The Imitation Game: What Turing Actually Proposed</a>
-</h3>
-</div>
-<div class="metadata">
-<a href="../project/reading-notes/turing-imitation-game.html" class="no-external">
-<div class="listing-date">
-Oct 1, 1950
-</div>
-</a>
-</div>
-</div>
-</div>
-<div class="listing-no-matching d-none">No matching items</div>
-</div>
+<blockquote class="blockquote">
+<p><strong>Source:</strong> <a href="https://www.cs.ox.ac.uk/activities/ieg/e-library/sources/t_article.pdf">Computing Machinery and Intelligence</a> — Alan Turing, Mind, vol.&nbsp;LIX, no. 236, 1950</p>
+</blockquote>
+<section id="the-substitution-not-the-test" class="level2">
+<h2 class="anchored" data-anchor-id="the-substitution-not-the-test">The substitution, not the test</h2>
+<p>Turing opens by proposing to consider “Can machines think?” — then abandons it within two paragraphs, because “machine” and “think” are too poorly defined to argue about. He replaces it with something operational: the imitation game. Three players — a man, a woman, and an interrogator in a separate room communicating by teleprinter (so tone of voice can’t leak information) — where the interrogator must identify who is who. Turing then asks what happens when a machine takes the man’s part, and reframes the whole question as: <em>are there imaginable digital computers that would do well at this game?</em></p>
+<p>This is the part with the longest half-life: swapping an unanswerable question for a measurable proxy. It’s also the first place the paper’s central weakness shows up — a proxy is only as good as the gap between it and the thing it stands in for, and that gap is exactly what the objections below attack.</p>
+<p>Worth noting explicitly: Turing never claims passing is <em>necessary</em> for thinking, only that it would be <em>sufficient</em>. Most objections raised since implicitly argue against the necessary version.</p>
+</section>
+<section id="the-setup-in-detail" class="level2">
+<h2 class="anchored" data-anchor-id="the-setup-in-detail">The setup, in detail</h2>
+<p>The game has more structure than the “chat with a hidden judge” shorthand suggests. Laid out as a schema:</p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart LR
+    subgraph Room_C["Interrogator's room"]
+        C["C — the interrogator&lt;br/&gt;knows the others only as X and Y"]
+    end
+    subgraph Room_A["Room 1"]
+        A["A — deceiver&lt;br/&gt;(originally: a man)&lt;br/&gt;goal: cause a wrong identification"]
+    end
+    subgraph Room_B["Room 2"]
+        B["B — helper&lt;br/&gt;(originally: a woman)&lt;br/&gt;goal: help C identify correctly"]
+    end
 
+    C -- "questions, via teleprinter" --&gt; A
+    C -- "questions, via teleprinter" --&gt; B
+    A -- "typed answers" --&gt; C
+    B -- "typed answers" --&gt; C
+
+    A -.-&gt;|"stage 2: A is replaced by a machine"| M["Machine"]
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<p>The load-bearing details:</p>
+<ul>
+<li><strong>Channel.</strong> Questions and answers are typewritten, not spoken — Turing is explicit that this is “in order that tones of voice may not help the interrogator.” The test is scoped deliberately to linguistic behaviour only; it says nothing about embodiment, appearance, or voice.</li>
+<li><strong>Roles are asymmetric.</strong> A is trying to <em>cause</em> misidentification; B is trying to <em>prevent</em> it. Turing notes B saying “I am the woman, don’t listen to him!” gains nothing, because A can say exactly the same thing — the protest itself carries no information.</li>
+<li><strong>The pivot.</strong> Stage two of the thought experiment swaps A for a machine and asks whether C misidentifies <em>at the same rate</em> as when A was a man. The woman B stays in the game in Turing’s original formulation — it’s a like-for-like substitution of one player, not a redesign of the whole setup.</li>
+<li><strong>What’s actually being scored.</strong> Not “does the machine seem intelligent” in the abstract, but a comparative failure rate of a specific judge under specific constraints — which is why the parameters (session length, judge skill, question style) change the result without changing the question being asked.</li>
+</ul>
+<p>Two variants show up in the literature and it’s worth keeping them straight: Turing’s original is <strong>three-party</strong> (machine vs.&nbsp;human, both being judged against each other by an interrogator who splits attention between them). Most popular retellings — and some of the modern empirical studies below — run a simpler <strong>two-party</strong> version: one interrogator, one hidden interlocutor per session, asked “human or machine?” These are not the same test and don’t produce comparable numbers, which is part of why “GPT-4 passed the Turing test” headlines are hard to pin down without checking which version was run.</p>
+</section>
+<section id="the-70-everyone-misquotes" class="level2">
+<h2 class="anchored" data-anchor-id="the-70-everyone-misquotes">The 70% everyone misquotes</h2>
+<p>The most-cited line in the paper predicts that in about fifty years, computers with ~10⁹ bits of storage would play the game well enough that “an average interrogator will not have more than 70 per cent chance of making the right identification after five minutes of questioning.”</p>
+<p>Two things get lost in translation. First, 70% is a ceiling on the <em>interrogator’s</em> accuracy, not a “machine fools 30% of judges” pass mark — those are different claims, and conflating them is precisely how Eugene Goostman got declared a Turing test “winner” in 2014 for a 33% fool rate. Second, the percentage, the five minutes, and the interrogator’s skill are all parameters Turing picked to make a dated bet, not part of the test’s definition. Treating them as fixed thresholds is a category error that persists in how the test gets talked about today.</p>
+</section>
+<section id="nine-objections-and-the-one-that-lands" class="level2">
+<h2 class="anchored" data-anchor-id="nine-objections-and-the-one-that-lands">Nine objections, and the one that lands</h2>
+<p>Roughly half the paper is Turing pre-empting critics — theology, mathematics (Gödel/Church), consciousness, disabilities (“a machine will never fall in love”), Lady Lovelace’s objection that machines only do what we tell them, and more. The sharpest exchange is on consciousness: pushed hard enough, “how do you know it’s thinking” collapses into solipsism, since the only way to verify another mind is to <em>be</em> it — and we don’t apply that standard to other people either.</p>
+<p>The objection that aged best is a later one, from Hayes and Ford (1995): the test asks for confirmation of a null hypothesis (no detectable difference from a human), which gives no gradations of success and actively rewards concealing capability. Turing anticipated this too — his hypothetical machine pauses 30 seconds and then gets 34957 + 70764 wrong on purpose, because answering instantly and correctly would give it away. Optimizing to <em>seem</em> human and optimizing to <em>be</em> capable are different objectives, and the test only measures the first.</p>
+</section>
+<section id="its-been-passed-and-thats-the-anticlimax" class="level2">
+<h2 class="anchored" data-anchor-id="its-been-passed-and-thats-the-anticlimax">It’s been passed — and that’s the anticlimax</h2>
+<p>Jones and Bergen (UC San Diego) ran the <em>two-party</em> version in 2024 (GPT-4 judged human 54% of the time, vs.&nbsp;67% for actual humans), then the <em>three-party</em> version Turing actually specified in 2025 — five-minute conversations, 1,023 games: GPT-4.5 with a persona prompt was judged the human <strong>73%</strong> of the time, beating the real human it was competing against. Without the persona prompt, the same model dropped to 36%.</p>
+<p>That one detail is the whole finding in miniature: the gap between passing and failing wasn’t model capability, it was a prompt telling the model to act like a specific kind of person. Which is exactly what the “too easy” critics (Block’s Blockhead, Searle’s Chinese Room) predicted — passing the game is evidence of performing a social category convincingly, not evidence of the underlying capability question Turing set out to dodge in the first paragraph.</p>
+</section>
+<section id="takeaway" class="level2">
+<h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
+<p>Turing’s replacement question has a definitive empirical answer now: yes, current models pass the imitation game by a comfortable margin, in its original three-party form. The original question — “can machines think?” — is exactly as open as when he called it “too meaningless to deserve discussion.” The lesson for evaluating any system today isn’t about Turing tests specifically; it’s about proxies in general: a benchmark that rewards convincing mimicry will get optimized toward mimicry, and the fact that a model clears the bar tells you about the bar’s design as much as the model’s capability. Worth asking of any eval — including the ones I build — what’s actually being measured versus what the pass/fail number implies.</p>
 
 
 </section>
