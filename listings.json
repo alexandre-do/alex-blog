@@ -24,7 +24,8 @@
       "/project/posts/deploy-ml-aws-cloudformation.html",
       "/project/posts/fine-tuning-llms.html",
       "/project/posts/rest-vs-graphql-vs-websocket.html",
-      "/project/posts/watermarking-libraries.html"
+      "/project/posts/watermarking-libraries.html",
+      "/project/posts/aws-authentication-methods.html"
     ]
   }
 ]
