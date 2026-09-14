@@ -713,457 +713,6 @@ font-style: inherit;">;</span></span></code></pre></div></div>
   <media:content url="https://alexdo.xyz/project/posts/images/mcp-vancouver-open-data.png" medium="image" type="image/png" height="96" width="144"/>
 </item>
 <item>
-  <title>Deploying a Machine Learning Project with AWS CloudFormation</title>
-  <link>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</link>
-  <description><![CDATA[ 
-
-
-
-
-<section id="deploying-a-machine-learning-project-with-aws-cloudformation" class="level1">
-<h1>Deploying a Machine Learning Project with AWS CloudFormation</h1>
-<p><img src="https://alexdo.xyz/project/posts/images/deploy-ml-aws-cloudformation.png" class="post-banner img-fluid" alt="Deploying a Machine Learning Project with AWS CloudFormation"></p>
-<p>Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.</p>
-<section id="what-is-infrastructure-as-code" class="level2">
-<h2 class="anchored" data-anchor-id="what-is-infrastructure-as-code">What Is Infrastructure as Code?</h2>
-<p>Infrastructure as Code (IaC) means describing infrastructure — networks, IAM roles, compute, storage — in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:</p>
-<ul>
-<li><strong>Reproducibility</strong> — the same definition produces the same stack in dev, staging, and prod.</li>
-<li><strong>Auditability</strong> — changes to infrastructure show up as diffs, not as an entry in someone’s shell history.</li>
-<li><strong>Idempotency</strong> — re-applying a template that already matches reality is a no-op; the tool only acts on the delta.</li>
-</ul>
-<p>IaC tools split along one main axis: <strong>declarative vs.&nbsp;imperative</strong>. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (Pulumi in its general-purpose-language mode, or a hand-rolled boto3/Ansible script) describe the steps to get there. Declarative is the norm for cloud infrastructure because the engine can diff current vs.&nbsp;desired state and tell you what will change <em>before</em> it changes it.</p>
-<p>CloudFormation is AWS’s own declarative engine: no install, no state file to manage, and it understands AWS resource types the day they ship. The trade-off is that it only speaks AWS.</p>
-</section>
-<section id="cloudformation-vs.-terraform-vs.-azure-armbicep" class="level2">
-<h2 class="anchored" data-anchor-id="cloudformation-vs.-terraform-vs.-azure-armbicep">CloudFormation vs.&nbsp;Terraform vs.&nbsp;Azure ARM/Bicep</h2>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-</colgroup>
-<thead>
-<tr class="header">
-<th></th>
-<th><strong>CloudFormation</strong></th>
-<th><strong>Terraform</strong></th>
-<th><strong>Azure ARM / Bicep</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Scope</td>
-<td>AWS only</td>
-<td>Multi-cloud (AWS, Azure, GCP, 100+ providers)</td>
-<td>Azure only</td>
-</tr>
-<tr class="even">
-<td>Language</td>
-<td>YAML/JSON</td>
-<td>HCL</td>
-<td>JSON (ARM) or Bicep (DSL that compiles to ARM)</td>
-</tr>
-<tr class="odd">
-<td>State</td>
-<td>Managed by AWS, no local state file</td>
-<td>State file (local or remote backend: S3, Terraform Cloud) that you must protect and lock</td>
-<td>Managed by Azure</td>
-</tr>
-<tr class="even">
-<td>Drift detection</td>
-<td>Built-in (<code>detect-stack-drift</code>)</td>
-<td>Via <code>terraform plan</code>, needs current state to be accurate</td>
-<td>Built-in</td>
-</tr>
-<tr class="odd">
-<td>Change preview</td>
-<td>Change sets</td>
-<td><code>terraform plan</code></td>
-<td>What-if operations</td>
-</tr>
-<tr class="even">
-<td>Ecosystem</td>
-<td>Native AWS support, SAM for serverless</td>
-<td>Largest ecosystem, most third-party modules, works across clouds</td>
-<td>Native Azure support, best for Azure-centric shops</td>
-</tr>
-<tr class="odd">
-<td>Best fit</td>
-<td>AWS-only teams that want zero extra tooling and tight IAM integration</td>
-<td>Teams running multi-cloud or hybrid infra, or who want one tool for everything</td>
-<td>Azure-only teams already inside the Microsoft stack</td>
-</tr>
-</tbody>
-</table>
-<p>For an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) — at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.</p>
-</section>
-<section id="core-building-blocks" class="level2">
-<h2 class="anchored" data-anchor-id="core-building-blocks">Core Building Blocks</h2>
-<p>A typical ML inference stack needs:</p>
-<ul>
-<li>An <strong>S3 bucket</strong> to store model artifacts</li>
-<li>An <strong>IAM role</strong> with least-privilege access for the compute layer</li>
-<li>A <strong>compute target</strong> — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference</li>
-</ul>
-</section>
-<section id="a-minimal-stack" class="level2">
-<h2 class="anchored" data-anchor-id="a-minimal-stack">A Minimal Stack</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb1-1"><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Resources</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-2"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">  </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">ModelArtifactsBucket</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-3"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Type</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> AWS::S3::Bucket</span></span>
-<span id="cb1-4"></span>
-<span id="cb1-5"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">  </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">SageMakerExecutionRole</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-6"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Type</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> AWS::IAM::Role</span></span>
-<span id="cb1-7"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Properties</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-8"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">      </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">AssumeRolePolicyDocument</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-9"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">        </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Statement</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-10"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">          </span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">-</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Effect</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> Allow</span></span>
-<span id="cb1-11"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">            </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Principal</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-12"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">              </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Service</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> sagemaker.amazonaws.com</span></span>
-<span id="cb1-13"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">            </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Action</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> sts:AssumeRole</span></span>
-<span id="cb1-14"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">      </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">ManagedPolicyArns</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-15"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">        </span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">-</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> arn:aws:iam::aws:policy/AmazonSageMakerFullAccess</span></span>
-<span id="cb1-16"></span>
-<span id="cb1-17"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">  </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Model</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-18"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Type</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> AWS::SageMaker::Model</span></span>
-<span id="cb1-19"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Properties</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-20"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">      </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">ExecutionRoleArn</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> !GetAtt SageMakerExecutionRole.Arn</span></span>
-<span id="cb1-21"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">      </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">PrimaryContainer</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-22"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">        </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Image</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> &lt;ecr-image-uri&gt;</span></span>
-<span id="cb1-23"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">        </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">ModelDataUrl</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> !Sub "s3://${ModelArtifactsBucket}/model.tar.gz"</span></span>
-<span id="cb1-24"></span>
-<span id="cb1-25"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">  </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">EndpointConfig</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-26"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Type</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> AWS::SageMaker::EndpointConfig</span></span>
-<span id="cb1-27"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Properties</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-28"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">      </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">ProductionVariants</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-29"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">        </span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">-</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">ModelName</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> !GetAtt Model.ModelName</span></span>
-<span id="cb1-30"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">          </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">VariantName</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> AllTraffic</span></span>
-<span id="cb1-31"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">          </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">InitialInstanceCount</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> </span><span class="dv" style="color: #AD0000;
-background-color: null;
-font-style: inherit;">1</span></span>
-<span id="cb1-32"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">          </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">InstanceType</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> ml.m5.large</span></span>
-<span id="cb1-33"></span>
-<span id="cb1-34"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">  </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Endpoint</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-35"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Type</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> AWS::SageMaker::Endpoint</span></span>
-<span id="cb1-36"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">    </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">Properties</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span></span>
-<span id="cb1-37"><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">      </span><span class="fu" style="color: #4758AB;
-background-color: null;
-font-style: inherit;">EndpointConfigName</span><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">:</span><span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;"> !GetAtt EndpointConfig.EndpointConfigName</span></span></code></pre></div></div>
-</section>
-<section id="deploying-the-stack" class="level2">
-<h2 class="anchored" data-anchor-id="deploying-the-stack">Deploying the Stack</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2" style="background: #f1f3f5;"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><span class="ex" style="color: null;
-background-color: null;
-font-style: inherit;">aws</span> cloudformation deploy <span class="dt" style="color: #AD0000;
-background-color: null;
-font-style: inherit;">\</span></span>
-<span id="cb2-2">  <span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">--template-file</span> stack.yaml <span class="dt" style="color: #AD0000;
-background-color: null;
-font-style: inherit;">\</span></span>
-<span id="cb2-3">  <span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">--stack-name</span> ml-inference-stack <span class="dt" style="color: #AD0000;
-background-color: null;
-font-style: inherit;">\</span></span>
-<span id="cb2-4">  <span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">--capabilities</span> CAPABILITY_IAM</span></code></pre></div></div>
-</section>
-<section id="tips" class="level2">
-<h2 class="anchored" data-anchor-id="tips">Tips</h2>
-<ul>
-<li>Parameterize the instance type and image URI so the same template works across environments.</li>
-<li>Use one stack per environment (dev/staging/prod) rather than branching logic inside a single template.</li>
-<li>Tear down with <code>aws cloudformation delete-stack</code> when you’re done — an idle SageMaker endpoint bills by the hour.</li>
-</ul>
-<p>CloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read.</p>
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>AWS</category>
-  <category>CloudFormation</category>
-  <category>MLOps</category>
-  <guid>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</guid>
-  <pubDate>Thu, 14 May 2026 07:00:00 GMT</pubDate>
-  <media:content url="https://alexdo.xyz/project/posts/images/deploy-ml-aws-cloudformation.png" medium="image" type="image/png" height="96" width="144"/>
-</item>
-<item>
   <title>A Local-First RAG Chat App, Built to Migrate to AWS on Day One</title>
   <link>https://alexdo.xyz/project/posts/chat-retrieval-system.html</link>
   <description><![CDATA[ 
@@ -1493,6 +1042,748 @@ font-style: inherit;">'{"session_id": "test", "message": "What does this documen
   <guid>https://alexdo.xyz/project/posts/chat-retrieval-system.html</guid>
   <pubDate>Sun, 07 Dec 2025 08:00:00 GMT</pubDate>
   <media:content url="https://alexdo.xyz/project/posts/images/chat-retrieval-system.gif" medium="image" type="image/gif"/>
+</item>
+<item>
+  <title>Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis</title>
+  <link>https://alexdo.xyz/project/posts/google-news-rss-radar.html</link>
+  <description><![CDATA[ 
+
+
+
+
+<section id="google-news-rss-radar-collecting-news-into-mongodb-for-search-and-trend-analysis" class="level1">
+<h1>Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis</h1>
+<p><img src="https://alexdo.xyz/project/posts/images/google-news-rss-radar.gif" class="post-banner img-fluid" alt="Google News RSS Radar demo — collecting, searching, and browsing trends across news articles"></p>
+<p>Google News RSS Radar is a four-stage Node.js pipeline — collect, download, extract, enrich — that turns a keyword and a date range into a searchable, trend-analyzable archive of full article text. It’s fundamentally a data engineering project: pull raw entries from an RSS feed, progressively enrich each one into a single flexible document, land everything in MongoDB, and build search and trend analysis on top of that one collection. Each stage’s choices keep it dependency-light: no headless browser unless the plain HTTP fetch actually needs one, and no external search/analytics service beyond MongoDB itself.</p>
+<pre class="mermaid"><code>flowchart LR
+    RSS[Google News RSS] --&gt; Collector[RSS Collector]
+    Collector --&gt; Downloader[HTML Downloader]
+    Downloader --&gt; Extraction[Content Extraction]
+    Extraction --&gt; Mongo[(MongoDB)]
+    Mongo --&gt; Enrich[Entity Enrichment]
+    Mongo --&gt; Search[Keyword Search + Trends]
+    Search --&gt; Dashboard[React Dashboard]</code></pre>
+<section id="stage-1-collect-google-news-rss-has-no-pagination-so-fake-it-with-date-chunks" class="level2">
+<h2 class="anchored" data-anchor-id="stage-1-collect-google-news-rss-has-no-pagination-so-fake-it-with-date-chunks">Stage 1: Collect — Google News RSS Has No Pagination, So Fake It With Date Chunks</h2>
+<p>Google News RSS supports <code>after:</code>/<code>before:</code> query operators, but each feed only returns a capped number of items regardless of the date range requested. <code>splitDateRange</code> works around this by chunking a wide date range into fixed windows (7 days by default) and firing one RSS request per chunk:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2" style="background: #f1f3f5;"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb2-1"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">export</span> <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">function</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">splitDateRange</span>(dateFrom<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> dateTo<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> timeDeltaDays <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> DEFAULT_TIME_DELTA_DAYS) {</span>
+<span id="cb2-2">  <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> start <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">parseISO</span>(dateFrom)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-3">  <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> end <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">parseISO</span>(dateTo)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-4">  <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">if</span> (<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">differenceInCalendarDays</span>(end<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> start) <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">&lt;=</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span>) {</span>
+<span id="cb2-5">    <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">return</span> [{ <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">from</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> dateFrom<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">to</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> dateTo }]<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-6">  }</span>
+<span id="cb2-7">  <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> chunks <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> []<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-8">  <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">let</span> chunkStart <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> start<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-9">  <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">while</span> (<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">isBefore</span>(chunkStart<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> end)) {</span>
+<span id="cb2-10">    <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> tentativeEnd <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">addDays</span>(chunkStart<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> timeDeltaDays)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-11">    <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> chunkEnd <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">isBefore</span>(end<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> tentativeEnd) <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">?</span> end <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> tentativeEnd<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-12">    chunks<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">push</span>({ <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">from</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">format</span>(chunkStart<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"yyyy-MM-dd"</span>)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">to</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">format</span>(chunkEnd<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"yyyy-MM-dd"</span>) })<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-13">    chunkStart <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> chunkEnd<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-14">  }</span>
+<span id="cb2-15">  <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">return</span> chunks<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb2-16">}</span></code></pre></div></div>
+<p>Each chunk becomes its own query URL against <code>news.google.com/rss/search</code>, and <code>collectBatch</code> fans this out further — a plain text file of <code>keyword;dateFrom;dateTo</code> lines lets a full backfill run as one CLI command instead of one invocation per keyword. Every entry is upserted into MongoDB immediately, so the collection is the pipeline’s single source of truth from the very first stage.</p>
+</section>
+<section id="stage-2-download-try-plain-http-first-fall-back-to-a-browser" class="level2">
+<h2 class="anchored" data-anchor-id="stage-2-download-try-plain-http-first-fall-back-to-a-browser">Stage 2: Download — Try Plain HTTP First, Fall Back to a Browser</h2>
+<p>Downloading is the stage most scrapers over-engineer by reaching for a headless browser on every request. This pipeline only pays that cost when it has to:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3" style="background: #f1f3f5;"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb3-1"><span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">async</span> <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">function</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">downloadOne</span>(article) {</span>
+<span id="cb3-2">  <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> httpResult <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">await</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">fetchHttp</span>(url)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb3-3">  <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">if</span> (<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">isContentSufficient</span>(httpResult<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">html</span>)) {</span>
+<span id="cb3-4">    <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">await</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">markDownloaded</span>(uuid<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> { <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">html</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> httpResult<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">html</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">method</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"http"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">...</span> })<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb3-5">    <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">return</span> { uuid<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">method</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"http"</span> }<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb3-6">  }</span>
+<span id="cb3-7">  <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> browserResult <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">await</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">fetchBrowser</span>(url)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb3-8">  <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">await</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">markDownloaded</span>(uuid<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> { <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">html</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> browserResult<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">html</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">method</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"browser"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">...</span> })<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb3-9">  <span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">return</span> { uuid<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">method</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"browser"</span> }<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb3-10">}</span></code></pre></div></div>
+<p><code>isContentSufficient</code> is a cheap heuristic — parse with Cheerio, check the body text is at least 500 characters and there’s an <code>&lt;article&gt;</code> tag or at least 3 <code>&lt;p&gt;</code> tags. Most publisher sites serve usable HTML on a plain <code>fetch</code>; the ones that don’t (client-side-rendered pages, JS-gated paywalls) fall through to a Playwright-driven Chromium instance that waits for <code>networkidle</code> before grabbing <code>page.content()</code>. The browser is lazily launched once and reused across the whole batch via a memoized promise, and explicitly closed at the end of the run — a headless Chromium process left running is an easy leak to introduce in a script that’s supposed to exit.</p>
+<p>Concurrency is capped with <code>p-limit</code> (4 by default) rather than firing every pending article’s fetch at once, which matters more for the browser fallback path than the HTTP one — a handful of concurrent Chromium contexts is a very different memory footprint than a handful of <code>fetch</code> calls.</p>
+</section>
+<section id="stage-3-extract-json-ld-first-readability-second-meta-tags-as-a-last-resort" class="level2">
+<h2 class="anchored" data-anchor-id="stage-3-extract-json-ld-first-readability-second-meta-tags-as-a-last-resort">Stage 3: Extract — JSON-LD First, Readability Second, Meta Tags as a Last Resort</h2>
+<p>Article extraction layers three signal sources with a clear precedence, because no single one is reliable across every publisher:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4" style="background: #f1f3f5;"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb4-1"><span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> jsonLd <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">extractJsonLd</span>(<span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">document</span>)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span>        <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">// schema.org NewsArticle block</span></span>
+<span id="cb4-2"><span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> reader <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">new</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">Readability</span>(<span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">document</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">cloneNode</span>(<span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">true</span>))<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb4-3"><span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> parsed <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> reader<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">parse</span>()<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span>                  <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">// Mozilla's readability algorithm</span></span>
+<span id="cb4-4"></span>
+<span id="cb4-5"><span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> title <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> jsonLd<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">?.</span><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">headline</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">||</span> parsed<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">?.</span><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">title</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">||</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">metaContent</span>(<span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">document</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> [<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">...</span>]) <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">||</span> <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">null</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span>
+<span id="cb4-6"><span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> publishedRaw <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> jsonLd<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">?.</span><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">datePublished</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">||</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">metaContent</span>(<span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">document</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> [<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">...</span>]) <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">||</span> <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">document</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">querySelector</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"time"</span>)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">?.</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">getAttribute</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"datetime"</span>)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span></code></pre></div></div>
+<p>JSON-LD (<code>&lt;script type="application/ld+json"&gt;</code> with an <code>Article</code>/<code>NewsArticle</code> <code>@type</code>) is structured data publishers embed specifically for search engines and social previews — when it’s present, it’s more precise than anything Readability infers from DOM shape. Readability (the same library behind Firefox’s Reader Mode) handles the body text extraction, stripping nav bars, ads, and related-article rails. Meta tags (<code>og:title</code>, <code>article:published_time</code>) are the fallback when neither of the above is present. The extraction method used (<code>readability+jsonld</code>, <code>readability</code>, or <code>meta-fallback</code>) gets stored alongside the result, which turns “why is this article’s title wrong” from a debugging session into a one-field lookup.</p>
+</section>
+<section id="storing-everything-as-one-flexible-document" class="level2">
+<h2 class="anchored" data-anchor-id="storing-everything-as-one-flexible-document">Storing Everything as One Flexible Document</h2>
+<p>Every stage writes back onto the same <code>articles</code> document by <code>uuid</code> — RSS metadata, downloaded HTML, extracted text, enrichment output — rather than splitting the pipeline across separate tables. A <code>status</code> field (<code>collected</code> → <code>downloaded</code> → <code>extracted</code> → <code>enriched</code>, with <code>*_failed</code> variants) tracks how far along each article is, so re-running a stage is just a query for documents stuck at the previous status:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5" style="background: #f1f3f5;"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb5-1"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">export</span> <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">const</span> STATUS <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> {</span>
+<span id="cb5-2">  <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">COLLECTED</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"collected"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb5-3">  <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">DOWNLOAD_FAILED</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"download_failed"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb5-4">  <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">DOWNLOADED</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"downloaded"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb5-5">  <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">EXTRACTION_FAILED</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"extraction_failed"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb5-6">  <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">EXTRACTED</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"extracted"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb5-7">  <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">ENRICH_FAILED</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"enrich_failed"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb5-8">  <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">ENRICHED</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"enriched"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb5-9">}<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span></code></pre></div></div>
+<p>This is where MongoDB’s schema flexibility earns its keep: an RSS entry, a downloaded HTML blob, and a structured extraction result don’t look anything alike, but they can all live as nested fields on the same document without a migration every time a stage’s output shape changes.</p>
+</section>
+<section id="stage-4-enrich-local-entity-extraction-over-the-stored-text" class="level2">
+<h2 class="anchored" data-anchor-id="stage-4-enrich-local-entity-extraction-over-the-stored-text">Stage 4: Enrich — Local Entity Extraction Over the Stored Text</h2>
+<p>The enrichment stage runs a small local NLP model over each article’s extracted text to pull out structured tags for analysis — people, organizations, places — rather than leaving the article as an opaque text blob:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1">LABEL_MAP <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> {</span>
+<span id="cb6-2">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"PERSON"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"person"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"ORG"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"organization"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"GPE"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"place"</span>,</span>
+<span id="cb6-3">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"LOC"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"place"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"FAC"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"place"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"NORP"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"group"</span>,</span>
+<span id="cb6-4">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"EVENT"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"event"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"PRODUCT"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"product"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"WORK_OF_ART"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"work"</span>,</span>
+<span id="cb6-5">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"LAW"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"law"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"LANGUAGE"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"language"</span>,</span>
+<span id="cb6-6">}</span>
+<span id="cb6-7"></span>
+<span id="cb6-8"><span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">@app.post</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"/ner"</span>, response_model<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">list</span>[Entity])</span>
+<span id="cb6-9"><span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">def</span> ner(req: NerRequest):</span>
+<span id="cb6-10">    doc <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> nlp(req.text <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">or</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">""</span>)</span>
+<span id="cb6-11">    <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># named entities from spaCy's NER, collapsed by (text, type) with counts</span></span>
+<span id="cb6-12">    <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># + generic noun-chunk "keywords" for anything not already a named entity</span></span>
+<span id="cb6-13">    ...</span></code></pre></div></div>
+<p>A tiny FastAPI service (<code>packages/ner-service</code>, <code>en_core_web_sm</code>) does this tagging over plain HTTP, called from the Node pipeline. The output — a list of <code>{text, type, count}</code> entries per article — becomes another indexable field on the document, which is what turns “search for articles mentioning a company” from a text-match guess into a structured filter.</p>
+</section>
+<section id="search-and-trends-without-a-search-engine" class="level2">
+<h2 class="anchored" data-anchor-id="search-and-trends-without-a-search-engine">Search and Trends Without a Search Engine</h2>
+<p>With four pipeline stages landing structured data in MongoDB, search and trend analysis are both just queries against one <code>articles</code> collection — no Elasticsearch, no separate analytics store:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7" style="background: #f1f3f5;"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb7-1"><span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">await</span> articles<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">createIndex</span>(</span>
+<span id="cb7-2">  {</span>
+<span id="cb7-3">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"rss.title"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"text"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"rss.summary"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"text"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb7-4">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"extraction.title"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"text"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"extraction.text"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"text"</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb7-5">  }<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">,</span></span>
+<span id="cb7-6">  { <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">name</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"articles_text_idx"</span> }</span>
+<span id="cb7-7">)<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">;</span></span></code></pre></div></div>
+<p><code>GET /api/articles?q=</code> runs against Mongo’s built-in <code>$text</code> index; <code>GET /api/trends?dimension=day|source</code> aggregates article counts by day or by source over a date range, which is the basic building block for “is coverage of this topic rising or falling” without a dedicated analytics pipeline.</p>
+</section>
+<section id="running-it" class="level2">
+<h2 class="anchored" data-anchor-id="running-it">Running It</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8" style="background: #f1f3f5;"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">docker</span> compose up <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">-d</span> mongo   <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># MongoDB</span></span>
+<span id="cb8-2"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">npm</span> run ner:up                <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># entity extraction service on :8001</span></span>
+<span id="cb8-3"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">npm</span> install <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">&amp;&amp;</span> <span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">npx</span> playwright install chromium</span>
+<span id="cb8-4"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">cp</span> .env.example .env</span>
+<span id="cb8-5"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">npm</span> run db:indexes</span>
+<span id="cb8-6"></span>
+<span id="cb8-7"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">npm</span> run pipeline <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">--</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Generative AI"</span> 2026-01-01 2026-01-09   <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># collect -&gt; download -&gt; extract -&gt; enrich</span></span>
+<span id="cb8-8"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">npm</span> run dev                                                    <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># API on :4000, dashboard on :5173</span></span></code></pre></div></div>
+<p><code>npm run collect-batch -- examples/collect-batch-input.example.txt</code> runs the same pipeline across a whole file of <code>keyword;dateFrom;dateTo</code> lines for backfilling multiple topics at once.</p>
+</section>
+<section id="lessons-learned" class="level2">
+<h2 class="anchored" data-anchor-id="lessons-learned">Lessons Learned</h2>
+<ul>
+<li><strong>A cheap heuristic beats a blanket policy.</strong> Checking body-text length and paragraph count before reaching for Playwright keeps the common case fast and only pays the browser-automation cost where it’s actually needed.</li>
+<li><strong>One flexible document per article beats a rigid multi-table schema.</strong> RSS metadata, raw HTML, extracted text, and enrichment tags all live on the same evolving document, keyed by status — adding a new stage’s output is a new nested field, not a migration.</li>
+<li><strong>Storing the extraction method alongside the result pays off during debugging.</strong> Knowing whether a title came from JSON-LD, Readability, or a meta-tag fallback turns “this field looks wrong” into an immediate diagnosis instead of a re-scrape.</li>
+</ul>
+<p>Next: extend the trends API with more dimensions (entity co-occurrence, source-over-time breakdowns) now that enrichment tags are already stored per article, and look at pre-aggregating the heavier trend queries instead of computing them on read.</p>
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Node.js</category>
+  <category>MongoDB</category>
+  <category>Data Analysis</category>
+  <guid>https://alexdo.xyz/project/posts/google-news-rss-radar.html</guid>
+  <pubDate>Fri, 01 Mar 2024 08:00:00 GMT</pubDate>
+  <media:content url="https://alexdo.xyz/project/posts/images/google-news-rss-radar.gif" medium="image" type="image/gif"/>
 </item>
 </channel>
 </rss>

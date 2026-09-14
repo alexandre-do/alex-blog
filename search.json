@@ -431,7 +431,7 @@
     "href": "index.html#pinned-posts",
     "title": "Home",
     "section": "Pinned Posts",
-    "text": "Pinned Posts\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nDeploying a Machine Learning Project with AWS CloudFormation\n\n\nTurning a manual, click-through AWS deployment into a reviewable, repeatable CloudFormation stack.\n\n\n\nMay 14, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nA Local-First RAG Chat App, Built to Migrate to AWS on Day One\n\n\nA document Q&A chatbot over finance PDFs (UniDoc-Bench) that uses Bedrock for embeddings and generation from the start, so the only thing that changes when it moves to AWS…\n\n\n\nDec 7, 2025\n\n\n\n\n\n\nNo matching items"
+    "text": "Pinned Posts\n\n\n\n\n\n\n\n\n\n\nBuilding an MCP Server for Vancouver’s Open Data\n\n\nExposing the City of Vancouver’s Open Data portal to LLMs through a Model Context Protocol server.\n\n\n\nSep 8, 2026\n\n\n\n\n\n\n\n\n\n\n\n\n\nA Local-First RAG Chat App, Built to Migrate to AWS on Day One\n\n\nA document Q&A chatbot over finance PDFs (UniDoc-Bench) that uses Bedrock for embeddings and generation from the start, so the only thing that changes when it moves to AWS…\n\n\n\nDec 7, 2025\n\n\n\n\n\n\n\n\n\n\n\n\n\nGoogle News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis\n\n\nA four-stage pipeline that collects Google News RSS entries, downloads and extracts full article text, and stores everything as flexible documents in MongoDB — then exposes…\n\n\n\nMar 1, 2024\n\n\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "about.html",
