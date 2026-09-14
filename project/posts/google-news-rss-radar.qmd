@@ -1,19 +1,19 @@
 ---
-title: "Google News RSS Radar: A Full News Pipeline Without an LLM in Sight"
+title: "Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis"
 date: "2024-03-01"
-description: "Collecting Google News RSS feeds, downloading and extracting full article text, enriching with a local spaCy NER model, and serving it through a search/trends API and React dashboard — no LLM API calls required."
+description: "A four-stage pipeline that collects Google News RSS entries, downloads and extracts full article text, and stores everything as flexible documents in MongoDB — then exposes it through a search/trends API and React dashboard."
 image: "images/google-news-rss-radar.gif"
 categories:
     - Node.js
-    - NLP
     - MongoDB
+    - Data Analysis
 ---
 
-# Google News RSS Radar: A Full News Pipeline Without an LLM in Sight
+# Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis
 
 ![](images/google-news-rss-radar.gif){.post-banner fig-alt="Google News RSS Radar demo — collecting, searching, and browsing trends across news articles"}
 
-Google News RSS Radar is a four-stage Node.js pipeline — collect, download, extract, enrich — that turns a keyword and a date range into a searchable, trend-analyzable archive of full article text. What makes it worth writing up isn't the pipeline shape (that's standard ETL), it's the choices at each stage that keep it dependency-light: no LLM API for enrichment, no headless browser unless the plain HTTP fetch actually needs one, and no external search service beyond MongoDB itself.
+Google News RSS Radar is a four-stage Node.js pipeline — collect, download, extract, enrich — that turns a keyword and a date range into a searchable, trend-analyzable archive of full article text. It's fundamentally a data engineering project: pull raw entries from an RSS feed, progressively enrich each one into a single flexible document, land everything in MongoDB, and build search and trend analysis on top of that one collection. Each stage's choices keep it dependency-light: no headless browser unless the plain HTTP fetch actually needs one, and no external search/analytics service beyond MongoDB itself.
 
 ```mermaid
 flowchart LR
@@ -21,8 +21,8 @@ flowchart LR
     Collector --> Downloader[HTML Downloader]
     Downloader --> Extraction[Content Extraction]
     Extraction --> Mongo[(MongoDB)]
-    Mongo --> Enrich[NLP enrichment: spaCy NER]
-    Mongo --> Search[Keyword search]
+    Mongo --> Enrich[Entity Enrichment]
+    Mongo --> Search[Keyword Search + Trends]
     Search --> Dashboard[React Dashboard]
 ```
 
@@ -49,7 +49,7 @@ export function splitDateRange(dateFrom, dateTo, timeDeltaDays = DEFAULT_TIME_DE
 }
 ```
 
-Each chunk becomes its own query URL against `news.google.com/rss/search`, and `collectBatch` fans this out further — a plain text file of `keyword;dateFrom;dateTo` lines lets a full backfill run as one CLI command instead of one invocation per keyword.
+Each chunk becomes its own query URL against `news.google.com/rss/search`, and `collectBatch` fans this out further — a plain text file of `keyword;dateFrom;dateTo` lines lets a full backfill run as one CLI command instead of one invocation per keyword. Every entry is upserted into MongoDB immediately, so the collection is the pipeline's single source of truth from the very first stage.
 
 ## Stage 2: Download — Try Plain HTTP First, Fall Back to a Browser
 
@@ -87,9 +87,27 @@ const publishedRaw = jsonLd?.datePublished || metaContent(document, [...]) || do
 
 JSON-LD (`<script type="application/ld+json">` with an `Article`/`NewsArticle` `@type`) is structured data publishers embed specifically for search engines and social previews — when it's present, it's more precise than anything Readability infers from DOM shape. Readability (the same library behind Firefox's Reader Mode) handles the body text extraction, stripping nav bars, ads, and related-article rails. Meta tags (`og:title`, `article:published_time`) are the fallback when neither of the above is present. The extraction method used (`readability+jsonld`, `readability`, or `meta-fallback`) gets stored alongside the result, which turns "why is this article's title wrong" from a debugging session into a one-field lookup.
 
-## Stage 4: Enrich — Local NER Instead of an LLM Call
+## Storing Everything as One Flexible Document
 
-The enrichment stage is deliberately built around a local spaCy model rather than an LLM API:
+Every stage writes back onto the same `articles` document by `uuid` — RSS metadata, downloaded HTML, extracted text, enrichment output — rather than splitting the pipeline across separate tables. A `status` field (`collected` → `downloaded` → `extracted` → `enriched`, with `*_failed` variants) tracks how far along each article is, so re-running a stage is just a query for documents stuck at the previous status:
+
+```js
+export const STATUS = {
+  COLLECTED: "collected",
+  DOWNLOAD_FAILED: "download_failed",
+  DOWNLOADED: "downloaded",
+  EXTRACTION_FAILED: "extraction_failed",
+  EXTRACTED: "extracted",
+  ENRICH_FAILED: "enrich_failed",
+  ENRICHED: "enriched",
+};
+```
+
+This is where MongoDB's schema flexibility earns its keep: an RSS entry, a downloaded HTML blob, and a structured extraction result don't look anything alike, but they can all live as nested fields on the same document without a migration every time a stage's output shape changes.
+
+## Stage 4: Enrich — Local Entity Extraction Over the Stored Text
+
+The enrichment stage runs a small local NLP model over each article's extracted text to pull out structured tags for analysis — people, organizations, places — rather than leaving the article as an opaque text blob:
 
 ```python
 LABEL_MAP = {
@@ -107,11 +125,11 @@ def ner(req: NerRequest):
     ...
 ```
 
-A tiny FastAPI service (`packages/ner-service`, `en_core_web_sm`) does entity recognition and noun-chunk keyword extraction over each article's text, called over plain HTTP from the Node pipeline. This buys deterministic, free, offline enrichment for the parts of the job that are genuinely a tagging problem — people, organizations, places — without spending an LLM call per article. `enrich.js` is explicit about where that trade-off ends: `analyzeSentiment` and `classifyTopics` are stub functions with a `TODO` pointing at "wire in a real LLM call here," because sentiment and topic classification need judgment a rule-based tagger doesn't have, while entity extraction doesn't.
+A tiny FastAPI service (`packages/ner-service`, `en_core_web_sm`) does this tagging over plain HTTP, called from the Node pipeline. The output — a list of `{text, type, count}` entries per article — becomes another indexable field on the document, which is what turns "search for articles mentioning a company" from a text-match guess into a structured filter.
 
 ## Search and Trends Without a Search Engine
 
-With four pipeline stages landing structured data in MongoDB, search and trends are both just queries against one `articles` collection — no Elasticsearch, no separate analytics store:
+With four pipeline stages landing structured data in MongoDB, search and trend analysis are both just queries against one `articles` collection — no Elasticsearch, no separate analytics store:
 
 ```js
 await articles.createIndex(
@@ -123,13 +141,13 @@ await articles.createIndex(
 );
 ```
 
-`GET /api/articles?q=` runs against Mongo's built-in `$text` index; `GET /api/trends?dimension=day|source` aggregates counts by day or by source over a date range. `searchService.js` already documents the extension point for going semantic later — add an `embedding` field at extraction time, stand up a Mongo Atlas vector index, and branch on a `mode=semantic` param — without touching the keyword path already in production.
+`GET /api/articles?q=` runs against Mongo's built-in `$text` index; `GET /api/trends?dimension=day|source` aggregates article counts by day or by source over a date range, which is the basic building block for "is coverage of this topic rising or falling" without a dedicated analytics pipeline.
 
 ## Running It
 
 ```bash
 docker compose up -d mongo   # MongoDB
-npm run ner:up                # spaCy NER service on :8001
+npm run ner:up                # entity extraction service on :8001
 npm install && npx playwright install chromium
 cp .env.example .env
 npm run db:indexes
@@ -143,7 +161,7 @@ npm run dev                                                    # API on :4000, d
 ## Lessons Learned
 
 - **A cheap heuristic beats a blanket policy.** Checking body-text length and paragraph count before reaching for Playwright keeps the common case fast and only pays the browser-automation cost where it's actually needed.
-- **Local NER is a legitimate default, not just a fallback.** For a fixed taxonomy (people, orgs, places), a local spaCy model is deterministic, free, and has no rate limit — reserving LLM calls for the tasks (sentiment, topic classification) that actually need open-ended judgment is a better allocation of that cost, not a compromise.
+- **One flexible document per article beats a rigid multi-table schema.** RSS metadata, raw HTML, extracted text, and enrichment tags all live on the same evolving document, keyed by status — adding a new stage's output is a new nested field, not a migration.
 - **Storing the extraction method alongside the result pays off during debugging.** Knowing whether a title came from JSON-LD, Readability, or a meta-tag fallback turns "this field looks wrong" into an immediate diagnosis instead of a re-scrape.
 
-Next: wire a real LLM call into `classifyTopics` and `analyzeSentiment` now that the stub interfaces are already in place, and add the `embedding` field + Atlas vector index that `searchService.js` already anticipates for semantic search.
+Next: extend the trends API with more dimensions (entity co-occurrence, source-over-time breakdowns) now that enrichment tags are already stored per article, and look at pre-aggregating the heavier trend queries instead of computing them on read.

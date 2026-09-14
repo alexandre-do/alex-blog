@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="dcterms.date" content="2024-03-01">
-<meta name="description" content="Collecting Google News RSS feeds, downloading and extracting full article text, enriching with a local spaCy NER model, and serving it through a search/trends API and React dashboard — no LLM API calls required.">
+<meta name="description" content="A four-stage pipeline that collects Google News RSS entries, downloads and extracts full article text, and stores everything as flexible documents in MongoDB — then exposes it through a search/trends API and React dashboard.">
 
-<title>Google News RSS Radar: A Full News Pipeline Without an LLM in Sight – Alexandre DO</title>
+<title>Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -167,17 +167,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Google News RSS Radar: A Full News Pipeline Without an LLM in Sight</h1>
+<h1 class="title">Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis</h1>
   <div class="quarto-categories">
     <div class="quarto-category">Node.js</div>
-    <div class="quarto-category">NLP</div>
     <div class="quarto-category">MongoDB</div>
+    <div class="quarto-category">Data Analysis</div>
   </div>
   </div>
 
 <div>
   <div class="description">
-    Collecting Google News RSS feeds, downloading and extracting full article text, enriching with a local spaCy NER model, and serving it through a search/trends API and React dashboard — no LLM API calls required.
+    A four-stage pipeline that collects Google News RSS entries, downloads and extracts full article text, and stores everything as flexible documents in MongoDB — then exposes it through a search/trends API and React dashboard.
   </div>
 </div>
 
@@ -200,17 +200,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="google-news-rss-radar-a-full-news-pipeline-without-an-llm-in-sight" class="level1">
-<h1>Google News RSS Radar: A Full News Pipeline Without an LLM in Sight</h1>
+<section id="google-news-rss-radar-collecting-news-into-mongodb-for-search-and-trend-analysis" class="level1">
+<h1>Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis</h1>
 <p><img src="images/google-news-rss-radar.gif" class="post-banner img-fluid" alt="Google News RSS Radar demo — collecting, searching, and browsing trends across news articles"></p>
-<p>Google News RSS Radar is a four-stage Node.js pipeline — collect, download, extract, enrich — that turns a keyword and a date range into a searchable, trend-analyzable archive of full article text. What makes it worth writing up isn’t the pipeline shape (that’s standard ETL), it’s the choices at each stage that keep it dependency-light: no LLM API for enrichment, no headless browser unless the plain HTTP fetch actually needs one, and no external search service beyond MongoDB itself.</p>
+<p>Google News RSS Radar is a four-stage Node.js pipeline — collect, download, extract, enrich — that turns a keyword and a date range into a searchable, trend-analyzable archive of full article text. It’s fundamentally a data engineering project: pull raw entries from an RSS feed, progressively enrich each one into a single flexible document, land everything in MongoDB, and build search and trend analysis on top of that one collection. Each stage’s choices keep it dependency-light: no headless browser unless the plain HTTP fetch actually needs one, and no external search/analytics service beyond MongoDB itself.</p>
 <pre class="mermaid"><code>flowchart LR
     RSS[Google News RSS] --&gt; Collector[RSS Collector]
     Collector --&gt; Downloader[HTML Downloader]
     Downloader --&gt; Extraction[Content Extraction]
     Extraction --&gt; Mongo[(MongoDB)]
-    Mongo --&gt; Enrich[NLP enrichment: spaCy NER]
-    Mongo --&gt; Search[Keyword search]
+    Mongo --&gt; Enrich[Entity Enrichment]
+    Mongo --&gt; Search[Keyword Search + Trends]
     Search --&gt; Dashboard[React Dashboard]</code></pre>
 <section id="stage-1-collect-google-news-rss-has-no-pagination-so-fake-it-with-date-chunks" class="level2">
 <h2 class="anchored" data-anchor-id="stage-1-collect-google-news-rss-has-no-pagination-so-fake-it-with-date-chunks">Stage 1: Collect — Google News RSS Has No Pagination, So Fake It With Date Chunks</h2>
@@ -231,7 +231,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> chunks<span class="op">;</span></span>
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Each chunk becomes its own query URL against <code>news.google.com/rss/search</code>, and <code>collectBatch</code> fans this out further — a plain text file of <code>keyword;dateFrom;dateTo</code> lines lets a full backfill run as one CLI command instead of one invocation per keyword.</p>
+<p>Each chunk becomes its own query URL against <code>news.google.com/rss/search</code>, and <code>collectBatch</code> fans this out further — a plain text file of <code>keyword;dateFrom;dateTo</code> lines lets a full backfill run as one CLI command instead of one invocation per keyword. Every entry is upserted into MongoDB immediately, so the collection is the pipeline’s single source of truth from the very first stage.</p>
 </section>
 <section id="stage-2-download-try-plain-http-first-fall-back-to-a-browser" class="level2">
 <h2 class="anchored" data-anchor-id="stage-2-download-try-plain-http-first-fall-back-to-a-browser">Stage 2: Download — Try Plain HTTP First, Fall Back to a Browser</h2>
@@ -260,56 +260,70 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> publishedRaw <span class="op">=</span> jsonLd<span class="op">?.</span><span class="at">datePublished</span> <span class="op">||</span> <span class="fu">metaContent</span>(<span class="bu">document</span><span class="op">,</span> [<span class="op">...</span>]) <span class="op">||</span> <span class="bu">document</span><span class="op">.</span><span class="fu">querySelector</span>(<span class="st">"time"</span>)<span class="op">?.</span><span class="fu">getAttribute</span>(<span class="st">"datetime"</span>)<span class="op">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>JSON-LD (<code>&lt;script type="application/ld+json"&gt;</code> with an <code>Article</code>/<code>NewsArticle</code> <code>@type</code>) is structured data publishers embed specifically for search engines and social previews — when it’s present, it’s more precise than anything Readability infers from DOM shape. Readability (the same library behind Firefox’s Reader Mode) handles the body text extraction, stripping nav bars, ads, and related-article rails. Meta tags (<code>og:title</code>, <code>article:published_time</code>) are the fallback when neither of the above is present. The extraction method used (<code>readability+jsonld</code>, <code>readability</code>, or <code>meta-fallback</code>) gets stored alongside the result, which turns “why is this article’s title wrong” from a debugging session into a one-field lookup.</p>
 </section>
-<section id="stage-4-enrich-local-ner-instead-of-an-llm-call" class="level2">
-<h2 class="anchored" data-anchor-id="stage-4-enrich-local-ner-instead-of-an-llm-call">Stage 4: Enrich — Local NER Instead of an LLM Call</h2>
-<p>The enrichment stage is deliberately built around a local spaCy model rather than an LLM API:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>LABEL_MAP <span class="op">=</span> {</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"PERSON"</span>: <span class="st">"person"</span>, <span class="st">"ORG"</span>: <span class="st">"organization"</span>, <span class="st">"GPE"</span>: <span class="st">"place"</span>,</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"LOC"</span>: <span class="st">"place"</span>, <span class="st">"FAC"</span>: <span class="st">"place"</span>, <span class="st">"NORP"</span>: <span class="st">"group"</span>,</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"EVENT"</span>: <span class="st">"event"</span>, <span class="st">"PRODUCT"</span>: <span class="st">"product"</span>, <span class="st">"WORK_OF_ART"</span>: <span class="st">"work"</span>,</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"LAW"</span>: <span class="st">"law"</span>, <span class="st">"LANGUAGE"</span>: <span class="st">"language"</span>,</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="at">@app.post</span>(<span class="st">"/ner"</span>, response_model<span class="op">=</span><span class="bu">list</span>[Entity])</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ner(req: NerRequest):</span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    doc <span class="op">=</span> nlp(req.text <span class="kw">or</span> <span class="st">""</span>)</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># named entities from spaCy's NER, collapsed by (text, type) with counts</span></span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># + generic noun-chunk "keywords" for anything not already a named entity</span></span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    ...</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>A tiny FastAPI service (<code>packages/ner-service</code>, <code>en_core_web_sm</code>) does entity recognition and noun-chunk keyword extraction over each article’s text, called over plain HTTP from the Node pipeline. This buys deterministic, free, offline enrichment for the parts of the job that are genuinely a tagging problem — people, organizations, places — without spending an LLM call per article. <code>enrich.js</code> is explicit about where that trade-off ends: <code>analyzeSentiment</code> and <code>classifyTopics</code> are stub functions with a <code>TODO</code> pointing at “wire in a real LLM call here,” because sentiment and topic classification need judgment a rule-based tagger doesn’t have, while entity extraction doesn’t.</p>
+<section id="storing-everything-as-one-flexible-document" class="level2">
+<h2 class="anchored" data-anchor-id="storing-everything-as-one-flexible-document">Storing Everything as One Flexible Document</h2>
+<p>Every stage writes back onto the same <code>articles</code> document by <code>uuid</code> — RSS metadata, downloaded HTML, extracted text, enrichment output — rather than splitting the pipeline across separate tables. A <code>status</code> field (<code>collected</code> → <code>downloaded</code> → <code>extracted</code> → <code>enriched</code>, with <code>*_failed</code> variants) tracks how far along each article is, so re-running a stage is just a query for documents stuck at the previous status:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">const</span> STATUS <span class="op">=</span> {</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">COLLECTED</span><span class="op">:</span> <span class="st">"collected"</span><span class="op">,</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">DOWNLOAD_FAILED</span><span class="op">:</span> <span class="st">"download_failed"</span><span class="op">,</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">DOWNLOADED</span><span class="op">:</span> <span class="st">"downloaded"</span><span class="op">,</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">EXTRACTION_FAILED</span><span class="op">:</span> <span class="st">"extraction_failed"</span><span class="op">,</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">EXTRACTED</span><span class="op">:</span> <span class="st">"extracted"</span><span class="op">,</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">ENRICH_FAILED</span><span class="op">:</span> <span class="st">"enrich_failed"</span><span class="op">,</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">ENRICHED</span><span class="op">:</span> <span class="st">"enriched"</span><span class="op">,</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>}<span class="op">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This is where MongoDB’s schema flexibility earns its keep: an RSS entry, a downloaded HTML blob, and a structured extraction result don’t look anything alike, but they can all live as nested fields on the same document without a migration every time a stage’s output shape changes.</p>
+</section>
+<section id="stage-4-enrich-local-entity-extraction-over-the-stored-text" class="level2">
+<h2 class="anchored" data-anchor-id="stage-4-enrich-local-entity-extraction-over-the-stored-text">Stage 4: Enrich — Local Entity Extraction Over the Stored Text</h2>
+<p>The enrichment stage runs a small local NLP model over each article’s extracted text to pull out structured tags for analysis — people, organizations, places — rather than leaving the article as an opaque text blob:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>LABEL_MAP <span class="op">=</span> {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"PERSON"</span>: <span class="st">"person"</span>, <span class="st">"ORG"</span>: <span class="st">"organization"</span>, <span class="st">"GPE"</span>: <span class="st">"place"</span>,</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"LOC"</span>: <span class="st">"place"</span>, <span class="st">"FAC"</span>: <span class="st">"place"</span>, <span class="st">"NORP"</span>: <span class="st">"group"</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"EVENT"</span>: <span class="st">"event"</span>, <span class="st">"PRODUCT"</span>: <span class="st">"product"</span>, <span class="st">"WORK_OF_ART"</span>: <span class="st">"work"</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"LAW"</span>: <span class="st">"law"</span>, <span class="st">"LANGUAGE"</span>: <span class="st">"language"</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="at">@app.post</span>(<span class="st">"/ner"</span>, response_model<span class="op">=</span><span class="bu">list</span>[Entity])</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ner(req: NerRequest):</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    doc <span class="op">=</span> nlp(req.text <span class="kw">or</span> <span class="st">""</span>)</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># named entities from spaCy's NER, collapsed by (text, type) with counts</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># + generic noun-chunk "keywords" for anything not already a named entity</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    ...</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A tiny FastAPI service (<code>packages/ner-service</code>, <code>en_core_web_sm</code>) does this tagging over plain HTTP, called from the Node pipeline. The output — a list of <code>{text, type, count}</code> entries per article — becomes another indexable field on the document, which is what turns “search for articles mentioning a company” from a text-match guess into a structured filter.</p>
 </section>
 <section id="search-and-trends-without-a-search-engine" class="level2">
 <h2 class="anchored" data-anchor-id="search-and-trends-without-a-search-engine">Search and Trends Without a Search Engine</h2>
-<p>With four pipeline stages landing structured data in MongoDB, search and trends are both just queries against one <code>articles</code> collection — no Elasticsearch, no separate analytics store:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> articles<span class="op">.</span><span class="fu">createIndex</span>(</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  {</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"rss.title"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span> <span class="st">"rss.summary"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"extraction.title"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span> <span class="st">"extraction.text"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  }<span class="op">,</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">name</span><span class="op">:</span> <span class="st">"articles_text_idx"</span> }</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>GET /api/articles?q=</code> runs against Mongo’s built-in <code>$text</code> index; <code>GET /api/trends?dimension=day|source</code> aggregates counts by day or by source over a date range. <code>searchService.js</code> already documents the extension point for going semantic later — add an <code>embedding</code> field at extraction time, stand up a Mongo Atlas vector index, and branch on a <code>mode=semantic</code> param — without touching the keyword path already in production.</p>
+<p>With four pipeline stages landing structured data in MongoDB, search and trend analysis are both just queries against one <code>articles</code> collection — no Elasticsearch, no separate analytics store:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> articles<span class="op">.</span><span class="fu">createIndex</span>(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  {</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"rss.title"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span> <span class="st">"rss.summary"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"extraction.title"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span> <span class="st">"extraction.text"</span><span class="op">:</span> <span class="st">"text"</span><span class="op">,</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  }<span class="op">,</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  { <span class="dt">name</span><span class="op">:</span> <span class="st">"articles_text_idx"</span> }</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>GET /api/articles?q=</code> runs against Mongo’s built-in <code>$text</code> index; <code>GET /api/trends?dimension=day|source</code> aggregates article counts by day or by source over a date range, which is the basic building block for “is coverage of this topic rising or falling” without a dedicated analytics pipeline.</p>
 </section>
 <section id="running-it" class="level2">
 <h2 class="anchored" data-anchor-id="running-it">Running It</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span> mongo   <span class="co"># MongoDB</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run ner:up                <span class="co"># spaCy NER service on :8001</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install <span class="kw">&amp;&amp;</span> <span class="ex">npx</span> playwright install chromium</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> .env.example .env</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run db:indexes</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run pipeline <span class="at">--</span> <span class="st">"Generative AI"</span> 2026-01-01 2026-01-09   <span class="co"># collect -&gt; download -&gt; extract -&gt; enrich</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run dev                                                    <span class="co"># API on :4000, dashboard on :5173</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span> mongo   <span class="co"># MongoDB</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run ner:up                <span class="co"># entity extraction service on :8001</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install <span class="kw">&amp;&amp;</span> <span class="ex">npx</span> playwright install chromium</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> .env.example .env</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run db:indexes</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run pipeline <span class="at">--</span> <span class="st">"Generative AI"</span> 2026-01-01 2026-01-09   <span class="co"># collect -&gt; download -&gt; extract -&gt; enrich</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run dev                                                    <span class="co"># API on :4000, dashboard on :5173</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>npm run collect-batch -- examples/collect-batch-input.example.txt</code> runs the same pipeline across a whole file of <code>keyword;dateFrom;dateTo</code> lines for backfilling multiple topics at once.</p>
 </section>
 <section id="lessons-learned" class="level2">
 <h2 class="anchored" data-anchor-id="lessons-learned">Lessons Learned</h2>
 <ul>
 <li><strong>A cheap heuristic beats a blanket policy.</strong> Checking body-text length and paragraph count before reaching for Playwright keeps the common case fast and only pays the browser-automation cost where it’s actually needed.</li>
-<li><strong>Local NER is a legitimate default, not just a fallback.</strong> For a fixed taxonomy (people, orgs, places), a local spaCy model is deterministic, free, and has no rate limit — reserving LLM calls for the tasks (sentiment, topic classification) that actually need open-ended judgment is a better allocation of that cost, not a compromise.</li>
+<li><strong>One flexible document per article beats a rigid multi-table schema.</strong> RSS metadata, raw HTML, extracted text, and enrichment tags all live on the same evolving document, keyed by status — adding a new stage’s output is a new nested field, not a migration.</li>
 <li><strong>Storing the extraction method alongside the result pays off during debugging.</strong> Knowing whether a title came from JSON-LD, Readability, or a meta-tag fallback turns “this field looks wrong” into an immediate diagnosis instead of a re-scrape.</li>
 </ul>
-<p>Next: wire a real LLM call into <code>classifyTopics</code> and <code>analyzeSentiment</code> now that the stub interfaces are already in place, and add the <code>embedding</code> field + Atlas vector index that <code>searchService.js</code> already anticipates for semantic search.</p>
+<p>Next: extend the trends API with more dimensions (entity co-occurrence, source-over-time breakdowns) now that enrichment tags are already stored per article, and look at pre-aggregating the heavier trend queries instead of computing them on read.</p>
 
 
 </section>
