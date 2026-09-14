@@ -25,22 +25,3 @@ I'm a **Data Science and Machine Learning Engineer** with 8+ years of experience
 I hold two Master's degrees in **Applied Mathematics** and **Data Science**, and I'm a graduate of **École polytechnique** and **ENSAE ParisTech** in France.
 
 I'm also **AWS certified**, with certifications in **Data Engineering** and **Generative AI Development – Professional**.
-
-## What I Do
-
-**2021–2025 · La Javaness — Paris, France · Senior AI Consultant**
-
-- Specialized in enterprise AI solutions, including **Generative AI, NLP, and unstructured data** such as images and speech.
-- Worked closely with IT, business, and design teams to deliver end-to-end AI projects.
-- Delivered AI and data science solutions for clients across **public institutions, banking and financial services, transportation, and energy**, generating measurable impact through predictive analytics, automation, and data-driven insights.
-
-**2017–2021 · Société Générale — Paris, France · Senior Data Scientist**
-
-- Specialized in **risk modeling and data science** for financial applications.
-- Developed advanced anomaly detection techniques for financial data.
-- Applied machine learning and statistical modeling to complex financial datasets.
-
-**2016 · Crédit Agricole — Paris, France · Data Scientist**
-
-- Developed advanced **machine learning models for credit scoring**.
-- Applied statistical and machine learning techniques to financial risk assessment.
