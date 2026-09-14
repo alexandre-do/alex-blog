@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="dcterms.date" content="2026-09-14">
-<meta name="description" content="A practical guide to picking between AWS’s Strands Agents and the LangChain/LangGraph stack — agent loops, orchestration, durability, and the traps in each.">
+<meta name="description" content="A practical guide to choosing between AWS Strands Agents and the LangChain/LangGraph stack for production agents.">
 
-<title>Strands Agents vs.&nbsp;LangChain: How to Actually Choose – Alexandre DO</title>
+<title>Strands vs.&nbsp;LangChain: Choose the Execution Model, Not the Agent Loop – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -167,7 +167,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Strands Agents vs.&nbsp;LangChain: How to Actually Choose</h1>
+<h1 class="title">Strands vs.&nbsp;LangChain: Choose the Execution Model, Not the Agent Loop</h1>
   <div class="quarto-categories">
     <div class="quarto-category">AWS</div>
     <div class="quarto-category">LangChain</div>
@@ -177,7 +177,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    A practical guide to picking between AWS’s Strands Agents and the LangChain/LangGraph stack — agent loops, orchestration, durability, and the traps in each.
+    A practical guide to choosing between AWS Strands Agents and the LangChain/LangGraph stack for production agents.
   </div>
 </div>
 
@@ -200,30 +200,39 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="strands-agents-vs.-langchain-how-to-actually-choose" class="level1">
-<h1>Strands Agents vs.&nbsp;LangChain: How to Actually Choose</h1>
-<p><img src="images/strands-vs-langchain.png" class="post-banner img-fluid" alt="Strands Agents vs. LangChain"></p>
-<p>Every few months someone on my team asks the same question: we’re building an agent, should we use Strands or LangChain? And every time, the honest answer starts with “those aren’t the same kind of thing.”</p>
-<p>So this post is the version of that answer I wish I could just link to. Each section below starts with the underlying problem every agentic framework has to solve, then walks through <strong>LangChain’s answer</strong>, then <strong>Strands’ answer</strong> — rather than a feature checklist. At the end there’s a heuristic you can apply in about ninety seconds.</p>
-<section id="first-what-are-we-even-comparing" class="level2">
-<h2 class="anchored" data-anchor-id="first-what-are-we-even-comparing">First: what are we even comparing?</h2>
-<p>Every agent framework has to answer the same question — who writes the reason → act → observe loop, and at what altitude do you plug in? LangChain and Strands answer it very differently.</p>
-<p>“LangChain” in 2026 is three layers stacked on top of each other, and conflating them is why these comparisons go sideways:</p>
+<section id="strands-vs.-langchain-choose-the-execution-model-not-the-agent-loop" class="level1">
+<h1>Strands vs.&nbsp;LangChain: Choose the Execution Model, Not the Agent Loop</h1>
+<p><img src="images/strands-vs-langchain.png" class="post-banner img-fluid" alt="Strands vs. LangChain"></p>
+<p>Every few months, a team asks some version of the same question: <em>we are building an agent—should we use Strands or LangChain?</em></p>
+<p>The question is reasonable, but the comparison is slightly off. Neither framework’s interesting innovation is the basic model → tool → observation loop. Both can do that. The useful question is where each system puts the structure around that loop:</p>
 <ul>
-<li><strong>LangGraph</strong> is the runtime. A Pregel-inspired graph engine: state, nodes, edges, super-steps, checkpoints. This is the actual engine.</li>
-<li><strong><code>create_agent</code></strong> is the agent harness built on that runtime. Model + tools + prompt + middleware, compiled down to a LangGraph graph.</li>
-<li><strong>deepagents</strong> is the batteries-included preset on top of <code>create_agent</code>: planning tool, virtual filesystem, subagents, memory, prompt caching.</li>
+<li>How do you model state and control flow?</li>
+<li>What happens when an execution stops, fails, or needs a human?</li>
+<li>Can you resume, inspect, replay, or fork a run?</li>
+<li>How much multi-agent orchestration do you want supplied versus composed?</li>
 </ul>
-<p>Strands Agents, by contrast, is a single SDK from AWS, in Python and TypeScript. You get an <code>Agent</code>, and you get first-class multi-agent orchestrators — <code>Swarm</code>, <code>Graph</code>, <code>Workflow</code> — plus A2A for talking to remote agents. One install, one mental model.</p>
-<p>So “Strands vs LangChain” is really “a three-layer stack where you choose your altitude vs one opinionated SDK.” That framing already tells you something: if you want to build an unusual control flow and have the runtime not fight you, LangGraph is closer to that. If you want to be handed a working multi-agent topology, Strands is closer to that.</p>
-<p>Everything below is downstream of that split.</p>
+<p>With that framing, the choice becomes much clearer.</p>
+<section id="what-are-we-comparing" class="level2">
+<h2 class="anchored" data-anchor-id="what-are-we-comparing">What are we comparing?</h2>
+<p>“LangChain” is now best understood as a stack with distinct layers:</p>
+<ul>
+<li><strong>LangGraph</strong> is the runtime: a stateful graph engine with nodes, edges, reducers, checkpoints, interrupts, and streaming.</li>
+<li><strong>LangChain <code>create_agent</code></strong> is an agent harness built on LangGraph: model, tools, prompt, and middleware compiled into a graph.</li>
+<li><strong>Deep Agents</strong> is a higher-level preset for longer-running agents, adding planning, filesystem tools, subagents, memory conventions, and context management.</li>
+</ul>
+<p><strong>Strands Agents</strong> is more deliberately unified. It is an AWS-led SDK for Python and TypeScript centered on <code>Agent</code>, with first-class Graph and Swarm orchestration, workflow tooling, A2A support, sessions, plugins, and observability.</p>
+<p>That means this is not a simple framework-versus-framework decision:</p>
+<blockquote class="blockquote">
+<p>LangGraph gives you a runtime to compose unusual execution models. Strands gives you an opinionated SDK with useful agent and multi-agent shapes ready to configure.</p>
+</blockquote>
+<p>Everything else follows from that distinction.</p>
 </section>
-<section id="axis-1-the-agent-loop-and-how-you-bound-it" class="level2">
-<h2 class="anchored" data-anchor-id="axis-1-the-agent-loop-and-how-you-bound-it">Axis 1: the agent loop and how you bound it</h2>
-<p>Both run the same loop — call the model, execute any tool calls, feed results back, repeat until the model stops asking for tools. Nobody is innovating on the loop itself. The difference is in the controls around it, and how you find out why a run stopped.</p>
-<section id="langchain-bound-the-loop-with-middleware" class="level3">
-<h3 class="anchored" data-anchor-id="langchain-bound-the-loop-with-middleware">LangChain: bound the loop with middleware</h3>
-<p>LangChain’s answer is middleware — less about naming the exit, more about composing behaviour on the way there:</p>
+<section id="the-agent-loop-change-its-behaviour-or-explain-its-ending" class="level2">
+<h2 class="anchored" data-anchor-id="the-agent-loop-change-its-behaviour-or-explain-its-ending">1. The agent loop: change its behaviour or explain its ending?</h2>
+<p>Both ecosystems run the familiar cycle: call a model, execute requested tools, feed tool results back, and repeat until the model stops requesting tools. The differentiation is in the controls around that loop.</p>
+<section id="langchain-middleware-is-the-extension-point" class="level3">
+<h3 class="anchored" data-anchor-id="langchain-middleware-is-the-extension-point">LangChain: middleware is the extension point</h3>
+<p>LangChain’s strongest answer is middleware. It lets you change behaviour before and after model calls, wrap tool calls, add fallbacks, retry failures, manage context, enforce limits, or pause for approval without reimplementing the agent loop.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langchain.agents <span class="im">import</span> create_agent</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langchain.agents.middleware <span class="im">import</span> (</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    ModelCallLimitMiddleware,</span>
@@ -243,13 +252,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        ModelCallLimitMiddleware(thread_limit<span class="op">=</span><span class="dv">40</span>, run_limit<span class="op">=</span><span class="dv">25</span>, exit_behavior<span class="op">=</span><span class="st">"end"</span>),</span>
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    ],</span>
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Middleware hooks into six points: <code>before_agent</code>, <code>before_model</code>, <code>after_model</code>, <code>after_agent</code>, <code>wrap_model_call</code>, <code>wrap_tool_call</code>. And the built-in list is the thing that actually saves you time — roughly nineteen of them covering tool errors, tool retries, model retries, model fallback, summarisation, human-in-the-loop, model and tool call limits, PII detection, todo lists, LLM-based tool selection, context editing, filesystem access, and tool emulation for tests.</p>
-<p>That list is real leverage. Retry with jitter, provider fallback, and context summarisation are three things every production agent eventually needs, and having them as a one-line import beats writing them again.</p>
-<p>Underneath, LangGraph has a <code>recursion_limit</code> (default 1000 super-steps) as the ultimate backstop. It’s a blunter instrument than a turn budget — it counts graph steps, not model turns — but it does stop runaway loops.</p>
+<p>This is genuine leverage in production. Retries, fallback models, summarization, human approval, PII handling, and limits are recurring requirements. Middleware turns much of that work into configuration rather than bespoke control code.</p>
+<p>LangGraph also has a final safety backstop: <code>recursion_limit</code>, which caps super-steps and raises a <code>GraphRecursionError</code> if a graph does not terminate. It is a graph-level limit, not a polished budget model, but it protects against runaway cycles.</p>
 </section>
-<section id="strands-named-stop-reasons" class="level3">
-<h3 class="anchored" data-anchor-id="strands-named-stop-reasons">Strands: named stop reasons</h3>
-<p>Strands is unusually explicit about termination. You pass a limits object and you get back a named stop reason:</p>
+<section id="strands-termination-is-explicit" class="level3">
+<h3 class="anchored" data-anchor-id="strands-termination-is-explicit">Strands: termination is explicit</h3>
+<p>Strands is especially good at making an invocation’s ending legible. You can impose turn and token budgets, then inspect the returned stop reason.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands <span class="im">import</span> Agent</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> Agent(</span>
@@ -258,17 +266,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    tools<span class="op">=</span>[search, fetch_page],</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> agent(<span class="st">"Summarise the state of agent frameworks"</span>, limits<span class="op">=</span>{</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"turns"</span>: <span class="dv">25</span>,</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"total_tokens"</span>: <span class="dv">200_000</span>,</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"output_tokens"</span>: <span class="dv">8_000</span>,</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> result.stop_reason <span class="op">==</span> <span class="st">"limit_turns"</span>:</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    ...  <span class="co"># budget exhausted, history is still valid — re-invoke with more</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The stop reason vocabulary is the part I like: <code>end_turn</code>, <code>tool_use</code>, <code>limit_turns</code>, <code>limit_total_tokens</code>, <code>limit_output_tokens</code>, <code>max_tokens</code>, <code>stop_sequence</code>, <code>content_filtered</code>, <code>guardrail_intervention</code>, <code>cancelled</code>. When a run ends, you know precisely why, and hitting a limit is treated as graceful budget exhaustion rather than a crash — the conversation history stays valid and you can resume with a bigger budget.</p>
-<p>Two more Strands details worth knowing. Cancellation is first-class and genuinely thought through: <code>agent.cancel()</code> is thread-safe and idempotent, you can pass a <code>threading.Event</code> (Python) or an <code>AbortSignal</code> (TypeScript) from outside, and there are four checkpoints where the loop notices — during model streaming, before tool execution, during MCP tool execution, and after. In-tool cancellation is cooperative, so a tool that ignores <code>tool_context.cancel_signal</code> runs to completion. And concurrency is guarded by default: overlapping invocations on one agent instance raise a <code>ConcurrencyException</code>, because an invocation mutates conversation history. You can opt into idempotency tokens or an explicitly unsafe reentrant mode, but you have to opt in.</p>
-<p><strong>The takeaway on this axis:</strong> LangChain gives you better answers to “how do I change what happens on the way?”; Strands gives you better answers to “why did this stop?” Both matter, but they matter to different people. If you’re building the agent and need retries, fallbacks, and context management, middleware is worth more. If you’re operating agents and debugging production incidents, named stop reasons are worth a lot.</p>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> agent(</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Summarise the state of agent frameworks"</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    limits<span class="op">=</span>{<span class="st">"turns"</span>: <span class="dv">25</span>, <span class="st">"total_tokens"</span>: <span class="dv">200_000</span>, <span class="st">"output_tokens"</span>: <span class="dv">8_000</span>},</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> result.stop_reason <span class="op">==</span> <span class="st">"limit_turns"</span>:</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The budget was exhausted; decide whether to resume or report partial work.</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">pass</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This seems small until an agent ends unexpectedly in production. A named reason—such as a turn budget, token budget, cancellation, content filtering, provider token cap, or natural end of turn—gives operators a concrete place to start.</p>
+<p>Strands also treats cancellation and concurrent invocation as first-class concerns. A Python agent can be cancelled safely from another thread; cancellation is observed at defined points in the loop. One agent instance rejects overlapping calls by default, because an invocation mutates its conversation history. Those are sensible defaults for a stateful SDK.</p>
+<p><strong>Choose by what hurts more:</strong> LangChain is stronger when you need to change what happens <em>during</em> the loop. Strands is particularly pleasant when you need to understand why a run <em>ended</em>.</p>
 </section>
 </section>
 <section id="axis-2-orchestration-composed-vs.-configured" class="level2">

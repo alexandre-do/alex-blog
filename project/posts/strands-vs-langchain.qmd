@@ -1,7 +1,7 @@
 ---
-title: "Strands Agents vs. LangChain: How to Actually Choose"
+title: "Strands vs. LangChain: Choose the Execution Model, Not the Agent Loop"
 date: "2026-09-14"
-description: "A practical guide to picking between AWS's Strands Agents and the LangChain/LangGraph stack — agent loops, orchestration, durability, and the traps in each."
+description: "A practical guide to choosing between AWS Strands Agents and the LangChain/LangGraph stack for production agents."
 image: "images/strands-vs-langchain.png"
 categories:
     - AWS
@@ -9,37 +9,44 @@ categories:
     - Agents
 ---
 
-# Strands Agents vs. LangChain: How to Actually Choose
+# Strands vs. LangChain: Choose the Execution Model, Not the Agent Loop
 
-![](images/strands-vs-langchain.png){.post-banner fig-alt="Strands Agents vs. LangChain"}
+![](images/strands-vs-langchain.png){.post-banner fig-alt="Strands vs. LangChain"}
 
-Every few months someone on my team asks the same question: we're building an agent, should we use Strands or LangChain? And every time, the honest answer starts with "those aren't the same kind of thing."
+Every few months, a team asks some version of the same question: *we are building an agent—should we use Strands or LangChain?*
 
-So this post is the version of that answer I wish I could just link to. Each section below starts with the underlying problem every agentic framework has to solve, then walks through **LangChain's answer**, then **Strands' answer** — rather than a feature checklist. At the end there's a heuristic you can apply in about ninety seconds.
+The question is reasonable, but the comparison is slightly off. Neither framework's interesting innovation is the basic model → tool → observation loop. Both can do that. The useful question is where each system puts the structure around that loop:
 
-## First: what are we even comparing?
+- How do you model state and control flow?
+- What happens when an execution stops, fails, or needs a human?
+- Can you resume, inspect, replay, or fork a run?
+- How much multi-agent orchestration do you want supplied versus composed?
 
-Every agent framework has to answer the same question — who writes the reason → act → observe loop, and at what altitude do you plug in? LangChain and Strands answer it very differently.
+With that framing, the choice becomes much clearer.
 
-"LangChain" in 2026 is three layers stacked on top of each other, and conflating them is why these comparisons go sideways:
+## What are we comparing?
 
-- **LangGraph** is the runtime. A Pregel-inspired graph engine: state, nodes, edges, super-steps, checkpoints. This is the actual engine.
-- **`create_agent`** is the agent harness built on that runtime. Model + tools + prompt + middleware, compiled down to a LangGraph graph.
-- **deepagents** is the batteries-included preset on top of `create_agent`: planning tool, virtual filesystem, subagents, memory, prompt caching.
+"LangChain" is now best understood as a stack with distinct layers:
 
-Strands Agents, by contrast, is a single SDK from AWS, in Python and TypeScript. You get an `Agent`, and you get first-class multi-agent orchestrators — `Swarm`, `Graph`, `Workflow` — plus A2A for talking to remote agents. One install, one mental model.
+- **LangGraph** is the runtime: a stateful graph engine with nodes, edges, reducers, checkpoints, interrupts, and streaming.
+- **LangChain `create_agent`** is an agent harness built on LangGraph: model, tools, prompt, and middleware compiled into a graph.
+- **Deep Agents** is a higher-level preset for longer-running agents, adding planning, filesystem tools, subagents, memory conventions, and context management.
 
-So "Strands vs LangChain" is really "a three-layer stack where you choose your altitude vs one opinionated SDK." That framing already tells you something: if you want to build an unusual control flow and have the runtime not fight you, LangGraph is closer to that. If you want to be handed a working multi-agent topology, Strands is closer to that.
+**Strands Agents** is more deliberately unified. It is an AWS-led SDK for Python and TypeScript centered on `Agent`, with first-class Graph and Swarm orchestration, workflow tooling, A2A support, sessions, plugins, and observability.
 
-Everything below is downstream of that split.
+That means this is not a simple framework-versus-framework decision:
 
-## Axis 1: the agent loop and how you bound it
+> LangGraph gives you a runtime to compose unusual execution models. Strands gives you an opinionated SDK with useful agent and multi-agent shapes ready to configure.
 
-Both run the same loop — call the model, execute any tool calls, feed results back, repeat until the model stops asking for tools. Nobody is innovating on the loop itself. The difference is in the controls around it, and how you find out why a run stopped.
+Everything else follows from that distinction.
 
-### LangChain: bound the loop with middleware
+## 1. The agent loop: change its behaviour or explain its ending?
 
-LangChain's answer is middleware — less about naming the exit, more about composing behaviour on the way there:
+Both ecosystems run the familiar cycle: call a model, execute requested tools, feed tool results back, and repeat until the model stops requesting tools. The differentiation is in the controls around that loop.
+
+### LangChain: middleware is the extension point
+
+LangChain's strongest answer is middleware. It lets you change behaviour before and after model calls, wrap tool calls, add fallbacks, retry failures, manage context, enforce limits, or pause for approval without reimplementing the agent loop.
 
 ```python
 from langchain.agents import create_agent
@@ -63,15 +70,13 @@ agent = create_agent(
 )
 ```
 
-Middleware hooks into six points: `before_agent`, `before_model`, `after_model`, `after_agent`, `wrap_model_call`, `wrap_tool_call`. And the built-in list is the thing that actually saves you time — roughly nineteen of them covering tool errors, tool retries, model retries, model fallback, summarisation, human-in-the-loop, model and tool call limits, PII detection, todo lists, LLM-based tool selection, context editing, filesystem access, and tool emulation for tests.
+This is genuine leverage in production. Retries, fallback models, summarization, human approval, PII handling, and limits are recurring requirements. Middleware turns much of that work into configuration rather than bespoke control code.
 
-That list is real leverage. Retry with jitter, provider fallback, and context summarisation are three things every production agent eventually needs, and having them as a one-line import beats writing them again.
+LangGraph also has a final safety backstop: `recursion_limit`, which caps super-steps and raises a `GraphRecursionError` if a graph does not terminate. It is a graph-level limit, not a polished budget model, but it protects against runaway cycles.
 
-Underneath, LangGraph has a `recursion_limit` (default 1000 super-steps) as the ultimate backstop. It's a blunter instrument than a turn budget — it counts graph steps, not model turns — but it does stop runaway loops.
+### Strands: termination is explicit
 
-### Strands: named stop reasons
-
-Strands is unusually explicit about termination. You pass a limits object and you get back a named stop reason:
+Strands is especially good at making an invocation's ending legible. You can impose turn and token budgets, then inspect the returned stop reason.
 
 ```python
 from strands import Agent
@@ -82,21 +87,21 @@ agent = Agent(
     tools=[search, fetch_page],
 )
 
-result = agent("Summarise the state of agent frameworks", limits={
-    "turns": 25,
-    "total_tokens": 200_000,
-    "output_tokens": 8_000,
-})
+result = agent(
+    "Summarise the state of agent frameworks",
+    limits={"turns": 25, "total_tokens": 200_000, "output_tokens": 8_000},
+)
 
 if result.stop_reason == "limit_turns":
-    ...  # budget exhausted, history is still valid — re-invoke with more
+    # The budget was exhausted; decide whether to resume or report partial work.
+    pass
 ```
 
-The stop reason vocabulary is the part I like: `end_turn`, `tool_use`, `limit_turns`, `limit_total_tokens`, `limit_output_tokens`, `max_tokens`, `stop_sequence`, `content_filtered`, `guardrail_intervention`, `cancelled`. When a run ends, you know precisely why, and hitting a limit is treated as graceful budget exhaustion rather than a crash — the conversation history stays valid and you can resume with a bigger budget.
+This seems small until an agent ends unexpectedly in production. A named reason—such as a turn budget, token budget, cancellation, content filtering, provider token cap, or natural end of turn—gives operators a concrete place to start.
 
-Two more Strands details worth knowing. Cancellation is first-class and genuinely thought through: `agent.cancel()` is thread-safe and idempotent, you can pass a `threading.Event` (Python) or an `AbortSignal` (TypeScript) from outside, and there are four checkpoints where the loop notices — during model streaming, before tool execution, during MCP tool execution, and after. In-tool cancellation is cooperative, so a tool that ignores `tool_context.cancel_signal` runs to completion. And concurrency is guarded by default: overlapping invocations on one agent instance raise a `ConcurrencyException`, because an invocation mutates conversation history. You can opt into idempotency tokens or an explicitly unsafe reentrant mode, but you have to opt in.
+Strands also treats cancellation and concurrent invocation as first-class concerns. A Python agent can be cancelled safely from another thread; cancellation is observed at defined points in the loop. One agent instance rejects overlapping calls by default, because an invocation mutates its conversation history. Those are sensible defaults for a stateful SDK.
 
-**The takeaway on this axis:** LangChain gives you better answers to "how do I change what happens on the way?"; Strands gives you better answers to "why did this stop?" Both matter, but they matter to different people. If you're building the agent and need retries, fallbacks, and context management, middleware is worth more. If you're operating agents and debugging production incidents, named stop reasons are worth a lot.
+**Choose by what hurts more:** LangChain is stronger when you need to change what happens *during* the loop. Strands is particularly pleasant when you need to understand why a run *ended*.
 
 ## Axis 2: orchestration — composed vs. configured
 
