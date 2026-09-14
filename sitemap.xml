@@ -14,27 +14,31 @@
   </url>
   <url>
     <loc>https://alexdo.xyz/project/posts/strands-vs-langchain.html</loc>
-    <lastmod>2026-09-14T03:29:02.845Z</lastmod>
+    <lastmod>2026-09-14T03:48:37.655Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/posts/watermarking-libraries.html</loc>
     <lastmod>2026-09-13T23:51:56.574Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/aws-authentication-methods.html</loc>
-    <lastmod>2026-09-13T23:51:56.571Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/chat-retrieval-system.html</loc>
+    <lastmod>2026-09-14T05:42:25.000Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</loc>
-    <lastmod>2026-09-13T23:51:56.573Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/rest-vs-graphql-vs-websocket.html</loc>
+    <lastmod>2026-09-13T23:51:56.574Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/google-news-rss-radar.html</loc>
+    <lastmod>2026-09-14T05:52:22.389Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</loc>
-    <lastmod>2026-09-13T23:51:56.571Z</lastmod>
+    <lastmod>2026-09-14T06:04:36.711Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/index.html</loc>
-    <lastmod>2026-09-13T23:51:56.569Z</lastmod>
+    <lastmod>2026-09-14T05:54:56.123Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/about.html</loc>
@@ -45,8 +49,12 @@
     <lastmod>2026-09-13T23:51:56.571Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/rest-vs-graphql-vs-websocket.html</loc>
-    <lastmod>2026-09-13T23:51:56.574Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</loc>
+    <lastmod>2026-09-13T23:51:56.573Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/aws-authentication-methods.html</loc>
+    <lastmod>2026-09-13T23:51:56.571Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/posts/agentic-stack-aws.html</loc>
