@@ -204,171 +204,180 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h1>Strands Agents vs.&nbsp;LangChain: How to Actually Choose</h1>
 <p><img src="images/strands-vs-langchain.png" class="post-banner img-fluid" alt="Strands Agents vs. LangChain"></p>
 <p>Every few months someone on my team asks the same question: we’re building an agent, should we use Strands or LangChain? And every time, the honest answer starts with “those aren’t the same kind of thing.”</p>
-<p>So this post is the version of that answer I wish I could just link to. It’s organised around the decisions you actually have to make — how you bound the loop, how you compose multiple agents, what happens when a run dies halfway through — rather than a feature checklist. At the end there’s a heuristic you can apply in about ninety seconds.</p>
+<p>So this post is the version of that answer I wish I could just link to. Each section below starts with the underlying problem every agentic framework has to solve, then walks through <strong>LangChain’s answer</strong>, then <strong>Strands’ answer</strong> — rather than a feature checklist. At the end there’s a heuristic you can apply in about ninety seconds.</p>
 <section id="first-what-are-we-even-comparing" class="level2">
 <h2 class="anchored" data-anchor-id="first-what-are-we-even-comparing">First: what are we even comparing?</h2>
-<p>Strands Agents is a single SDK from AWS, in Python and TypeScript. You get an <code>Agent</code>, and you get first-class multi-agent orchestrators — <code>Swarm</code>, <code>Graph</code>, <code>Workflow</code> — plus A2A for talking to remote agents. One install, one mental model.</p>
+<p>Every agent framework has to answer the same question — who writes the reason → act → observe loop, and at what altitude do you plug in? LangChain and Strands answer it very differently.</p>
 <p>“LangChain” in 2026 is three layers stacked on top of each other, and conflating them is why these comparisons go sideways:</p>
 <ul>
 <li><strong>LangGraph</strong> is the runtime. A Pregel-inspired graph engine: state, nodes, edges, super-steps, checkpoints. This is the actual engine.</li>
 <li><strong><code>create_agent</code></strong> is the agent harness built on that runtime. Model + tools + prompt + middleware, compiled down to a LangGraph graph.</li>
 <li><strong>deepagents</strong> is the batteries-included preset on top of <code>create_agent</code>: planning tool, virtual filesystem, subagents, memory, prompt caching.</li>
 </ul>
-<p>So “Strands vs LangChain” is really “one opinionated SDK vs a three-layer stack where you choose your altitude.” That framing already tells you something: if you want to be handed a working multi-agent topology, Strands is closer to that. If you want to build an unusual control flow and have the runtime not fight you, LangGraph is closer to that.</p>
+<p>Strands Agents, by contrast, is a single SDK from AWS, in Python and TypeScript. You get an <code>Agent</code>, and you get first-class multi-agent orchestrators — <code>Swarm</code>, <code>Graph</code>, <code>Workflow</code> — plus A2A for talking to remote agents. One install, one mental model.</p>
+<p>So “Strands vs LangChain” is really “a three-layer stack where you choose your altitude vs one opinionated SDK.” That framing already tells you something: if you want to build an unusual control flow and have the runtime not fight you, LangGraph is closer to that. If you want to be handed a working multi-agent topology, Strands is closer to that.</p>
 <p>Everything below is downstream of that split.</p>
 </section>
 <section id="axis-1-the-agent-loop-and-how-you-bound-it" class="level2">
 <h2 class="anchored" data-anchor-id="axis-1-the-agent-loop-and-how-you-bound-it">Axis 1: the agent loop and how you bound it</h2>
-<p>Both run the same loop — call the model, execute any tool calls, feed results back, repeat until the model stops asking for tools. Nobody is innovating on the loop itself. The difference is in the controls around it.</p>
-<p><strong>Strands is unusually explicit about termination.</strong> You pass a limits object and you get back a named stop reason:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands <span class="im">import</span> Agent</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> Agent(</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    name<span class="op">=</span><span class="st">"researcher"</span>,</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    system_prompt<span class="op">=</span><span class="st">"You research topics thoroughly."</span>,</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    tools<span class="op">=</span>[search, fetch_page],</span>
+<p>Both run the same loop — call the model, execute any tool calls, feed results back, repeat until the model stops asking for tools. Nobody is innovating on the loop itself. The difference is in the controls around it, and how you find out why a run stopped.</p>
+<section id="langchain-bound-the-loop-with-middleware" class="level3">
+<h3 class="anchored" data-anchor-id="langchain-bound-the-loop-with-middleware">LangChain: bound the loop with middleware</h3>
+<p>LangChain’s answer is middleware — less about naming the exit, more about composing behaviour on the way there:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langchain.agents <span class="im">import</span> create_agent</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langchain.agents.middleware <span class="im">import</span> (</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    ModelCallLimitMiddleware,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    ToolRetryMiddleware,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    ModelFallbackMiddleware,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    SummarizationMiddleware,</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> agent(<span class="st">"Summarise the state of agent frameworks"</span>, limits<span class="op">=</span>{</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"turns"</span>: <span class="dv">25</span>,</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"total_tokens"</span>: <span class="dv">200_000</span>,</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"output_tokens"</span>: <span class="dv">8_000</span>,</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> result.stop_reason <span class="op">==</span> <span class="st">"limit_turns"</span>:</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    ...  <span class="co"># budget exhausted, history is still valid — re-invoke with more</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The stop reason vocabulary is the part I like: <code>end_turn</code>, <code>tool_use</code>, <code>limit_turns</code>, <code>limit_total_tokens</code>, <code>limit_output_tokens</code>, <code>max_tokens</code>, <code>stop_sequence</code>, <code>content_filtered</code>, <code>guardrail_intervention</code>, <code>cancelled</code>. When a run ends, you know precisely why, and hitting a limit is treated as graceful budget exhaustion rather than a crash — the conversation history stays valid and you can resume with a bigger budget.</p>
-<p>Two more Strands details worth knowing. Cancellation is first-class and genuinely thought through: <code>agent.cancel()</code> is thread-safe and idempotent, you can pass a <code>threading.Event</code> (Python) or an <code>AbortSignal</code> (TypeScript) from outside, and there are four checkpoints where the loop notices — during model streaming, before tool execution, during MCP tool execution, and after. In-tool cancellation is cooperative, so a tool that ignores <code>tool_context.cancel_signal</code> runs to completion. And concurrency is guarded by default: overlapping invocations on one agent instance raise a <code>ConcurrencyException</code>, because an invocation mutates conversation history. You can opt into idempotency tokens or an explicitly unsafe reentrant mode, but you have to opt in.</p>
-<p><strong>LangChain bounds the loop with middleware instead</strong>, which is less about naming the exit and more about composing behaviour:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langchain.agents <span class="im">import</span> create_agent</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langchain.agents.middleware <span class="im">import</span> (</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    ModelCallLimitMiddleware,</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    ToolRetryMiddleware,</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    ModelFallbackMiddleware,</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    SummarizationMiddleware,</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> create_agent(</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    model<span class="op">=</span><span class="st">"anthropic:claude-sonnet-4-6"</span>,</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    tools<span class="op">=</span>[search, fetch_page],</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    system_prompt<span class="op">=</span><span class="st">"You research topics thoroughly."</span>,</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    middleware<span class="op">=</span>[</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        ToolRetryMiddleware(max_retries<span class="op">=</span><span class="dv">3</span>, backoff_factor<span class="op">=</span><span class="fl">2.0</span>, jitter<span class="op">=</span><span class="va">True</span>),</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        ModelFallbackMiddleware(<span class="st">"openai:gpt-5.5"</span>, <span class="st">"google:gemini-3.6-flash"</span>),</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        SummarizationMiddleware(trigger<span class="op">=</span>(<span class="st">"fraction"</span>, <span class="fl">0.7</span>), keep<span class="op">=</span>(<span class="st">"messages"</span>, <span class="dv">20</span>)),</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        ModelCallLimitMiddleware(thread_limit<span class="op">=</span><span class="dv">40</span>, run_limit<span class="op">=</span><span class="dv">25</span>, exit_behavior<span class="op">=</span><span class="st">"end"</span>),</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    ],</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> create_agent(</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    model<span class="op">=</span><span class="st">"anthropic:claude-sonnet-4-6"</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    tools<span class="op">=</span>[search, fetch_page],</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    system_prompt<span class="op">=</span><span class="st">"You research topics thoroughly."</span>,</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    middleware<span class="op">=</span>[</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        ToolRetryMiddleware(max_retries<span class="op">=</span><span class="dv">3</span>, backoff_factor<span class="op">=</span><span class="fl">2.0</span>, jitter<span class="op">=</span><span class="va">True</span>),</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        ModelFallbackMiddleware(<span class="st">"openai:gpt-5.5"</span>, <span class="st">"google:gemini-3.6-flash"</span>),</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        SummarizationMiddleware(trigger<span class="op">=</span>(<span class="st">"fraction"</span>, <span class="fl">0.7</span>), keep<span class="op">=</span>(<span class="st">"messages"</span>, <span class="dv">20</span>)),</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        ModelCallLimitMiddleware(thread_limit<span class="op">=</span><span class="dv">40</span>, run_limit<span class="op">=</span><span class="dv">25</span>, exit_behavior<span class="op">=</span><span class="st">"end"</span>),</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Middleware hooks into six points: <code>before_agent</code>, <code>before_model</code>, <code>after_model</code>, <code>after_agent</code>, <code>wrap_model_call</code>, <code>wrap_tool_call</code>. And the built-in list is the thing that actually saves you time — roughly nineteen of them covering tool errors, tool retries, model retries, model fallback, summarisation, human-in-the-loop, model and tool call limits, PII detection, todo lists, LLM-based tool selection, context editing, filesystem access, and tool emulation for tests.</p>
 <p>That list is real leverage. Retry with jitter, provider fallback, and context summarisation are three things every production agent eventually needs, and having them as a one-line import beats writing them again.</p>
-<p>Underneath, LangGraph has a <code>recursion_limit</code> (default 1000 super-steps) as the ultimate backstop. It’s a blunter instrument than Strands’ turn budget — it counts graph steps, not model turns — but it does stop runaway loops.</p>
-<p><strong>The takeaway on this axis:</strong> Strands gives you better answers to “why did this stop?”; LangChain gives you better answers to “how do I change what happens on the way?” Both matter, but they matter to different people. If you’re operating agents and debugging production incidents, named stop reasons are worth a lot. If you’re building the agent and need retries, fallbacks, and context management, middleware is worth more.</p>
+<p>Underneath, LangGraph has a <code>recursion_limit</code> (default 1000 super-steps) as the ultimate backstop. It’s a blunter instrument than a turn budget — it counts graph steps, not model turns — but it does stop runaway loops.</p>
 </section>
-<section id="axis-2-orchestration-configured-vs.-composed" class="level2">
-<h2 class="anchored" data-anchor-id="axis-2-orchestration-configured-vs.-composed">Axis 2: orchestration — configured vs.&nbsp;composed</h2>
-<p>This is the axis that should drive your decision.</p>
-<section id="strands-hands-you-the-topologies" class="level3">
-<h3 class="anchored" data-anchor-id="strands-hands-you-the-topologies">Strands hands you the topologies</h3>
+<section id="strands-named-stop-reasons" class="level3">
+<h3 class="anchored" data-anchor-id="strands-named-stop-reasons">Strands: named stop reasons</h3>
+<p>Strands is unusually explicit about termination. You pass a limits object and you get back a named stop reason:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands <span class="im">import</span> Agent</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> Agent(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    name<span class="op">=</span><span class="st">"researcher"</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    system_prompt<span class="op">=</span><span class="st">"You research topics thoroughly."</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    tools<span class="op">=</span>[search, fetch_page],</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> agent(<span class="st">"Summarise the state of agent frameworks"</span>, limits<span class="op">=</span>{</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"turns"</span>: <span class="dv">25</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"total_tokens"</span>: <span class="dv">200_000</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"output_tokens"</span>: <span class="dv">8_000</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> result.stop_reason <span class="op">==</span> <span class="st">"limit_turns"</span>:</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    ...  <span class="co"># budget exhausted, history is still valid — re-invoke with more</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The stop reason vocabulary is the part I like: <code>end_turn</code>, <code>tool_use</code>, <code>limit_turns</code>, <code>limit_total_tokens</code>, <code>limit_output_tokens</code>, <code>max_tokens</code>, <code>stop_sequence</code>, <code>content_filtered</code>, <code>guardrail_intervention</code>, <code>cancelled</code>. When a run ends, you know precisely why, and hitting a limit is treated as graceful budget exhaustion rather than a crash — the conversation history stays valid and you can resume with a bigger budget.</p>
+<p>Two more Strands details worth knowing. Cancellation is first-class and genuinely thought through: <code>agent.cancel()</code> is thread-safe and idempotent, you can pass a <code>threading.Event</code> (Python) or an <code>AbortSignal</code> (TypeScript) from outside, and there are four checkpoints where the loop notices — during model streaming, before tool execution, during MCP tool execution, and after. In-tool cancellation is cooperative, so a tool that ignores <code>tool_context.cancel_signal</code> runs to completion. And concurrency is guarded by default: overlapping invocations on one agent instance raise a <code>ConcurrencyException</code>, because an invocation mutates conversation history. You can opt into idempotency tokens or an explicitly unsafe reentrant mode, but you have to opt in.</p>
+<p><strong>The takeaway on this axis:</strong> LangChain gives you better answers to “how do I change what happens on the way?”; Strands gives you better answers to “why did this stop?” Both matter, but they matter to different people. If you’re building the agent and need retries, fallbacks, and context management, middleware is worth more. If you’re operating agents and debugging production incidents, named stop reasons are worth a lot.</p>
+</section>
+</section>
+<section id="axis-2-orchestration-composed-vs.-configured" class="level2">
+<h2 class="anchored" data-anchor-id="axis-2-orchestration-composed-vs.-configured">Axis 2: orchestration — composed vs.&nbsp;configured</h2>
+<p>This is the axis that should drive your decision: do you need a runtime that lets you build an unusual multi-agent topology, or one that already ships the standard shapes?</p>
+<section id="langchain-a-runtime-you-compose" class="level3">
+<h3 class="anchored" data-anchor-id="langchain-a-runtime-you-compose">LangChain: a runtime you compose</h3>
+<p>The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five <em>patterns</em> — subagents, handoffs, skills, router, custom workflow — and you build the one you need on <code>StateGraph</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Annotated, TypedDict</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> operator <span class="im">import</span> add</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.graph <span class="im">import</span> StateGraph, START, END</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.checkpoint.memory <span class="im">import</span> InMemorySaver</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> State(TypedDict):</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    messages: Annotated[<span class="bu">list</span>, add]</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    findings: Annotated[<span class="bu">list</span>[<span class="bu">str</span>], add]</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    attempts: <span class="bu">int</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> route(state: State) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> state[<span class="st">"attempts"</span>] <span class="op">&gt;=</span> <span class="dv">3</span>:</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"report"</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">"analysis"</span> <span class="cf">if</span> <span class="kw">not</span> state[<span class="st">"findings"</span>] <span class="cf">else</span> <span class="st">"report"</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>builder <span class="op">=</span> StateGraph(State)</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>builder.add_node(<span class="st">"research"</span>, research_node)</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>builder.add_node(<span class="st">"analysis"</span>, analysis_node)</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>builder.add_node(<span class="st">"report"</span>, report_node)</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>builder.add_edge(START, <span class="st">"research"</span>)</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"research"</span>, <span class="st">"analysis"</span>)</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>builder.add_conditional_edges(<span class="st">"analysis"</span>, route, {<span class="st">"analysis"</span>: <span class="st">"analysis"</span>, <span class="st">"report"</span>: <span class="st">"report"</span>})</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"report"</span>, END)</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>graph <span class="op">=</span> builder.<span class="bu">compile</span>(checkpointer<span class="op">=</span>InMemorySaver())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The state model is the real feature here. Every key can have its own reducer — <code>Annotated[list, add]</code> appends, the default overwrites, and you can write custom merge functions. That’s how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.</p>
+<p>Dynamic fan-out is also cleaner:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.types <span class="im">import</span> Send</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fan_out(state: State):</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [Send(<span class="st">"analyse_doc"</span>, {<span class="st">"doc"</span>: d}) <span class="cf">for</span> d <span class="kw">in</span> state[<span class="st">"documents"</span>]]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>Send</code> spawns one node execution per item at runtime — genuine map-reduce, where Strands’ parallelism comes from static graph branches. And <code>Command</code> lets a node update state and route in one return:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.types <span class="im">import</span> Command</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Literal</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> triage(state: State) <span class="op">-&gt;</span> Command[Literal[<span class="st">"billing"</span>, <span class="st">"technical"</span>]]:</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    kind <span class="op">=</span> classify(state[<span class="st">"messages"</span>][<span class="op">-</span><span class="dv">1</span>])</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Command(update<span class="op">=</span>{<span class="st">"category"</span>: kind}, goto<span class="op">=</span>kind)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="strands-topologies-you-configure" class="level3">
+<h3 class="anchored" data-anchor-id="strands-topologies-you-configure">Strands: topologies you configure</h3>
 <p>Three built-in orchestrators, each with its own semantics, plus agents-as-tools for hierarchical delegation.</p>
 <p><strong>Swarm</strong> is autonomous handoff between peers. Any agent can decide to pass the task to another:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent <span class="im">import</span> Swarm</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>swarm <span class="op">=</span> Swarm(</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    [researcher, coder, reviewer, architect],</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    entry_point<span class="op">=</span>researcher,</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    max_handoffs<span class="op">=</span><span class="dv">20</span>,</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    max_iterations<span class="op">=</span><span class="dv">20</span>,</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    execution_timeout<span class="op">=</span><span class="fl">900.0</span>,</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    node_timeout<span class="op">=</span><span class="fl">300.0</span>,</span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    repetitive_handoff_detection_window<span class="op">=</span><span class="dv">8</span>,</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    repetitive_handoff_min_unique_agents<span class="op">=</span><span class="dv">3</span>,</span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> swarm(<span class="st">"Design and implement a REST API for a todo app"</span>)</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(result.status, [n.node_id <span class="cf">for</span> n <span class="kw">in</span> result.node_history])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent <span class="im">import</span> Swarm</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>swarm <span class="op">=</span> Swarm(</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    [researcher, coder, reviewer, architect],</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    entry_point<span class="op">=</span>researcher,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    max_handoffs<span class="op">=</span><span class="dv">20</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    max_iterations<span class="op">=</span><span class="dv">20</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    execution_timeout<span class="op">=</span><span class="fl">900.0</span>,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    node_timeout<span class="op">=</span><span class="fl">300.0</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    repetitive_handoff_detection_window<span class="op">=</span><span class="dv">8</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    repetitive_handoff_min_unique_agents<span class="op">=</span><span class="dv">3</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> swarm(<span class="st">"Design and implement a REST API for a todo app"</span>)</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(result.status, [n.node_id <span class="cf">for</span> n <span class="kw">in</span> result.node_history])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Every agent gets a <code>handoff_to_agent(agent_name=..., message=..., context={...})</code> tool injected, and a mutable <code>SharedContext</code> that all of them read and write. The receiving agent gets a built context string: the handoff message, the original request, the chain of agents so far, shared knowledge, and descriptions of the other agents available.</p>
 <p>Look at those constructor defaults again, because they’re the point. Step limits, a total execution timeout, a per-node timeout, <em>and</em> ping-pong detection — two agents bouncing a task back and forth is the classic swarm failure mode and Strands ships a detector for it. That’s roughly a day of work you don’t do.</p>
 <p><strong>Graph</strong> is explicit topology with conditional edges, and it supports cycles:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent <span class="im">import</span> GraphBuilder</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent.base <span class="im">import</span> Status</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent.graph <span class="im">import</span> GraphState</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> analysis_failed(state: GraphState) <span class="op">-&gt;</span> <span class="bu">bool</span>:</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    res <span class="op">=</span> state.results.get(<span class="st">"analysis"</span>)</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> res <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="kw">and</span> res.status <span class="op">!=</span> Status.COMPLETED</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>builder <span class="op">=</span> GraphBuilder()</span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>builder.add_node(researcher, <span class="st">"research"</span>)</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>builder.add_node(analyst, <span class="st">"analysis"</span>)</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>builder.add_node(critic, <span class="st">"critique"</span>)</span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>builder.add_node(writer, <span class="st">"report"</span>)</span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"research"</span>, <span class="st">"analysis"</span>)</span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"analysis"</span>, <span class="st">"critique"</span>)</span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"critique"</span>, <span class="st">"analysis"</span>, condition<span class="op">=</span>analysis_failed)  <span class="co"># feedback loop</span></span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"analysis"</span>, <span class="st">"report"</span>)</span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>builder.set_entry_point(<span class="st">"research"</span>)</span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>builder.set_max_node_executions(<span class="dv">30</span>)</span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>builder.set_execution_timeout(<span class="dv">600</span>)</span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>graph <span class="op">=</span> builder.build()</span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> graph(<span class="st">"Assess the EU AI Act's impact on model providers"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent <span class="im">import</span> GraphBuilder</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent.base <span class="im">import</span> Status</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent.graph <span class="im">import</span> GraphState</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> analysis_failed(state: GraphState) <span class="op">-&gt;</span> <span class="bu">bool</span>:</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    res <span class="op">=</span> state.results.get(<span class="st">"analysis"</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> res <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="kw">and</span> res.status <span class="op">!=</span> Status.COMPLETED</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>builder <span class="op">=</span> GraphBuilder()</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>builder.add_node(researcher, <span class="st">"research"</span>)</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>builder.add_node(analyst, <span class="st">"analysis"</span>)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>builder.add_node(critic, <span class="st">"critique"</span>)</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>builder.add_node(writer, <span class="st">"report"</span>)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"research"</span>, <span class="st">"analysis"</span>)</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"analysis"</span>, <span class="st">"critique"</span>)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"critique"</span>, <span class="st">"analysis"</span>, condition<span class="op">=</span>analysis_failed)  <span class="co"># feedback loop</span></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"analysis"</span>, <span class="st">"report"</span>)</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>builder.set_entry_point(<span class="st">"research"</span>)</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>builder.set_max_node_executions(<span class="dv">30</span>)</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>builder.set_execution_timeout(<span class="dv">600</span>)</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>graph <span class="op">=</span> builder.build()</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> graph(<span class="st">"Assess the EU AI Act's impact on model providers"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Nodes can be other orchestrators — <code>builder.add_node(research_swarm, "research_team")</code> nests a whole Swarm as one node — or remote agents over A2A:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.agent.a2a_agent <span class="im">import</span> A2AAgent</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>ml_analyzer <span class="op">=</span> A2AAgent(endpoint<span class="op">=</span><span class="st">"http://ml-service:9000"</span>, name<span class="op">=</span><span class="st">"ml_analyzer"</span>, timeout<span class="op">=</span><span class="dv">600</span>)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>builder.add_node(ml_analyzer, <span class="st">"ml"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.agent.a2a_agent <span class="im">import</span> A2AAgent</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>ml_analyzer <span class="op">=</span> A2AAgent(endpoint<span class="op">=</span><span class="st">"http://ml-service:9000"</span>, name<span class="op">=</span><span class="st">"ml_analyzer"</span>, timeout<span class="op">=</span><span class="dv">600</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>builder.add_node(ml_analyzer, <span class="st">"ml"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Workflow</strong> is the deterministic DAG: no cycles, parallel execution of independent tasks, outputs auto-passed to dependents, each task receiving a curated summary of its dependencies rather than the full history. Use it when the plan is known in advance.</p>
-</section>
-<section id="langchain-hands-you-a-runtime" class="level3">
-<h3 class="anchored" data-anchor-id="langchain-hands-you-a-runtime">LangChain hands you a runtime</h3>
-<p>The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five <em>patterns</em> — subagents, handoffs, skills, router, custom workflow — and you build the one you need on <code>StateGraph</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Annotated, TypedDict</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> operator <span class="im">import</span> add</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.graph <span class="im">import</span> StateGraph, START, END</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.checkpoint.memory <span class="im">import</span> InMemorySaver</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> State(TypedDict):</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    messages: Annotated[<span class="bu">list</span>, add]</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    findings: Annotated[<span class="bu">list</span>[<span class="bu">str</span>], add]</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    attempts: <span class="bu">int</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> route(state: State) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> state[<span class="st">"attempts"</span>] <span class="op">&gt;=</span> <span class="dv">3</span>:</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"report"</span></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">"analysis"</span> <span class="cf">if</span> <span class="kw">not</span> state[<span class="st">"findings"</span>] <span class="cf">else</span> <span class="st">"report"</span></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>builder <span class="op">=</span> StateGraph(State)</span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>builder.add_node(<span class="st">"research"</span>, research_node)</span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>builder.add_node(<span class="st">"analysis"</span>, analysis_node)</span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>builder.add_node(<span class="st">"report"</span>, report_node)</span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>builder.add_edge(START, <span class="st">"research"</span>)</span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"research"</span>, <span class="st">"analysis"</span>)</span>
-<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>builder.add_conditional_edges(<span class="st">"analysis"</span>, route, {<span class="st">"analysis"</span>: <span class="st">"analysis"</span>, <span class="st">"report"</span>: <span class="st">"report"</span>})</span>
-<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"report"</span>, END)</span>
-<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>graph <span class="op">=</span> builder.<span class="bu">compile</span>(checkpointer<span class="op">=</span>InMemorySaver())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The state model is the real feature here. Every key can have its own reducer — <code>Annotated[list, add]</code> appends, the default overwrites, and you can write custom merge functions. That’s how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.</p>
-<p>Dynamic fan-out is also cleaner:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.types <span class="im">import</span> Send</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fan_out(state: State):</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [Send(<span class="st">"analyse_doc"</span>, {<span class="st">"doc"</span>: d}) <span class="cf">for</span> d <span class="kw">in</span> state[<span class="st">"documents"</span>]]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>Send</code> spawns one node execution per item at runtime — genuine map-reduce, where Strands’ parallelism comes from static graph branches. And <code>Command</code> lets a node update state and route in one return:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.types <span class="im">import</span> Command</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Literal</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> triage(state: State) <span class="op">-&gt;</span> Command[Literal[<span class="st">"billing"</span>, <span class="st">"technical"</span>]]:</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    kind <span class="op">=</span> classify(state[<span class="st">"messages"</span>][<span class="op">-</span><span class="dv">1</span>])</span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Command(update<span class="op">=</span>{<span class="st">"category"</span>: kind}, goto<span class="op">=</span>kind)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>The takeaway on this axis:</strong> if your orchestration looks like one of the four shapes Strands ships — supervisor, swarm, pipeline, feedback loop — you will be done faster with Strands, with better safety rails. If your orchestration is <em>weird</em> — dynamic fan-out over an unknown number of items, parallel branches that need custom merge semantics, deterministic steps interleaved with agentic ones — LangGraph will fight you less.</p>
+<p><strong>The takeaway on this axis:</strong> if your orchestration is <em>weird</em> — dynamic fan-out over an unknown number of items, parallel branches that need custom merge semantics, deterministic steps interleaved with agentic ones — LangGraph will fight you less. If your orchestration looks like one of the four shapes Strands ships — supervisor, swarm, pipeline, feedback loop — you will be done faster with Strands, with better safety rails.</p>
 </section>
 </section>
 <section id="axis-3-durability-and-human-in-the-loop" class="level2">
 <h2 class="anchored" data-anchor-id="axis-3-durability-and-human-in-the-loop">Axis 3: durability and human-in-the-loop</h2>
 <p>This is where LangGraph is furthest ahead, and if it matters to you it probably decides the question.</p>
+<section id="langchain-checkpoints-replay-and-interrupts" class="level3">
+<h3 class="anchored" data-anchor-id="langchain-checkpoints-replay-and-interrupts">LangChain: checkpoints, replay, and interrupts</h3>
 <p>LangGraph’s checkpointer isn’t a session store, it’s an execution log. State is persisted at super-step boundaries to a real database — Postgres, SQLite, MongoDB, CosmosDB — with tunable durability:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>graph <span class="op">=</span> builder.<span class="bu">compile</span>(checkpointer<span class="op">=</span>PostgresSaver(conn))</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>graph.invoke(inputs, config<span class="op">=</span>{<span class="st">"configurable"</span>: {<span class="st">"thread_id"</span>: tid}}, durability<span class="op">=</span><span class="st">"sync"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -407,11 +416,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    })],</span>
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>There are sharp edges — the docs spell out four rules, and they’re worth reading before you ship. Don’t wrap <code>interrupt()</code> in a bare <code>try/except</code> (you’ll swallow the control-flow exception). Don’t reorder or conditionally skip interrupt calls within a node, because resume matching is strictly index-based. Don’t pass unserializable values into the interrupt payload. And make any side effect <em>before</em> an interrupt idempotent, because the node re-runs from the top on resume.</p>
+</section>
+<section id="strands-interrupts-without-the-replay-story" class="level3">
+<h3 class="anchored" data-anchor-id="strands-interrupts-without-the-replay-story">Strands: interrupts without the replay story</h3>
 <p>Strands is not absent here. It has interrupts as a distinct concept — the docs are explicit that cancellation stops the agent while interrupts pause and resume — plus sessions, snapshots, storage backends, and a whole “Interventions” section covering steering, authorization, and human-in-the-loop. Graph <code>invocation_state</code> is serialized with the graph checkpoint across interrupt/resume. But I don’t see a documented equivalent of <code>get_state_history()</code> and forked replay, and that gap is the single biggest capability difference between the two.</p>
+</section>
 </section>
 <section id="axis-4-the-long-horizon-agent" class="level2">
 <h2 class="anchored" data-anchor-id="axis-4-the-long-horizon-agent">Axis 4: the long-horizon agent</h2>
-<p>If you’re building a research or coding agent that runs for many minutes and produces artifacts, LangChain has a specific answer:</p>
+<p>If you’re building a research or coding agent that runs for many minutes and produces artifacts, this is the axis that matters.</p>
+<section id="langchain-deepagents" class="level3">
+<h3 class="anchored" data-anchor-id="langchain-deepagents">LangChain: deepagents</h3>
+<p>LangChain has a specific, pre-assembled answer:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> deepagents <span class="im">import</span> create_deep_agent</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> create_deep_agent(</span>
@@ -427,7 +443,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    }],</span>
 <span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>You get a virtual filesystem (<code>ls</code>, <code>read_file</code>, <code>write_file</code>, <code>edit_file</code>, <code>glob</code>, <code>grep</code>), a <code>write_todos</code> planning tool, a <code>task</code> tool for delegating to subagents, memory via <code>AGENTS.md</code>, summarisation, and prompt caching — all wired by default. Subagents run <code>isolated</code> (fresh context, own prompt) or <code>fork</code> (inherits the parent’s full history and exact system prompt, which preserves the prompt cache). That’s a meaningful head start on the long-horizon shape.</p>
+</section>
+<section id="strands-comparable-ingredients-assembled-by-you" class="level3">
+<h3 class="anchored" data-anchor-id="strands-comparable-ingredients-assembled-by-you">Strands: comparable ingredients, assembled by you</h3>
 <p>Strands’ answer is its plugin system — Skills, Steering, Context Offloader, Context Injector, GoalLoop — plus sandboxes and context management. Comparable ingredients; less of a single pre-assembled preset.</p>
+</section>
 </section>
 <section id="axis-5-ops" class="level2">
 <h2 class="anchored" data-anchor-id="axis-5-ops">Axis 5: ops</h2>
@@ -440,35 +460,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <thead>
 <tr class="header">
 <th></th>
-<th>Strands</th>
 <th>LangChain</th>
+<th>Strands</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td>Tracing</td>
-<td>Observability, Metrics, Traces, Logs sections</td>
 <td>LangSmith, plus LangSmith Engine for issue detection</td>
+<td>Observability, Metrics, Traces, Logs sections</td>
 </tr>
 <tr class="even">
 <td>Evaluation</td>
-<td><strong>Strands Evals SDK</strong> — ~25 evaluators, red-teaming, chaos testing, root-cause detectors</td>
 <td>LangSmith evaluation</td>
+<td><strong>Strands Evals SDK</strong> — ~25 evaluators, red-teaming, chaos testing, root-cause detectors</td>
 </tr>
 <tr class="odd">
 <td>Streaming</td>
-<td><code>stream_async</code> with <code>multiagent_node_start</code> / <code>_stream</code> / <code>_handoff</code> / <code>_result</code>; plus bidirectional realtime voice (Nova Sonic, Gemini Live, OpenAI Realtime)</td>
 <td><code>stream_mode</code> (values, updates, messages, custom, checkpoints, tasks, debug) and typed <code>stream_events(version="v3")</code></td>
+<td><code>stream_async</code> with <code>multiagent_node_start</code> / <code>_stream</code> / <code>_handoff</code> / <code>_result</code>; plus bidirectional realtime voice (Nova Sonic, Gemini Live, OpenAI Realtime)</td>
 </tr>
 <tr class="even">
 <td>Deployment</td>
-<td>AgentCore, Lambda, Fargate, App Runner, EKS, EC2, Docker, K8s, Terraform</td>
 <td>LangSmith Deployment / Agent Server: cloud, hybrid, self-hosted, standalone</td>
+<td>AgentCore, Lambda, Fargate, App Runner, EKS, EC2, Docker, K8s, Terraform</td>
 </tr>
 <tr class="odd">
 <td>Models</td>
-<td>Bedrock, Nova, Anthropic, Google, OpenAI, Mistral, Ollama, LiteLLM, llama.cpp, SageMaker, Writer, Vercel</td>
 <td><code>init_chat_model("provider:model")</code> across providers</td>
+<td>Bedrock, Nova, Anthropic, Google, OpenAI, Mistral, Ollama, LiteLLM, llama.cpp, SageMaker, Writer, Vercel</td>
 </tr>
 </tbody>
 </table>
@@ -478,6 +498,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="the-traps" class="level2">
 <h2 class="anchored" data-anchor-id="the-traps">The traps</h2>
 <p>Four things that will cost you a day each if nobody tells you.</p>
+<p><strong>LangGraph subgraph streaming is opt-in.</strong> <code>create_agent</code> returns a compiled graph, so putting one inside a <code>StateGraph</code> makes it a subgraph — and without <code>subgraphs=True</code> on the parent’s stream, <code>stream_mode="messages"</code> won’t emit the inner agent’s tokens at all. You’ll think streaming is broken.</p>
+<p><strong>LangGraph’s <code>interrupt()</code> re-runs the node.</strong> Resume restarts the node function from the top, not from the interrupt line. Any side effect before the interrupt happens twice unless it’s idempotent.</p>
 <p><strong>Strands Python <code>Graph</code> defaults to OR fan-in.</strong> A node fires when <em>any</em> incoming edge’s source completes — most frameworks default to AND. To get a real join you write a condition on every incoming edge:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> all_complete(required: <span class="bu">list</span>[<span class="bu">str</span>]):</span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> check(state: GraphState) <span class="op">-&gt;</span> <span class="bu">bool</span>:</span>
@@ -491,19 +513,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"research"</span>, <span class="st">"synthesis"</span>, condition<span class="op">=</span>join)</span>
 <span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"market_data"</span>, <span class="st">"synthesis"</span>, condition<span class="op">=</span>join)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Strands’ Python and TypeScript SDKs are not the same API.</strong> Python uses a <code>GraphBuilder</code>, TS a declarative <code>new Graph({nodes, edges, sources, maxSteps})</code>. Python has <code>max_handoffs</code> + <code>max_iterations</code>, TS has one <code>maxSteps</code>. Python’s Swarm has a mutable <code>SharedContext</code>; TS passes only serialized handoff context. Exceeding the step limit <em>throws</em> in TS but returns a <code>FAILED</code> result in Python. If you plan to port between them, read the “SDK Differences” sections first.</p>
-<p><strong>LangGraph subgraph streaming is opt-in.</strong> <code>create_agent</code> returns a compiled graph, so putting one inside a <code>StateGraph</code> makes it a subgraph — and without <code>subgraphs=True</code> on the parent’s stream, <code>stream_mode="messages"</code> won’t emit the inner agent’s tokens at all. You’ll think streaming is broken.</p>
-<p><strong>LangGraph’s <code>interrupt()</code> re-runs the node.</strong> Resume restarts the node function from the top, not from the interrupt line. Any side effect before the interrupt happens twice unless it’s idempotent.</p>
 </section>
 <section id="so-how-do-i-choose" class="level2">
 <h2 class="anchored" data-anchor-id="so-how-do-i-choose">So: how do I choose?</h2>
 <p>Run down this list and stop at the first one that’s true.</p>
 <ol type="1">
-<li><strong>Building a realtime voice agent?</strong> → Strands. The bidirectional streaming support is the deciding factor.</li>
 <li><strong>Need durable execution — resume after a crash, audit trails, replay, forking a run from a past checkpoint?</strong> → LangGraph. This is the largest capability gap.</li>
-<li><strong>Deep on AWS, deploying to Bedrock AgentCore?</strong> → Strands. It’s the paved road, and the deployment guides cover Lambda, Fargate, EKS and Terraform properly.</li>
 <li><strong>Building a long-horizon research or coding agent with planning, files, and subagents?</strong> → deepagents. Fork-mode subagents that preserve the prompt cache are a real differentiator.</li>
-<li><strong>Orchestration matches a standard shape — supervisor, swarm, pipeline, feedback loop?</strong> → Strands. Configuring <code>Swarm</code> or <code>GraphBuilder</code> with sane timeouts is faster than building it, and the safety rails are already there.</li>
 <li><strong>Orchestration is unusual — dynamic fan-out, custom state merging, deterministic steps interleaved with agentic ones?</strong> → LangGraph. Reducers and <code>Send</code> exist for exactly this.</li>
+<li><strong>Building a realtime voice agent?</strong> → Strands. The bidirectional streaming support is the deciding factor.</li>
+<li><strong>Deep on AWS, deploying to Bedrock AgentCore?</strong> → Strands. It’s the paved road, and the deployment guides cover Lambda, Fargate, EKS and Terraform properly.</li>
+<li><strong>Orchestration matches a standard shape — supervisor, swarm, pipeline, feedback loop?</strong> → Strands. Configuring <code>Swarm</code> or <code>GraphBuilder</code> with sane timeouts is faster than building it, and the safety rails are already there.</li>
 <li><strong>Need Python <em>and</em> TypeScript at similar depth?</strong> → Both do it; Strands is a genuine dual SDK but the two differ meaningfully, so check the specific APIs you’ll use.</li>
 <li><strong>None of the above?</strong> → Whichever your team already knows. The loop is the same. The switching cost is real but not enormous, and you’ll learn more from shipping one than from another week of evaluation.</li>
 </ol>

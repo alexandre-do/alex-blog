@@ -15,11 +15,11 @@ categories:
 
 Every few months someone on my team asks the same question: we're building an agent, should we use Strands or LangChain? And every time, the honest answer starts with "those aren't the same kind of thing."
 
-So this post is the version of that answer I wish I could just link to. It's organised around the decisions you actually have to make — how you bound the loop, how you compose multiple agents, what happens when a run dies halfway through — rather than a feature checklist. At the end there's a heuristic you can apply in about ninety seconds.
+So this post is the version of that answer I wish I could just link to. Each section below starts with the underlying problem every agentic framework has to solve, then walks through **LangChain's answer**, then **Strands' answer** — rather than a feature checklist. At the end there's a heuristic you can apply in about ninety seconds.
 
 ## First: what are we even comparing?
 
-Strands Agents is a single SDK from AWS, in Python and TypeScript. You get an `Agent`, and you get first-class multi-agent orchestrators — `Swarm`, `Graph`, `Workflow` — plus A2A for talking to remote agents. One install, one mental model.
+Every agent framework has to answer the same question — who writes the reason → act → observe loop, and at what altitude do you plug in? LangChain and Strands answer it very differently.
 
 "LangChain" in 2026 is three layers stacked on top of each other, and conflating them is why these comparisons go sideways:
 
@@ -27,40 +27,19 @@ Strands Agents is a single SDK from AWS, in Python and TypeScript. You get an `A
 - **`create_agent`** is the agent harness built on that runtime. Model + tools + prompt + middleware, compiled down to a LangGraph graph.
 - **deepagents** is the batteries-included preset on top of `create_agent`: planning tool, virtual filesystem, subagents, memory, prompt caching.
 
-So "Strands vs LangChain" is really "one opinionated SDK vs a three-layer stack where you choose your altitude." That framing already tells you something: if you want to be handed a working multi-agent topology, Strands is closer to that. If you want to build an unusual control flow and have the runtime not fight you, LangGraph is closer to that.
+Strands Agents, by contrast, is a single SDK from AWS, in Python and TypeScript. You get an `Agent`, and you get first-class multi-agent orchestrators — `Swarm`, `Graph`, `Workflow` — plus A2A for talking to remote agents. One install, one mental model.
+
+So "Strands vs LangChain" is really "a three-layer stack where you choose your altitude vs one opinionated SDK." That framing already tells you something: if you want to build an unusual control flow and have the runtime not fight you, LangGraph is closer to that. If you want to be handed a working multi-agent topology, Strands is closer to that.
 
 Everything below is downstream of that split.
 
 ## Axis 1: the agent loop and how you bound it
 
-Both run the same loop — call the model, execute any tool calls, feed results back, repeat until the model stops asking for tools. Nobody is innovating on the loop itself. The difference is in the controls around it.
+Both run the same loop — call the model, execute any tool calls, feed results back, repeat until the model stops asking for tools. Nobody is innovating on the loop itself. The difference is in the controls around it, and how you find out why a run stopped.
 
-**Strands is unusually explicit about termination.** You pass a limits object and you get back a named stop reason:
+### LangChain: bound the loop with middleware
 
-```python
-from strands import Agent
-
-agent = Agent(
-    name="researcher",
-    system_prompt="You research topics thoroughly.",
-    tools=[search, fetch_page],
-)
-
-result = agent("Summarise the state of agent frameworks", limits={
-    "turns": 25,
-    "total_tokens": 200_000,
-    "output_tokens": 8_000,
-})
-
-if result.stop_reason == "limit_turns":
-    ...  # budget exhausted, history is still valid — re-invoke with more
-```
-
-The stop reason vocabulary is the part I like: `end_turn`, `tool_use`, `limit_turns`, `limit_total_tokens`, `limit_output_tokens`, `max_tokens`, `stop_sequence`, `content_filtered`, `guardrail_intervention`, `cancelled`. When a run ends, you know precisely why, and hitting a limit is treated as graceful budget exhaustion rather than a crash — the conversation history stays valid and you can resume with a bigger budget.
-
-Two more Strands details worth knowing. Cancellation is first-class and genuinely thought through: `agent.cancel()` is thread-safe and idempotent, you can pass a `threading.Event` (Python) or an `AbortSignal` (TypeScript) from outside, and there are four checkpoints where the loop notices — during model streaming, before tool execution, during MCP tool execution, and after. In-tool cancellation is cooperative, so a tool that ignores `tool_context.cancel_signal` runs to completion. And concurrency is guarded by default: overlapping invocations on one agent instance raise a `ConcurrencyException`, because an invocation mutates conversation history. You can opt into idempotency tokens or an explicitly unsafe reentrant mode, but you have to opt in.
-
-**LangChain bounds the loop with middleware instead**, which is less about naming the exit and more about composing behaviour:
+LangChain's answer is middleware — less about naming the exit, more about composing behaviour on the way there:
 
 ```python
 from langchain.agents import create_agent
@@ -88,15 +67,97 @@ Middleware hooks into six points: `before_agent`, `before_model`, `after_model`,
 
 That list is real leverage. Retry with jitter, provider fallback, and context summarisation are three things every production agent eventually needs, and having them as a one-line import beats writing them again.
 
-Underneath, LangGraph has a `recursion_limit` (default 1000 super-steps) as the ultimate backstop. It's a blunter instrument than Strands' turn budget — it counts graph steps, not model turns — but it does stop runaway loops.
+Underneath, LangGraph has a `recursion_limit` (default 1000 super-steps) as the ultimate backstop. It's a blunter instrument than a turn budget — it counts graph steps, not model turns — but it does stop runaway loops.
 
-**The takeaway on this axis:** Strands gives you better answers to "why did this stop?"; LangChain gives you better answers to "how do I change what happens on the way?" Both matter, but they matter to different people. If you're operating agents and debugging production incidents, named stop reasons are worth a lot. If you're building the agent and need retries, fallbacks, and context management, middleware is worth more.
+### Strands: named stop reasons
 
-## Axis 2: orchestration — configured vs. composed
+Strands is unusually explicit about termination. You pass a limits object and you get back a named stop reason:
 
-This is the axis that should drive your decision.
+```python
+from strands import Agent
 
-### Strands hands you the topologies
+agent = Agent(
+    name="researcher",
+    system_prompt="You research topics thoroughly.",
+    tools=[search, fetch_page],
+)
+
+result = agent("Summarise the state of agent frameworks", limits={
+    "turns": 25,
+    "total_tokens": 200_000,
+    "output_tokens": 8_000,
+})
+
+if result.stop_reason == "limit_turns":
+    ...  # budget exhausted, history is still valid — re-invoke with more
+```
+
+The stop reason vocabulary is the part I like: `end_turn`, `tool_use`, `limit_turns`, `limit_total_tokens`, `limit_output_tokens`, `max_tokens`, `stop_sequence`, `content_filtered`, `guardrail_intervention`, `cancelled`. When a run ends, you know precisely why, and hitting a limit is treated as graceful budget exhaustion rather than a crash — the conversation history stays valid and you can resume with a bigger budget.
+
+Two more Strands details worth knowing. Cancellation is first-class and genuinely thought through: `agent.cancel()` is thread-safe and idempotent, you can pass a `threading.Event` (Python) or an `AbortSignal` (TypeScript) from outside, and there are four checkpoints where the loop notices — during model streaming, before tool execution, during MCP tool execution, and after. In-tool cancellation is cooperative, so a tool that ignores `tool_context.cancel_signal` runs to completion. And concurrency is guarded by default: overlapping invocations on one agent instance raise a `ConcurrencyException`, because an invocation mutates conversation history. You can opt into idempotency tokens or an explicitly unsafe reentrant mode, but you have to opt in.
+
+**The takeaway on this axis:** LangChain gives you better answers to "how do I change what happens on the way?"; Strands gives you better answers to "why did this stop?" Both matter, but they matter to different people. If you're building the agent and need retries, fallbacks, and context management, middleware is worth more. If you're operating agents and debugging production incidents, named stop reasons are worth a lot.
+
+## Axis 2: orchestration — composed vs. configured
+
+This is the axis that should drive your decision: do you need a runtime that lets you build an unusual multi-agent topology, or one that already ships the standard shapes?
+
+### LangChain: a runtime you compose
+
+The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five *patterns* — subagents, handoffs, skills, router, custom workflow — and you build the one you need on `StateGraph`:
+
+```python
+from typing import Annotated, TypedDict
+from operator import add
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import InMemorySaver
+
+class State(TypedDict):
+    messages: Annotated[list, add]
+    findings: Annotated[list[str], add]
+    attempts: int
+
+def route(state: State) -> str:
+    if state["attempts"] >= 3:
+        return "report"
+    return "analysis" if not state["findings"] else "report"
+
+builder = StateGraph(State)
+builder.add_node("research", research_node)
+builder.add_node("analysis", analysis_node)
+builder.add_node("report", report_node)
+
+builder.add_edge(START, "research")
+builder.add_edge("research", "analysis")
+builder.add_conditional_edges("analysis", route, {"analysis": "analysis", "report": "report"})
+builder.add_edge("report", END)
+
+graph = builder.compile(checkpointer=InMemorySaver())
+```
+
+The state model is the real feature here. Every key can have its own reducer — `Annotated[list, add]` appends, the default overwrites, and you can write custom merge functions. That's how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.
+
+Dynamic fan-out is also cleaner:
+
+```python
+from langgraph.types import Send
+
+def fan_out(state: State):
+    return [Send("analyse_doc", {"doc": d}) for d in state["documents"]]
+```
+
+`Send` spawns one node execution per item at runtime — genuine map-reduce, where Strands' parallelism comes from static graph branches. And `Command` lets a node update state and route in one return:
+
+```python
+from langgraph.types import Command
+from typing import Literal
+
+def triage(state: State) -> Command[Literal["billing", "technical"]]:
+    kind = classify(state["messages"][-1])
+    return Command(update={"category": kind}, goto=kind)
+```
+
+### Strands: topologies you configure
 
 Three built-in orchestrators, each with its own semantics, plus agents-as-tools for hierarchical delegation.
 
@@ -165,66 +226,13 @@ builder.add_node(ml_analyzer, "ml")
 
 **Workflow** is the deterministic DAG: no cycles, parallel execution of independent tasks, outputs auto-passed to dependents, each task receiving a curated summary of its dependencies rather than the full history. Use it when the plan is known in advance.
 
-### LangChain hands you a runtime
-
-The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five *patterns* — subagents, handoffs, skills, router, custom workflow — and you build the one you need on `StateGraph`:
-
-```python
-from typing import Annotated, TypedDict
-from operator import add
-from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
-
-class State(TypedDict):
-    messages: Annotated[list, add]
-    findings: Annotated[list[str], add]
-    attempts: int
-
-def route(state: State) -> str:
-    if state["attempts"] >= 3:
-        return "report"
-    return "analysis" if not state["findings"] else "report"
-
-builder = StateGraph(State)
-builder.add_node("research", research_node)
-builder.add_node("analysis", analysis_node)
-builder.add_node("report", report_node)
-
-builder.add_edge(START, "research")
-builder.add_edge("research", "analysis")
-builder.add_conditional_edges("analysis", route, {"analysis": "analysis", "report": "report"})
-builder.add_edge("report", END)
-
-graph = builder.compile(checkpointer=InMemorySaver())
-```
-
-The state model is the real feature here. Every key can have its own reducer — `Annotated[list, add]` appends, the default overwrites, and you can write custom merge functions. That's how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.
-
-Dynamic fan-out is also cleaner:
-
-```python
-from langgraph.types import Send
-
-def fan_out(state: State):
-    return [Send("analyse_doc", {"doc": d}) for d in state["documents"]]
-```
-
-`Send` spawns one node execution per item at runtime — genuine map-reduce, where Strands' parallelism comes from static graph branches. And `Command` lets a node update state and route in one return:
-
-```python
-from langgraph.types import Command
-from typing import Literal
-
-def triage(state: State) -> Command[Literal["billing", "technical"]]:
-    kind = classify(state["messages"][-1])
-    return Command(update={"category": kind}, goto=kind)
-```
-
-**The takeaway on this axis:** if your orchestration looks like one of the four shapes Strands ships — supervisor, swarm, pipeline, feedback loop — you will be done faster with Strands, with better safety rails. If your orchestration is *weird* — dynamic fan-out over an unknown number of items, parallel branches that need custom merge semantics, deterministic steps interleaved with agentic ones — LangGraph will fight you less.
+**The takeaway on this axis:** if your orchestration is *weird* — dynamic fan-out over an unknown number of items, parallel branches that need custom merge semantics, deterministic steps interleaved with agentic ones — LangGraph will fight you less. If your orchestration looks like one of the four shapes Strands ships — supervisor, swarm, pipeline, feedback loop — you will be done faster with Strands, with better safety rails.
 
 ## Axis 3: durability and human-in-the-loop
 
 This is where LangGraph is furthest ahead, and if it matters to you it probably decides the question.
+
+### LangChain: checkpoints, replay, and interrupts
 
 LangGraph's checkpointer isn't a session store, it's an execution log. State is persisted at super-step boundaries to a real database — Postgres, SQLite, MongoDB, CosmosDB — with tunable durability:
 
@@ -283,11 +291,17 @@ agent = create_agent(
 
 There are sharp edges — the docs spell out four rules, and they're worth reading before you ship. Don't wrap `interrupt()` in a bare `try/except` (you'll swallow the control-flow exception). Don't reorder or conditionally skip interrupt calls within a node, because resume matching is strictly index-based. Don't pass unserializable values into the interrupt payload. And make any side effect *before* an interrupt idempotent, because the node re-runs from the top on resume.
 
+### Strands: interrupts without the replay story
+
 Strands is not absent here. It has interrupts as a distinct concept — the docs are explicit that cancellation stops the agent while interrupts pause and resume — plus sessions, snapshots, storage backends, and a whole "Interventions" section covering steering, authorization, and human-in-the-loop. Graph `invocation_state` is serialized with the graph checkpoint across interrupt/resume. But I don't see a documented equivalent of `get_state_history()` and forked replay, and that gap is the single biggest capability difference between the two.
 
 ## Axis 4: the long-horizon agent
 
-If you're building a research or coding agent that runs for many minutes and produces artifacts, LangChain has a specific answer:
+If you're building a research or coding agent that runs for many minutes and produces artifacts, this is the axis that matters.
+
+### LangChain: deepagents
+
+LangChain has a specific, pre-assembled answer:
 
 ```python
 from deepagents import create_deep_agent
@@ -308,17 +322,19 @@ agent = create_deep_agent(
 
 You get a virtual filesystem (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`), a `write_todos` planning tool, a `task` tool for delegating to subagents, memory via `AGENTS.md`, summarisation, and prompt caching — all wired by default. Subagents run `isolated` (fresh context, own prompt) or `fork` (inherits the parent's full history and exact system prompt, which preserves the prompt cache). That's a meaningful head start on the long-horizon shape.
 
+### Strands: comparable ingredients, assembled by you
+
 Strands' answer is its plugin system — Skills, Steering, Context Offloader, Context Injector, GoalLoop — plus sandboxes and context management. Comparable ingredients; less of a single pre-assembled preset.
 
 ## Axis 5: ops
 
-| | Strands | LangChain |
+| | LangChain | Strands |
 |---|---|---|
-| Tracing | Observability, Metrics, Traces, Logs sections | LangSmith, plus LangSmith Engine for issue detection |
-| Evaluation | **Strands Evals SDK** — ~25 evaluators, red-teaming, chaos testing, root-cause detectors | LangSmith evaluation |
-| Streaming | `stream_async` with `multiagent_node_start` / `_stream` / `_handoff` / `_result`; plus bidirectional realtime voice (Nova Sonic, Gemini Live, OpenAI Realtime) | `stream_mode` (values, updates, messages, custom, checkpoints, tasks, debug) and typed `stream_events(version="v3")` |
-| Deployment | AgentCore, Lambda, Fargate, App Runner, EKS, EC2, Docker, K8s, Terraform | LangSmith Deployment / Agent Server: cloud, hybrid, self-hosted, standalone |
-| Models | Bedrock, Nova, Anthropic, Google, OpenAI, Mistral, Ollama, LiteLLM, llama.cpp, SageMaker, Writer, Vercel | `init_chat_model("provider:model")` across providers |
+| Tracing | LangSmith, plus LangSmith Engine for issue detection | Observability, Metrics, Traces, Logs sections |
+| Evaluation | LangSmith evaluation | **Strands Evals SDK** — ~25 evaluators, red-teaming, chaos testing, root-cause detectors |
+| Streaming | `stream_mode` (values, updates, messages, custom, checkpoints, tasks, debug) and typed `stream_events(version="v3")` | `stream_async` with `multiagent_node_start` / `_stream` / `_handoff` / `_result`; plus bidirectional realtime voice (Nova Sonic, Gemini Live, OpenAI Realtime) |
+| Deployment | LangSmith Deployment / Agent Server: cloud, hybrid, self-hosted, standalone | AgentCore, Lambda, Fargate, App Runner, EKS, EC2, Docker, K8s, Terraform |
+| Models | `init_chat_model("provider:model")` across providers | Bedrock, Nova, Anthropic, Google, OpenAI, Mistral, Ollama, LiteLLM, llama.cpp, SageMaker, Writer, Vercel |
 
 Two things stand out. The Strands Evals SDK is a genuinely differentiated bit of kit — evaluators for correctness, faithfulness, tool selection accuracy and trajectory, plus red-teaming and chaos testing, in the same SDK. If your compliance story needs agent evaluation, that's not nothing.
 
@@ -327,6 +343,10 @@ And Strands has bidirectional streaming for realtime voice. If you're building a
 ## The traps
 
 Four things that will cost you a day each if nobody tells you.
+
+**LangGraph subgraph streaming is opt-in.** `create_agent` returns a compiled graph, so putting one inside a `StateGraph` makes it a subgraph — and without `subgraphs=True` on the parent's stream, `stream_mode="messages"` won't emit the inner agent's tokens at all. You'll think streaming is broken.
+
+**LangGraph's `interrupt()` re-runs the node.** Resume restarts the node function from the top, not from the interrupt line. Any side effect before the interrupt happens twice unless it's idempotent.
 
 **Strands Python `Graph` defaults to OR fan-in.** A node fires when *any* incoming edge's source completes — most frameworks default to AND. To get a real join you write a condition on every incoming edge:
 
@@ -346,20 +366,16 @@ builder.add_edge("market_data", "synthesis", condition=join)
 
 **Strands' Python and TypeScript SDKs are not the same API.** Python uses a `GraphBuilder`, TS a declarative `new Graph({nodes, edges, sources, maxSteps})`. Python has `max_handoffs` + `max_iterations`, TS has one `maxSteps`. Python's Swarm has a mutable `SharedContext`; TS passes only serialized handoff context. Exceeding the step limit *throws* in TS but returns a `FAILED` result in Python. If you plan to port between them, read the "SDK Differences" sections first.
 
-**LangGraph subgraph streaming is opt-in.** `create_agent` returns a compiled graph, so putting one inside a `StateGraph` makes it a subgraph — and without `subgraphs=True` on the parent's stream, `stream_mode="messages"` won't emit the inner agent's tokens at all. You'll think streaming is broken.
-
-**LangGraph's `interrupt()` re-runs the node.** Resume restarts the node function from the top, not from the interrupt line. Any side effect before the interrupt happens twice unless it's idempotent.
-
 ## So: how do I choose?
 
 Run down this list and stop at the first one that's true.
 
-1. **Building a realtime voice agent?** → Strands. The bidirectional streaming support is the deciding factor.
-2. **Need durable execution — resume after a crash, audit trails, replay, forking a run from a past checkpoint?** → LangGraph. This is the largest capability gap.
-3. **Deep on AWS, deploying to Bedrock AgentCore?** → Strands. It's the paved road, and the deployment guides cover Lambda, Fargate, EKS and Terraform properly.
-4. **Building a long-horizon research or coding agent with planning, files, and subagents?** → deepagents. Fork-mode subagents that preserve the prompt cache are a real differentiator.
-5. **Orchestration matches a standard shape — supervisor, swarm, pipeline, feedback loop?** → Strands. Configuring `Swarm` or `GraphBuilder` with sane timeouts is faster than building it, and the safety rails are already there.
-6. **Orchestration is unusual — dynamic fan-out, custom state merging, deterministic steps interleaved with agentic ones?** → LangGraph. Reducers and `Send` exist for exactly this.
+1. **Need durable execution — resume after a crash, audit trails, replay, forking a run from a past checkpoint?** → LangGraph. This is the largest capability gap.
+2. **Building a long-horizon research or coding agent with planning, files, and subagents?** → deepagents. Fork-mode subagents that preserve the prompt cache are a real differentiator.
+3. **Orchestration is unusual — dynamic fan-out, custom state merging, deterministic steps interleaved with agentic ones?** → LangGraph. Reducers and `Send` exist for exactly this.
+4. **Building a realtime voice agent?** → Strands. The bidirectional streaming support is the deciding factor.
+5. **Deep on AWS, deploying to Bedrock AgentCore?** → Strands. It's the paved road, and the deployment guides cover Lambda, Fargate, EKS and Terraform properly.
+6. **Orchestration matches a standard shape — supervisor, swarm, pipeline, feedback loop?** → Strands. Configuring `Swarm` or `GraphBuilder` with sane timeouts is faster than building it, and the safety rails are already there.
 7. **Need Python *and* TypeScript at similar depth?** → Both do it; Strands is a genuine dual SDK but the two differ meaningfully, so check the specific APIs you'll use.
 8. **None of the above?** → Whichever your team already knows. The loop is the same. The switching cost is real but not enormous, and you'll learn more from shipping one than from another week of evaluation.
 
