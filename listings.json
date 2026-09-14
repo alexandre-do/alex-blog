@@ -18,6 +18,7 @@
   {
     "listing": "/project/posts.html",
     "items": [
+      "/project/posts/chat-retrieval-system.html",
       "/project/posts/strands-vs-langchain.html",
       "/project/posts/mcp-vancouver-open-data.html",
       "/project/posts/agentic-stack-aws.html",
