@@ -441,7 +441,7 @@ li.category.active {
 /* ---------------- Art carousel ---------------- */
 .art-carousel {
   position: relative;
-  max-width: 720px;
+  max-width: 504px;
   margin: 0 auto;
   aspect-ratio: 4 / 3;
   overflow: hidden;
@@ -461,11 +461,6 @@ li.category.active {
   height: 100%;
   will-change: transform;
   transition: transform 0.7s cubic-bezier(0.65, 0.05, 0.36, 1);
-}
-
-.art-carousel--vertical .art-carousel-track {
-  flex-direction: column;
-  width: 100%;
 }
 
 .art-slide {
