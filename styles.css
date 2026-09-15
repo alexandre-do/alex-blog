@@ -532,6 +532,14 @@ li.category.active {
   opacity: 1;
 }
 
+/* Touch devices never trigger :hover, so keep prev/next reachable-looking
+   without requiring a tap-to-reveal step first. */
+@media (hover: none) {
+  .art-carousel-btn {
+    opacity: 1;
+  }
+}
+
 .art-carousel-btn:hover {
   background: rgba(201, 130, 46, 0.75);
 }
