@@ -463,11 +463,6 @@ li.category.active {
   transition: transform 0.7s cubic-bezier(0.65, 0.05, 0.36, 1);
 }
 
-.art-carousel--vertical .art-carousel-track {
-  flex-direction: column;
-  width: 100%;
-}
-
 .art-slide {
   flex-shrink: 0;
   display: flex;

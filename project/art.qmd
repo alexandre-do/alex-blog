@@ -20,7 +20,7 @@ Outside of machine learning and data, I paint and draw as a way to unplug and re
 ## Oil Paintings
 
 ```{=html}
-<div class="art-carousel art-carousel--horizontal" data-interval="5000">
+<div class="art-carousel" data-interval="5000">
 <div class="art-carousel-track">
 <figure class="art-slide"><a href="art/paintings/paint_1-large.jpg" class="lightbox" data-gallery="paintings" title="Oil painting"><img src="art/paintings/paint_1-thumb.jpg" srcset="art/paintings/paint_1-thumb.jpg 640w, art/paintings/paint_1-large.jpg 1800w" sizes="(max-width: 720px) 100vw, 720px" alt="Oil painting 1" loading="lazy"></a></figure>
 <figure class="art-slide"><a href="art/paintings/paint_2-large.jpg" class="lightbox" data-gallery="paintings" title="Oil painting"><img src="art/paintings/paint_2-thumb.jpg" srcset="art/paintings/paint_2-thumb.jpg 640w, art/paintings/paint_2-large.jpg 945w" sizes="(max-width: 720px) 100vw, 720px" alt="Oil painting 2" loading="lazy"></a></figure>
@@ -40,7 +40,7 @@ Outside of machine learning and data, I paint and draw as a way to unplug and re
 ## Watercolor
 
 ```{=html}
-<div class="art-carousel art-carousel--vertical" data-interval="4500">
+<div class="art-carousel" data-interval="4500">
 <div class="art-carousel-track">
 <figure class="art-slide"><a href="art/drawings/water_1-large.jpg" class="lightbox" data-gallery="watercolor" title="Watercolor"><img src="art/drawings/water_1-thumb.jpg" srcset="art/drawings/water_1-thumb.jpg 640w, art/drawings/water_1-large.jpg 1800w" sizes="(max-width: 720px) 100vw, 720px" alt="Watercolor 1" loading="lazy"></a></figure>
 <figure class="art-slide"><a href="art/drawings/water_2-large.jpg" class="lightbox" data-gallery="watercolor" title="Watercolor"><img src="art/drawings/water_2-thumb.jpg" srcset="art/drawings/water_2-thumb.jpg 640w, art/drawings/water_2-large.jpg 1800w" sizes="(max-width: 720px) 100vw, 720px" alt="Watercolor 2" loading="lazy"></a></figure>
@@ -66,7 +66,6 @@ Outside of machine learning and data, I paint and draw as a way to unplug and re
     var total = slides.length;
     if (total < 2) return;
 
-    var isVertical = carousel.classList.contains('art-carousel--vertical');
     var intervalMs = parseInt(carousel.dataset.interval, 10) || 5000;
 
     var clone = slides[0].cloneNode(true);
@@ -77,7 +76,6 @@ Outside of machine learning and data, I paint and draw as a way to unplug and re
     track.style.width = (total + 1) * 100 + '%';
     Array.prototype.slice.call(track.children).forEach(function (slide) {
       slide.style.flex = '0 0 ' + slideBasis + '%';
-      if (isVertical) slide.style.width = '100%';
     });
 
     var dotsWrap = carousel.querySelector('.art-carousel-dots');
@@ -106,7 +104,7 @@ Outside of machine learning and data, I paint and draw as a way to unplug and re
     function apply(withTransition) {
       track.style.transition = withTransition ? '' : 'none';
       var pct = -index * slideBasis;
-      track.style.transform = isVertical ? 'translateY(' + pct + '%)' : 'translateX(' + pct + '%)';
+      track.style.transform = 'translateX(' + pct + '%)';
     }
 
     function next() {
