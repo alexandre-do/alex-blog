@@ -11,8 +11,8 @@ listing:
   - id: posts
     contents:
       - project/posts/mcp-vancouver-open-data.qmd
-      - project/posts/deploy-ml-aws-cloudformation.qmd
-      - project/posts/rest-vs-graphql-vs-websocket.qmd
+      - project/posts/google-news-rss-radar.qmd
+      - project/posts/chat-retrieval-system.qmd
     type: grid
     fields: [image, date, title, description]
     sort: "date desc"
