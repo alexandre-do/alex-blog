@@ -209,6 +209,24 @@ a:hover, a:focus {
   }
 }
 
+/* Below this width the fixed aspect-ratio makes the hero too short to
+   fit the heading + subtitle sentence, clipping them via overflow:hidden
+   and letting the absolutely-positioned credit line overlap the text. */
+@media (max-width: 640px) {
+  .home-hero {
+    aspect-ratio: auto;
+    padding: 1.75rem 1.25rem;
+  }
+
+  .home-hero-credit {
+    position: static;
+    left: auto;
+    bottom: auto;
+    display: block;
+    margin-top: 1rem;
+  }
+}
+
 /* ---------------- Listings / Cards ---------------- */
 .quarto-grid-item {
   background-color: var(--surface);
