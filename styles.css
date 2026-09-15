@@ -310,6 +310,18 @@ a:hover, a:focus {
   max-width: 100%;
 }
 
+/* On narrow screens a long title has no room to stay on one line —
+   let it wrap instead of truncating with an ellipsis. Desktop keeps
+   the single-line archive look untouched. */
+@media (max-width: 640px) {
+  .quarto-post .body .listing-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+  }
+}
+
 .quarto-post .body .listing-title a {
   color: var(--text) !important;
 }
