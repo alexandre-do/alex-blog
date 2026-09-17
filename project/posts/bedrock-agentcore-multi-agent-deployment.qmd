@@ -1,6 +1,6 @@
 ---
 title: "Bedrock AgentCore: One Runtime, Any Multi-Agent Framework"
-date: "2026-09-16"
+date: "2025-10-10"
 description: "How Amazon Bedrock AgentCore deploys Strands, CrewAI, LangGraph, and Pydantic AI multi-agent systems through the same Runtime, Memory, and Observability primitives — so the framework choice stops being a deployment decision."
 image: "images/bedrock-agentcore-multi-agent-deployment.png"
 categories:
