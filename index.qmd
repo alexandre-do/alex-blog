@@ -58,7 +58,10 @@ listing:
 <a href="https://www.credly.com/badges/6fa7ec5d-2489-4b94-b7c8-484b21043911/public_url" target="_blank" rel="noopener noreferrer">
 <img src="images/certification_1.png" alt="Certification" style="height: 189px;">
 </a>
+<div style="display: flex; flex-direction: column; align-items: center;">
 <img src="images/certification_2.png" alt="Certification" style="height: 189px;">
+<small>In progress</small>
+</div>
 </div>
 ```
 
