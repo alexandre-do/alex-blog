@@ -13,7 +13,7 @@ categories:
 
 ![](images/strands-vs-langchain.png){.post-banner fig-alt="Strands vs. LangChain"}
 
-Every few months, a team asks some version of the same question: *we are building an agent—should we use Strands or LangChain?*
+Every few months, a team asks some version of the same question: *we are building an agent - should we use Strands or LangChain?*
 
 The question is reasonable, but the comparison is slightly off. Neither framework's interesting innovation is the basic model → tool → observation loop. Both can do that. The useful question is where each system puts the structure around that loop:
 
@@ -97,19 +97,19 @@ if result.stop_reason == "limit_turns":
     pass
 ```
 
-This seems small until an agent ends unexpectedly in production. A named reason—such as a turn budget, token budget, cancellation, content filtering, provider token cap, or natural end of turn—gives operators a concrete place to start.
+This seems small until an agent ends unexpectedly in production. A named reason - such as a turn budget, token budget, cancellation, content filtering, provider token cap, or natural end of turn - gives operators a concrete place to start.
 
 Strands also treats cancellation and concurrent invocation as first-class concerns. A Python agent can be cancelled safely from another thread; cancellation is observed at defined points in the loop. One agent instance rejects overlapping calls by default, because an invocation mutates its conversation history. Those are sensible defaults for a stateful SDK.
 
 **Choose by what hurts more:** LangChain is stronger when you need to change what happens *during* the loop. Strands is particularly pleasant when you need to understand why a run *ended*.
 
-## Axis 2: orchestration — composed vs. configured
+## Axis 2: orchestration - composed vs. configured
 
 This is the axis that should drive your decision: do you need a runtime that lets you build an unusual multi-agent topology, or one that already ships the standard shapes?
 
 ### LangChain: a runtime you compose
 
-The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five *patterns* — subagents, handoffs, skills, router, custom workflow — and you build the one you need on `StateGraph`:
+The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five *patterns* - subagents, handoffs, skills, router, custom workflow - and you build the one you need on `StateGraph`:
 
 ```python
 from typing import Annotated, TypedDict
@@ -140,7 +140,7 @@ builder.add_edge("report", END)
 graph = builder.compile(checkpointer=InMemorySaver())
 ```
 
-The state model is the real feature here. Every key can have its own reducer — `Annotated[list, add]` appends, the default overwrites, and you can write custom merge functions. That's how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.
+The state model is the real feature here. Every key can have its own reducer - `Annotated[list, add]` appends, the default overwrites, and you can write custom merge functions. That's how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.
 
 Dynamic fan-out is also cleaner:
 
@@ -151,7 +151,7 @@ def fan_out(state: State):
     return [Send("analyse_doc", {"doc": d}) for d in state["documents"]]
 ```
 
-`Send` spawns one node execution per item at runtime — genuine map-reduce, where Strands' parallelism comes from static graph branches. And `Command` lets a node update state and route in one return:
+`Send` spawns one node execution per item at runtime - genuine map-reduce, where Strands' parallelism comes from static graph branches. And `Command` lets a node update state and route in one return:
 
 ```python
 from langgraph.types import Command
@@ -162,7 +162,7 @@ def triage(state: State) -> Command[Literal["billing", "technical"]]:
     return Command(update={"category": kind}, goto=kind)
 ```
 
-You can dynamically fan work out with `Send`, route and update state in one step with `Command`, mix deterministic code with agentic nodes, and define custom joins. If your workflow is unusual, this flexibility is the point—not an implementation detail.
+You can dynamically fan work out with `Send`, route and update state in one step with `Command`, mix deterministic code with agentic nodes, and define custom joins. If your workflow is unusual, this flexibility is the point - not an implementation detail.
 
 ### Strands: familiar shapes with safety rails
 
@@ -214,7 +214,7 @@ graph.update_state(snapshot.config, {"findings": ["corrected"]})
 graph.invoke(None, config=snapshot.config)
 ```
 
-LangGraph's `interrupt()` uses the same persistence machinery. A node can pause for human approval, then resume later — even in another process — with a `Command`. That makes it suited to audit-heavy, expensive, or long-lived workflows.
+LangGraph's `interrupt()` uses the same persistence machinery. A node can pause for human approval, then resume later - even in another process - with a `Command`. That makes it suited to audit-heavy, expensive, or long-lived workflows.
 
 There is one non-negotiable implementation rule: an interrupted node restarts from its beginning on resume. Make every side effect before `interrupt()` idempotent, or move it after the interruption.
 
@@ -251,19 +251,19 @@ agent = create_deep_agent(
 
 ### Strands: comparable ingredients, assembled by you
 
-Strands offers comparable components — skills, steering, context management, goal loops, plugins, and sandboxes — but leaves more of their assembly to you. That is neither a flaw nor a universal advantage. It depends on whether your team wants a designed default or a smaller set of composable parts.
+Strands offers comparable components - skills, steering, context management, goal loops, plugins, and sandboxes - but leaves more of their assembly to you. That is neither a flaw nor a universal advantage. It depends on whether your team wants a designed default or a smaller set of composable parts.
 
 ## Axis 5: ops
 
 | | LangChain | Strands |
 |---|---|---|
 | Tracing | LangSmith, plus LangSmith Engine for issue detection | Observability, Metrics, Traces, Logs sections |
-| Evaluation | LangSmith evaluation | **Strands Evals SDK** — ~25 evaluators, red-teaming, chaos testing, root-cause detectors |
+| Evaluation | LangSmith evaluation | **Strands Evals SDK** - ~25 evaluators, red-teaming, chaos testing, root-cause detectors |
 | Streaming | `stream_mode` (values, updates, messages, custom, checkpoints, tasks, debug) and typed `stream_events(version="v3")` | `stream_async` with `multiagent_node_start` / `_stream` / `_handoff` / `_result`; plus bidirectional realtime voice (Nova Sonic, Gemini Live, OpenAI Realtime) |
 | Deployment | LangSmith Deployment / Agent Server: cloud, hybrid, self-hosted, standalone | AgentCore, Lambda, Fargate, App Runner, EKS, EC2, Docker, K8s, Terraform |
 | Models | `init_chat_model("provider:model")` across providers | Bedrock, Nova, Anthropic, Google, OpenAI, Mistral, Ollama, LiteLLM, llama.cpp, SageMaker, Writer, Vercel |
 
-Two things stand out. The Strands Evals SDK is a genuinely differentiated bit of kit — evaluators for correctness, faithfulness, tool selection accuracy and trajectory, plus red-teaming and chaos testing, in the same SDK. If your compliance story needs agent evaluation, that's not nothing.
+Two things stand out. The Strands Evals SDK is a genuinely differentiated bit of kit - evaluators for correctness, faithfulness, tool selection accuracy and trajectory, plus red-teaming and chaos testing, in the same SDK. If your compliance story needs agent evaluation, that's not nothing.
 
 And Strands has bidirectional streaming for realtime voice. If you're building a voice agent, this is close to a one-option decision.
 
@@ -271,11 +271,11 @@ And Strands has bidirectional streaming for realtime voice. If you're building a
 
 Four things that will cost you a day each if nobody tells you.
 
-**LangGraph subgraph streaming is opt-in.** `create_agent` returns a compiled graph, so putting one inside a `StateGraph` makes it a subgraph — and without `subgraphs=True` on the parent's stream, `stream_mode="messages"` won't emit the inner agent's tokens at all. You'll think streaming is broken.
+**LangGraph subgraph streaming is opt-in.** `create_agent` returns a compiled graph, so putting one inside a `StateGraph` makes it a subgraph - and without `subgraphs=True` on the parent's stream, `stream_mode="messages"` won't emit the inner agent's tokens at all. You'll think streaming is broken.
 
 **LangGraph's `interrupt()` re-runs the node.** Resume restarts the node function from the top, not from the interrupt line. Any side effect before the interrupt happens twice unless it's idempotent.
 
-**Strands Python `Graph` defaults to OR fan-in.** A node fires when *any* incoming edge's source completes — most frameworks default to AND. To get a real join you write a condition on every incoming edge:
+**Strands Python `Graph` defaults to OR fan-in.** A node fires when *any* incoming edge's source completes - most frameworks default to AND. To get a real join you write a condition on every incoming edge:
 
 ```python
 def all_complete(required: list[str]):
@@ -299,7 +299,7 @@ Run down this list and stop at the first one that's true.
 
 1. **Need durable execution, recovery, audit history, replay, or state forking?** → LangGraph.
 2. **Building a long-horizon research or coding agent and want planning, filesystem tools, and subagents wired together?** → Start with Deep Agents.
-3. **Orchestration is unusual — runtime fan-out, custom merge logic, elaborate joins, or deterministic steps mixed with agents?** → LangGraph.
+3. **Orchestration is unusual - runtime fan-out, custom merge logic, elaborate joins, or deterministic steps mixed with agents?** → LangGraph.
 4. **Deep in AWS, deploying through Bedrock AgentCore or adjacent AWS infrastructure?** → Strands.
 5. **Orchestration is a standard graph, swarm, or dependency workflow and you want sensible safety boundaries immediately?** → Strands.
 6. **None of the above decisive?** → Choose the stack your team can operate confidently. The cost of changing frameworks is usually lower than the cost of never shipping the first agent.
@@ -317,4 +317,4 @@ The agent loop is commodity. The durable choices are the state model, the recove
 
 ---
 
-*Sources: the [Strands Agents docs](https://strandsagents.com/docs/user-guide/concepts/multi-agent/multi-agent-patterns/), the [LangChain agents](https://docs.langchain.com/oss/python/langchain/agents), [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api), and [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence) docs, and AWS's [LangGraph-and-Strands reference architecture](https://aws.amazon.com/blogs/machine-learning/market-surveillance-agent-with-langgraph-and-strands-on-agentcore/). APIs move fast in both ecosystems — check version numbers before copying code.*
+*Sources: the [Strands Agents docs](https://strandsagents.com/docs/user-guide/concepts/multi-agent/multi-agent-patterns/), the [LangChain agents](https://docs.langchain.com/oss/python/langchain/agents), [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api), and [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence) docs, and AWS's [LangGraph-and-Strands reference architecture](https://aws.amazon.com/blogs/machine-learning/market-surveillance-agent-with-langgraph-and-strands-on-agentcore/). APIs move fast in both ecosystems - check version numbers before copying code.*

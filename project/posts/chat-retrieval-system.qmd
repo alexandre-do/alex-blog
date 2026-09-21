@@ -11,13 +11,13 @@ categories:
 
 # A Local-First RAG Chat App, Built to Migrate to AWS on Day One
 
-![](images/chat-retrieval-system.gif){.post-banner fig-alt="Chat retrieval system demo — upload a document, ask questions, get cited answers"}
+![](images/chat-retrieval-system.gif){.post-banner fig-alt="Chat retrieval system demo - upload a document, ask questions, get cited answers"}
 
-Most "local-first" RAG prototypes push the AWS migration to a rewrite: local embeddings become Bedrock calls, a FAISS index becomes OpenSearch, and half the retrieval code changes shape along the way. This project — a chat-QA prototype built around the finance split of [UniDoc-Bench](https://huggingface.co/datasets/Salesforce/UniDoc-Bench) — takes the opposite approach: **Bedrock is the LLM and embedding provider from the first commit**, and only the storage layer is a local stand-in. Migrating later is a config and infrastructure change, not a code change.
+Most "local-first" RAG prototypes push the AWS migration to a rewrite: local embeddings become Bedrock calls, a FAISS index becomes OpenSearch, and half the retrieval code changes shape along the way. This project - a chat-QA prototype built around the finance split of [UniDoc-Bench](https://huggingface.co/datasets/Salesforce/UniDoc-Bench) - takes the opposite approach: **Bedrock is the LLM and embedding provider from the first commit**, and only the storage layer is a local stand-in. Migrating later is a config and infrastructure change, not a code change.
 
 ## The Trick: Swap Storage, Not the API Calls
 
-The design constraint is simple — pick local replacements for AWS services that implement the *same interface* the AWS service would, so nothing upstream of storage needs to know which one it's talking to.
+The design constraint is simple - pick local replacements for AWS services that implement the *same interface* the AWS service would, so nothing upstream of storage needs to know which one it's talking to.
 
 | Concern | Local prototype | AWS target | What changes |
 |---|---|---|---|
@@ -38,7 +38,7 @@ def get_vector_store() -> ChromaVectorStore:
     return ChromaVectorStore(chroma_collection=collection)
 ```
 
-Swapping this one function for `OpensearchVectorStore` pointed at a real collection is the entire vector-store migration — `build_or_update_index`, `retrieve`, `list_documents`, and every router that calls them stay untouched.
+Swapping this one function for `OpensearchVectorStore` pointed at a real collection is the entire vector-store migration - `build_or_update_index`, `retrieve`, `list_documents`, and every router that calls them stay untouched.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ frontend/
   index.html, app.js, style.css   # plain HTML/JS chat UI, no build step
 ```
 
-A separate `ingestion/` module (loaders, chunking, metadata, preprocessors, parser, storage) exists alongside the backend for offline experimentation — comparing a deterministic Docling parse against an LLM-assisted parse on the same documents, to see which produces better chunk boundaries before that choice gets baked into the live pipeline.
+A separate `ingestion/` module (loaders, chunking, metadata, preprocessors, parser, storage) exists alongside the backend for offline experimentation - comparing a deterministic Docling parse against an LLM-assisted parse on the same documents, to see which produces better chunk boundaries before that choice gets baked into the live pipeline.
 
 ## Retrieval Is a Tool Call, Not a Pipeline Step
 
@@ -88,7 +88,7 @@ def _make_search_tool(retrieved_sink: list) -> FunctionTool:
 
 `answer_question` then runs a bounded tool-calling loop (`MAX_TOOL_ROUNDS = 4`) against Claude via Bedrock: call the LLM with the tool available, execute any tool calls it makes, feed the results back into history, and repeat until it answers with plain text instead of another tool call. Every retrieved node gets deduplicated and mapped back to its source chunk's position in the original document, so the response can cite `filename` + `chunk_number` rather than a bare similarity score.
 
-This matters for a chat-shaped Q&A app specifically: "hi" or "what can you do?" shouldn't trigger a vector search, and a tool-calling agent gets that for free — a fixed retrieve-then-generate pipeline would either search on everything or need its own intent classifier.
+This matters for a chat-shaped Q&A app specifically: "hi" or "what can you do?" shouldn't trigger a vector search, and a tool-calling agent gets that for free - a fixed retrieve-then-generate pipeline would either search on everything or need its own intent classifier.
 
 ## Chunking and Indexing
 
@@ -107,7 +107,7 @@ index = VectorStoreIndex.from_documents(
 )
 ```
 
-Each chunk's `start_char_idx` gets persisted in Chroma's metadata (via LlamaIndex's `_node_content`), which is what lets `get_chunk_order` reconstruct source-order chunk numbers after the fact — Chroma itself has no native concept of document order, so this is the small amount of bookkeeping needed to answer "which chunk of the document was this."
+Each chunk's `start_char_idx` gets persisted in Chroma's metadata (via LlamaIndex's `_node_content`), which is what lets `get_chunk_order` reconstruct source-order chunk numbers after the fact - Chroma itself has no native concept of document order, so this is the small amount of bookkeeping needed to answer "which chunk of the document was this."
 
 ## Running It
 
@@ -118,8 +118,8 @@ cp .env.example .env   # fill in AWS_REGION / credentials
 docker compose up --build
 ```
 
-- **backend** — `http://localhost:8000` (FastAPI + uvicorn), `app/data` on a named volume so uploads/index survive restarts
-- **frontend** — `http://localhost:5173` (nginx), pointed at the backend via `API_BASE_URL`
+- **backend** - `http://localhost:8000` (FastAPI + uvicorn), `app/data` on a named volume so uploads/index survive restarts
+- **frontend** - `http://localhost:5173` (nginx), pointed at the backend via `API_BASE_URL`
 
 ```bash
 curl -F "files=@/path/to/some.pdf" http://localhost:8000/documents/upload
@@ -128,11 +128,11 @@ curl -X POST http://localhost:8000/chat \
   -d '{"session_id": "test", "message": "What does this document say?"}'
 ```
 
-Kubernetes manifests (Kustomize, namespace `chat-qa`) mirror the same two-service shape for a cluster deployment, with one caveat worth flagging: the backend `Deployment` is pinned to `replicas: 1`, because Chroma's SQLite file on the PVC can't be shared across pods. That constraint disappears the moment the OpenSearch swap happens — it's a property of the local stand-in, not of the architecture.
+Kubernetes manifests (Kustomize, namespace `chat-qa`) mirror the same two-service shape for a cluster deployment, with one caveat worth flagging: the backend `Deployment` is pinned to `replicas: 1`, because Chroma's SQLite file on the PVC can't be shared across pods. That constraint disappears the moment the OpenSearch swap happens - it's a property of the local stand-in, not of the architecture.
 
 ## Lessons Learned
 
-- **Interface-first storage choices pay for themselves later.** Picking Chroma specifically because LlamaIndex's `VectorStore` abstraction covers it — rather than reaching for whatever's fastest to set up locally — is what keeps the AWS migration to one function body.
+- **Interface-first storage choices pay for themselves later.** Picking Chroma specifically because LlamaIndex's `VectorStore` abstraction covers it - rather than reaching for whatever's fastest to set up locally - is what keeps the AWS migration to one function body.
 - **Tool-calling retrieval beats a fixed RAG pipeline for chat.** Letting the model decide whether a question needs `search_documents` avoids both wasted vector searches on small talk and the need for a separate intent classifier.
 - **Bookkeeping chunk order costs little and buys real citations.** Sorting by `start_char_idx` to recover source-order chunk numbers is a small addition on top of Chroma's default (unordered) metadata, and it's the difference between citing "chunk 3 of report.pdf" and citing an opaque UUID.
 
