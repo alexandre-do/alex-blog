@@ -24,41 +24,279 @@ include-in-header:
 
 > **Source:** [{{< meta source-title >}}]({{< meta source-url >}}) — {{< meta source-author >}}
 
-## The problem with RNNs and CNNs
+## The attention mechanism
 
-Before this paper, sequence transduction models (translation, etc.) relied on recurrent networks (RNNs/LSTMs) or convolutions. Recurrence processes tokens one step at a time, which is inherently sequential — it can't be parallelized across the sequence length during training, and long-range dependencies degrade as the distance between tokens grows. Convolutional approaches parallelize better but still need many layers to relate distant positions.
+Each token is turned into three vectors by learned linear projections: a **query** (what I am looking for), a **key** (what I offer), and a **value** (what I would contribute).
 
-## The core idea: self-attention only
+Attention scores every token against every other token by dot product, normalizes the scores, and returns a weighted average of the values:
 
-The Transformer removes recurrence and convolution entirely and relies purely on **attention** to draw global dependencies between input and output. Each token attends directly to every other token in the sequence in a single step, so the number of operations needed to relate two positions is constant rather than growing with distance. This also makes training highly parallelizable, since there's no sequential dependency between positions.
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V
+$$
 
-### Scaled dot-product attention
+- $QK^\top$ produces an $n \times n$ matrix: "how relevant is token $j$ to token $i$".
+- $\sqrt{d_k}$ keeps dot products from growing large enough to saturate the softmax.
+- The softmax turns each row into weights summing to 1.
+- Multiplying by $V$ gives each token a new representation mixed from the whole sequence.
 
-For queries $Q$, keys $K$, and values $V$:
+**Multi-head attention** runs this $h$ times with different projections, so different heads can track different relations — syntax, coreference, position — then concatenates the results and projects back to $d_{\text{model}}$.
 
-$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
+### Why it is parallel
 
-The $\sqrt{d_k}$ scaling factor prevents dot products from growing too large in magnitude as dimensionality increases, which would otherwise push the softmax into regions with extremely small gradients.
+The key point is what each position depends on. In an RNN, $h_t = f(h_{t-1}, x_t)$: you cannot compute step 100 before step 99, so a sequence of length $n$ costs $n$ sequential steps.
 
-### Multi-head attention
+In attention, every output position depends only on the **input** representations of the layer, never on other output positions of the same layer. Therefore:
 
-Rather than computing a single attention function, the model projects $Q$, $K$, $V$ into multiple lower-dimensional subspaces ("heads") and runs attention in parallel across each, then concatenates the results. This lets the model jointly attend to information from different representation subspaces at different positions — one head might track syntactic relationships while another tracks something more semantic.
+- All queries, keys and values are computed in one matrix multiply.
+- All $n^2$ interaction scores are one matrix multiply.
+- The path length between any two tokens is $O(1)$ instead of $O(n)$, which also helps gradients flow over long distances.
+- Heads, and positions within a layer, are independent — ideal for GPUs, which are built for large dense matmuls.
 
-### Positional encoding
+Sequential depth is $O(1)$ per layer instead of $O(n)$. The cost is $O(n^2)$ work and memory in sequence length, which is the trade-off the field has been chipping at ever since (flash attention, sparse and linear variants).
 
-Since there's no recurrence or convolution, the model has no inherent notion of token order. The authors inject position information via sinusoidal positional encodings added to the input embeddings, chosen so the model can easily learn to attend by relative position (since $PE_{pos+k}$ can be expressed as a linear function of $PE_{pos}$).
+::: {.callout-important}
+## This parallelism is a training-time property
 
-## Architecture
+With a causal mask, a decoder processes an entire sequence at once because the correct previous tokens are already known. At generation time you still emit one token at a time — token $t+1$ cannot be computed before token $t$ exists. Inference is sequential; the KV cache avoids recomputing past keys and values, but it does not make decoding parallel.
+:::
 
-Encoder-decoder stack, each made of identical layers:
+## The architecture, component by component
 
-- **Encoder layer**: multi-head self-attention → feed-forward network, each with a residual connection and layer normalization.
-- **Decoder layer**: same, plus a masked self-attention (so a position can't attend to future positions) and a cross-attention layer over the encoder output.
+The original *Attention Is All You Need* diagram has two columns: **encoder** on the left, **decoder** on the right. Reading bottom to top.
 
-## Results
+![The Transformer model architecture (Vaswani et al., 2017)](images/The-Transformer-model-architecture.png){fig-alt="Diagram of the Transformer encoder-decoder architecture, showing stacked multi-head attention and feed-forward layers with residual connections and layer normalization."}
 
-Trained on WMT 2014 English-to-German and English-to-French translation tasks, the Transformer beat the best previously reported models (including ensembles) while requiring significantly less training compute — and importantly, this was measured in an era where compute cost for training was still relatively small compared to what came a few years later.
+### Inputs
 
-## Takeaway
+**Input / Output Embedding.** Each token ID becomes a learned vector of dimension $d_{\text{model}}$ (512 in the paper). A lookup table of size `vocab × d_model`.
 
-This paper is the architectural ancestor of essentially every modern LLM (GPT, BERT, etc.). The key shift wasn't just "attention helps" — attention mechanisms already existed as an add-on to RNNs — it was proving that attention *alone*, with no recurrence at all, is sufficient and actually superior once you account for parallelization. That parallelizability is arguably the more consequential half of the paper's legacy: it's what made it feasible to scale models to the sizes explored later (see [scaling laws](scaling-laws-llms.qmd)), since training no longer bottlenecks on sequential computation over the sequence length.
+**Output (shifted right).** The decoder receives the target sequence delayed by one position: it sees `<start>, y₁, y₂…` while predicting `y₁, y₂, y₃…`. This is what makes "predict the next token" well defined during training.
+
+**Positional Encoding (the ⊕ with the wave symbol).** Attention is a set operation — permuting the input permutes the output identically, so the model has no sense of order. A position-dependent vector (sine and cosine of different frequencies in the paper) is **added** to each embedding. The ⊕ is elementwise addition, not concatenation.
+
+### Encoder block (repeated $N$ times)
+
+**Multi-Head Attention.** The three arrows entering it are $Q$, $K$, $V$, all from the same source here — hence *self*-attention. Each token attends to every token in the input, in both directions, unmasked.
+
+**Add & Norm.** Two things:
+
+- *Add* is the residual connection, $x + \text{Sublayer}(x)$. It gives gradients a direct path back to early layers, so you can stack deeply.
+- *Norm* is layer normalization, normalizing across the feature dimension of each token independently. It stabilizes training.
+
+**Feed Forward.** A small MLP applied to each position **separately and identically**:
+
+$$
+\text{FFN}(x) = \max(0,\, xW_1 + b_1)W_2 + b_2
+$$
+
+expanding $512 \rightarrow 2048 \rightarrow 512$. Attention mixes information *across* tokens; the FFN does the per-token nonlinear processing. Roughly two thirds of the parameters live here.
+
+### Decoder block (repeated $N$ times)
+
+**Masked Multi-Head Attention.** Self-attention over what has been generated so far. The mask sets scores for future positions to $-\infty$ before the softmax, so position $i$ can only see positions $\le i$. Without it, the model would trivially cheat by reading the answer it is supposed to predict.
+
+**Multi-Head Attention (middle) — cross-attention.** The key structural detail in the diagram: **two arrows come from the encoder**, one from below.
+
+- $Q$ comes from the decoder — what the output being built needs.
+- $K$ and $V$ come from the encoder output — the full source sentence.
+
+This is where translation actually happens: the decoder queries the source. It is not masked, since the whole input is legitimately available.
+
+**Feed Forward + Add & Norm.** Same as the encoder.
+
+### Head
+
+**Linear** projects the final $d_{\text{model}}$ vector to vocabulary size, producing one logit per possible token. **Softmax** turns logits into a probability distribution over the next token.
+
+### The shape of the whole thing
+
+Each layer alternates the same two moves: *mix across positions* (attention), then *process each position* (FFN), each wrapped in residual and norm. The encoder sees everything at once; the decoder sees only the past of its own output, plus all of the input.
+
+::: {.callout-note}
+The diagram shows **post-norm** (normalization after the residual add). Nearly all modern implementations use **pre-norm** — normalization before the sublayer — because post-norm requires learning-rate warmup to train stably at depth.
+:::
+
+## How the model is trained
+
+### The objective
+
+Everything reduces to **next-token (or masked-token) prediction with cross-entropy**. For a target sequence $y$ of length $n$:
+
+$$
+\mathcal{L} = -\frac{1}{n}\sum_{i=1}^{n} \log P(y_i \mid y_{<i},\, x)
+$$
+
+$P$ is the softmax output at position $i$, and you read off the probability the model assigned to the token that actually came next. Minimizing this is identical to maximizing the likelihood of the training corpus. No task-specific labels are needed — the text is its own supervision.
+
+### One forward pass covers the whole sequence
+
+This is where the parallelism pays off. You feed the full target sequence in at once (**teacher forcing**), the causal mask keeps each position from seeing its own answer, and the head produces logits at *every* position simultaneously. One forward pass over a 1024-token sequence yields 1024 training signals; one backward pass updates on all of them.
+
+The consequence matters: the model is always conditioned on the **ground-truth** prefix during training, never on its own outputs. At generation time it conditions on what it itself produced. This gap is **exposure bias** — one early mistake puts the model in a context distribution it never trained on.
+
+### Two masks, not one
+
+- **Causal mask** — triangular, enforces "no peeking at the future". Part of the architecture.
+- **Padding mask** — sequences in a batch have different lengths; padded slots get $-\infty$ attention scores and are excluded from the loss. Bookkeeping, not semantics.
+
+### Mechanics that matter in practice
+
+| Concern | Standard choice |
+|---|---|
+| Optimizer | Adam ($\beta_2 \approx 0.98$ in the paper, 0.95 typical now), gradient clipping at 1.0 |
+| LR schedule | Linear **warmup**, then decay. Not optional — attention logits at initialization are unstable and a large first step diverges |
+| Regularization | Dropout 0.1 on sublayer outputs and embeddings; label smoothing 0.1 (hurts perplexity, helps BLEU — less confident, better calibrated) |
+| Weight tying | Input embedding and output Linear share one matrix, saving `vocab × d_model` parameters |
+| Batching | Batched by *token count*, not sentence count, so batches carry uniform compute |
+
+### Three pretraining objectives
+
+Which one you choose determines which half of the diagram you keep.
+
+**Causal LM** (GPT, Llama, Claude) — decoder only. Drop the encoder and the cross-attention block. Predict token $t+1$ from tokens $\le t$. Every token contributes a loss term, so it is the most sample-efficient, and it is the objective behind all modern generative models.
+
+**Masked LM** (BERT) — encoder only. Corrupt 15% of tokens with `[MASK]` and predict the originals using bidirectional context. Only masked positions produce loss, so it is roughly 7× less efficient per token, but each representation sees both directions — better for understanding tasks, and it cannot generate.
+
+**Denoising seq2seq** (T5, BART) — the full diagram as drawn. Corrupt spans of the input; the decoder reconstructs them.
+
+For assistant models, two stages stack on top: **SFT** (the same cross-entropy, on curated prompt→response pairs, with the loss usually masked to response tokens only) and **preference optimization** (RLHF or DPO, which optimizes a ranking of responses rather than likelihood).
+
+## How predictions are generated, per downstream task
+
+The dividing question: **does the output have variable length?** If yes, you loop. If no, one forward pass and you are done.
+
+### Translation and summarization (encoder–decoder)
+
+Autoregressive, with one efficiency detail specific to this architecture.
+
+1. Run the encoder **once** over the source. Its output is fixed for the whole generation.
+2. From that output, precompute $K$ and $V$ for the cross-attention layer **once** — they never change.
+3. Start the decoder with `<bos>`, take argmax (or beam) over the softmax, append, repeat.
+4. Stop at `<eos>` or a maximum length.
+
+**KV cache.** At step $t$, keys and values for positions $1 \ldots t-1$ were already computed. Cache them and compute only the new position. This turns decoding from $O(n^3)$ total to $O(n^2)$, and it is why the first token of a response is slow (prefill, parallel) while subsequent tokens are fast and evenly spaced (decode, sequential).
+
+**Beam search** is the usual decoding rule here: keep the $k$ highest-probability partial sequences rather than committing greedily, with a length penalty because raw sequence probability favours short outputs. For translation, where there is roughly one right answer, beam clearly beats sampling.
+
+### Open-ended generation and chat (decoder-only)
+
+The same autoregressive loop without an encoder — the prompt is simply the prefix, so prefill runs over it in parallel and decoding continues from there.
+
+The difference is the **decoding rule**. Beam search produces bland, repetitive text on open-ended tasks, because the most probable continuation is rarely the most interesting one. So you sample:
+
+- **Temperature** $T$ — divide logits by $T$ before the softmax. $T<1$ sharpens, $T>1$ flattens, $T \to 0$ is greedy.
+- **Top-k** — sample only from the $k$ most likely tokens.
+- **Top-p (nucleus)** — sample from the smallest set whose cumulative probability exceeds $p$. Adaptive: narrow where the model is confident, wide where it is not. The common default.
+- **Repetition and frequency penalties** — downweight tokens already produced.
+
+For structured output (JSON, a grammar, a required schema), **constrained decoding** masks out any token that would break the grammar before sampling, making malformed output impossible rather than merely unlikely.
+
+### Sequence classification (sentiment, NLI, spam)
+
+**No generation at all.** Take the encoder output, pool it into one vector (BERT uses the `[CLS]` position; mean-pooling also works), feed a small classification head, softmax over *labels* rather than vocabulary, take argmax.
+
+One forward pass, one output, fully parallel. The Linear + Softmax at the top of the diagram is replaced by a head of size = number of classes.
+
+### Token classification (NER, POS tagging)
+
+The same single forward pass, but the head applies at **every position** — one label per token. Because the outputs are independent given the representations, they are all computed at once.
+
+Optional refinement: a CRF layer or BIO-constraint decoding on top, so the model cannot emit an illegal sequence such as `I-PER` without a preceding `B-PER`.
+
+### Extractive QA (SQuAD-style)
+
+Encode `[CLS] question [SEP] passage`. Two heads produce a **start logit** and an **end logit** per token. Softmax each over the passage, then choose the span maximizing $P(\text{start}=i)\cdot P(\text{end}=j)$ subject to $i \le j$ and a maximum span length.
+
+Still one forward pass — the answer is located, not generated.
+
+### Embeddings, retrieval, semantic search
+
+Run the encoder, pool to a single vector, **and stop**. The head is discarded entirely; the representation *is* the output. Similarity is cosine distance between vectors, and search is an approximate-nearest-neighbour lookup over a precomputed index. Generation never enters the picture.
+
+### Text-to-text framing (T5, and modern LLMs generally)
+
+The modern alternative to the four cases above: cast every task as generation. "Classify sentiment: *the film was fine*" → the model literally generates the word `positive`. You lose the efficiency of a single forward pass and gain the ability to do every task with one set of weights and no task-specific head — which is what makes zero-shot and in-context learning possible.
+
+## Summary
+
+| Task | Passes | Output space | Decoding |
+|---|---|---|---|
+| Translation | 1 encode + $n$ decode | vocabulary | beam search |
+| Chat / generation | prefill + $n$ decode | vocabulary | top-p sampling |
+| Classification | 1 | label set | argmax |
+| NER | 1 | label set × $n$ | argmax (+ CRF) |
+| Extractive QA | 1 | span indices | constrained argmax |
+| Embeddings | 1 | $\mathbb{R}^d$ | none |
+
+Training is always parallel. Inference is parallel only when the output length is fixed in advance — which is exactly why classification is cheap and chat is not.
+
+## Case study: French e-mail classification with CamemBERT and FlauBERT
+
+A concrete application of everything above: a deep-learning model that routes incoming French e-mails into categories. The design decisions follow almost mechanically from the architecture.
+
+### Why an encoder, and only an encoder
+
+E-mail classification is exactly case C from the previous section: fixed-size output, variable-size input, no generation. So the right half of the diagram — decoder, masked self-attention, cross-attention, autoregressive loop — is pure dead weight.
+
+What the task needs is the **best possible representation of the whole message**, and for that, bidirectionality is not a luxury. In *"votre virement n'a **pas** été validé"*, the meaning of `validé` depends on a token to its left; in *"merci de valider la **facture** ci-jointe"*, on a token to its right. A causal model sees only the left context at each position. An MLM-pretrained encoder sees both, which is why BERT-family models dominate classification benchmarks despite being far smaller than generative models.
+
+Practical consequence: one forward pass per e-mail, `[CLS]` pooled into a softmax over categories. Cheap enough to run in-line on an incoming mail stream, which a generative model would not be.
+
+### Why a pretrained transformer rather than TF-IDF + SVM
+
+The classical baseline is genuinely strong on e-mail and deserves to be the reference point. The transformer wins for reasons specific to this data:
+
+- **Labelled data is scarce, unlabelled French text is not.** The whole value of transfer learning is that the expensive part — learning French — was already paid for. Fine-tuning on a few thousand labelled e-mails works; training from scratch on them does not.
+- **Subword tokenization absorbs noise.** E-mails contain typos, missing accents (`reglement` for `règlement`), agglutinations, product codes and proper nouns. A bag-of-words model treats `règlement`, `reglement` and `Règlements` as three unrelated features. SentencePiece or BPE decomposes all three into overlapping subwords, so they share representation.
+- **Context disambiguates polysemy.** `compte` in *"clôturer mon compte"* versus *"compte tenu du retard"* is one feature for TF-IDF and two different vectors for a transformer.
+- **Word order carries the intent.** *"je n'ai pas reçu le remboursement"* and *"j'ai reçu le remboursement"* have nearly identical bags of words and opposite routing.
+
+### Why French-specific rather than multilingual BERT
+
+This is the decision the two model choices actually encode. mBERT covers 104 languages with a single shared 110k-token vocabulary; CamemBERT and FlauBERT each spend a ~32k–50k vocabulary entirely on French. Two consequences:
+
+**Tokenization fertility.** A multilingual vocabulary allocates few subwords to French, so French words fragment more — a word costing 1–2 tokens for a monolingual model may cost 4–5 for mBERT. More tokens per word means a shorter effective context inside the 512-token budget, and representations spread thinly across fragments that carry no meaning individually.
+
+**Pretraining volume actually spent on French.** mBERT's French share is a slice of its corpus; CamemBERT and FlauBERT saw only French, including its morphology — elision (`l'accusé`), clitics (`puis-je`), rich verb inflection — and register variation. Both papers report clear gains over mBERT on French tasks, which is the empirical justification for the choice.
+
+For a business-French corpus full of domain vocabulary, administrative formulas and named entities, that gap widens rather than narrows.
+
+### What distinguishes the two models
+
+They are not two names for the same thing, and the differences are exactly what makes using both informative.
+
+| | CamemBERT | FlauBERT |
+|---|---|---|
+| Base architecture | RoBERTa | BERT |
+| Pretraining corpus | OSCAR — large-scale web crawl (~138 GB) | Curated, heterogeneous (~71 GB): Wikipedia, books, news, Common Crawl, WMT |
+| Tokenizer | SentencePiece | fastBPE |
+| Masking | Dynamic, whole-word masking | Standard MLM |
+| Next-sentence prediction | Dropped (RoBERTa recipe) | Dropped |
+| Released alongside | — | FLUE, a French evaluation benchmark |
+
+CamemBERT follows the RoBERTa recipe: more data, dynamic masking, no NSP. Its corpus is web-crawled, so it is broad and closer to informal written French. FlauBERT's corpus is deliberately curated and more editorial in register.
+
+One finding from the CamemBERT paper is worth keeping in mind for any replication: performance saturated surprisingly early — a ~4 GB well-filtered subset performed close to the full 138 GB. Corpus *quality and diversity* mattered more than raw size.
+
+### Why evaluate both rather than pick one upfront
+
+Three defensible reasons, in increasing order of strength:
+
+1. **No reliable prior.** Published rankings on FLUE tasks do not transfer cleanly to a private e-mail corpus with its own label set and class distribution. Which model wins is an empirical question about *your* data, and running both is the cheapest way to answer it.
+2. **Different pretraining, different failure modes.** Different corpora and different tokenizers mean the two models fragment and represent the same rare token differently — a product code or an internal acronym may be well handled by one and shredded by the other. Errors are therefore only partially correlated.
+3. **Decorrelated errors make ensembling pay.** Averaging the two softmax distributions, or a simple soft vote, typically buys a point or two of macro-F1 over the better single model — which is the standard reason to keep two architectures rather than two seeds of one.
+
+It also makes the result defensible: reporting a single model invites "did you try the other one?", and the comparison is itself a finding.
+
+### What e-mail forces you to handle
+
+The architecture constrains the preprocessing:
+
+- **The 512-token limit.** Long threads exceed it. Truncation is unavoidable, and *where* you truncate matters: a head+tail strategy (first ~128 and last ~382 tokens) usually beats head-only, because both the subject line and the most recent message carry the signal.
+- **Quoted history and signatures.** Reply chains duplicate old content. Stripping quoted blocks, disclaimers and signatures before tokenizing frees budget for the part of the message that is actually new.
+- **Class imbalance.** Routing categories are rarely balanced. Class-weighted cross-entropy, and **macro-F1 rather than accuracy** as the selection metric, or a majority class quietly dominates.
+- **Fine-tuning stability.** Small labelled sets plus large pretrained encoders are prone to degenerate runs — low learning rate ($2\text{–}5 \times 10^{-5}$), warmup, few epochs, and several seeds with the mean reported.
+
+### Honest limits of the choice
+
+Both models cap at 512 tokens, so genuinely long documents need chunking with aggregation, or a long-context architecture. Both are French-only, so multilingual mail needs language detection and a routing layer. And the classical baseline should still be run: if TF-IDF + linear SVM lands within a point of the transformer on an easy label set, the inference cost of the transformer may not be worth paying. The baseline is what makes the transformer result meaningful.
