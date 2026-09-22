@@ -54,7 +54,7 @@ app.include_router(GraphQLRouter(schema), prefix="/graphql")
 
 ## WebSocket
 
-A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.
+A persistent, bidirectional connection - the right tool when the server needs to push data without the client asking first.
 
 ```python
 from fastapi import WebSocket
@@ -69,8 +69,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
 ## When to Use Which
 
-- **REST** — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.
-- **GraphQL** — nested or variable data shapes, multiple client types (web/mobile) with different needs.
-- **WebSocket** — real-time features like chat, live dashboards, or notifications.
+- **REST** - public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.
+- **GraphQL** - nested or variable data shapes, multiple client types (web/mobile) with different needs.
+- **WebSocket** - real-time features like chat, live dashboards, or notifications.
 
-They're not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it's common to mix them depending on the feature.
+They're not mutually exclusive - a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it's common to mix them depending on the feature.

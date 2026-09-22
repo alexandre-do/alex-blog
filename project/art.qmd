@@ -1,6 +1,6 @@
 ---
 title: "Artwork"
-description: "Oil paintings and watercolors — a creative outlet outside of code."
+description: "Oil paintings and watercolors - a creative outlet outside of code."
 lightbox:
   match: auto
   effect: fade
@@ -15,7 +15,7 @@ include-in-header:
 
 # Artwork
 
-Outside of machine learning and data, I paint and draw as a way to unplug and recharge. This page is a growing gallery of my work — click on any piece to view it in full size.
+Outside of machine learning and data, I paint and draw as a way to unplug and recharge. This page is a growing gallery of my work - click on any piece to view it in full size.
 
 ## Oil Paintings
 

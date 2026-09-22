@@ -1,0 +1,604 @@
+---
+title: "The Transformer Pipeline, Shape by Shape"
+date: "2023-04-01"
+description: "Tracing the tensor shapes through an encoder classification pipeline and a decoder generation pipeline, step by step, with a runnable NumPy tracer."
+categories:
+    - LLM
+    - Architecture
+---
+
+# The Transformer Pipeline, Shape by Shape
+
+The fastest way to understand a transformer is to stop thinking about meaning for a moment and just follow the **tensor shapes**. Every architectural decision becomes obvious once you see where a dimension appears, where it survives, and where it collapses.
+
+This post traces two pipelines end to end:
+
+1. **Encoder to `[CLS]` to fixed class.** Input length varies, output size is fixed. One forward pass.
+2. **Decoder, autoregressive loop.** Input length varies, output length also varies. One forward pass *per generated token*.
+
+Every shape below was produced by a runnable NumPy script, included at the end.
+
+## Notation
+
+| Symbol | Value | Meaning |
+|---|---|---|
+| $d_{\text{model}}$ | 768 | width of the residual stream |
+| $H$ | 12 | attention heads |
+| $d_{\text{head}}$ | 64 | $d_{\text{model}} / H$ |
+| $d_{\text{ff}}$ | 3072 | FFN inner width, $4 \times d_{\text{model}}$ |
+| $L$ | 12 | stacked layers |
+| $V$ | 32 000 | vocabulary size |
+| $n$ | varies | tokens in this particular input |
+| $C$ | 5 | output classes (case 1 only) |
+
+These are BERT-base / GPT-2-small numbers. The batch dimension is omitted throughout for readability; see [the batch dimension section below](#sec-batch).
+
+---
+
+## Case 1: Encoder to a fixed class {#sec-case1}
+
+**Task:** route a French e-mail into one of 5 categories.
+**Input:** `"Votre facture est en retard"`
+**Output:** one label.
+
+### Step 0: Text to tokens
+
+The tokenizer splits into subwords and adds the two special tokens.
+
+```
+"Votre facture est en retard"
+        ↓
+[CLS]  votre  fact  ##ure  est  en  retard  [SEP]
+  0      1      2     3     4    5     6       7
+```
+
+| | shape | note |
+|---|---|---|
+| token ids | `(8,)` | 8 integers, each < 32000 |
+
+Note `facture` became two tokens, `fact` + `##ure`. This is subword tokenization doing its job: an unseen word never becomes `[UNK]`, it becomes pieces.
+
+`[CLS]` is a deliberately meaningless token prepended to **every** input. Its purpose is explained in [Why `[CLS]` works](#sec-cls) below.
+
+### Step 1: Embedding lookup
+
+```
+ids (8,)  ──►  E[ids]  ──►  (8, 768)
+                 ▲
+        E is (32000, 768), a stored parameter
+```
+
+| | shape | note |
+|---|---|---|
+| embedding table `E` | `(32000, 768)` | a **parameter**, always in memory |
+| after lookup | `(8, 768)` | an **activation**, exists only for this input |
+
+This is a pure row-selection: row `i` of the output is row `ids[i]` of the table. No computation.
+
+::: {.callout-warning}
+## These vectors are still context-free
+At this point `retard` has the exact same vector it would have in any other sentence. Nothing has been contextualized yet.
+:::
+
+### Step 2: Add positional encoding
+
+```
+(8, 768)  +  (8, 768)  =  (8, 768)
+ content     position
+```
+
+Elementwise **addition**, not concatenation - the dimension does not grow. Without it the model is permutation-invariant and *"le client paie le fournisseur"* is identical to *"le fournisseur paie le client"*.
+
+### Step 3: One encoder layer, in detail
+
+This is the interesting part. Follow the shapes carefully.
+
+#### 3a. Project to Q, K, V
+
+```
+X (8,768) ──┬── @ Wq (768,768) ──► Q (8,768)
+            ├── @ Wk (768,768) ──► K (8,768)
+            └── @ Wv (768,768) ──► V (8,768)
+```
+
+All three come from the **same** source - that is what makes it *self*-attention.
+
+#### 3b. Split into heads
+
+```
+(8, 768)  ──reshape──►  (8, 12, 64)  ──transpose──►  (12, 8, 64)
+                                                       ▲   ▲   ▲
+                                                     heads │  dims per head
+                                                         tokens
+```
+
+Nothing is computed here - 768 numbers are simply *re-labelled* as 12 groups of 64. Each head will now attend independently over the same 8 tokens, using a different 64-dimensional slice.
+
+#### 3c. Attention scores
+
+$$
+\text{scores} = \frac{QK^\top}{\sqrt{64}}
+$$
+
+```
+Q (12, 8, 64)  @  Kᵀ (12, 64, 8)  ──►  scores (12, 8, 8)
+                                                  ▲  ▲
+                                            queries  keys
+```
+
+| | shape | note |
+|---|---|---|
+| scores | `(12, 8, 8)` | **square** - 8 tokens attending to 8 tokens |
+
+This `8 × 8` square is the heart of the encoder. Row *i*, column *j* = "how much should token *i* look at token *j*". **No mask**: every token sees every token, in both directions. This is why `retard` can inform `facture`, and vice versa.
+
+The $\sqrt{64}$ divisor exists because dot products of 64-dimensional vectors grow with dimension; without it the softmax saturates and gradients vanish.
+
+#### 3d. Weighted sum of values
+
+```
+softmax(scores) (12, 8, 8)  @  V (12, 8, 64)  ──►  (12, 8, 64)
+```
+
+Each token's new vector is a weighted average of all 8 value vectors.
+
+#### 3e. Merge heads and project
+
+```
+(12, 8, 64)  ──transpose+reshape──►  (8, 768)  ──@ Wo (768,768)──►  (8, 768)
+```
+
+`Wo` lets the 12 heads' outputs mix; without it they would stay in 12 isolated 64-dim silos.
+
+#### 3f. Add & Norm
+
+```python
+x = LayerNorm(x + attention_output)
+```
+
+| | shape |
+|---|---|
+| input to the sublayer | `(8, 768)` |
+| output of the sublayer | `(8, 768)` |
+| after adding | `(8, 768)` |
+
+The **residual add** means the layer learns a *correction* to the running vector rather than replacing it. The **LayerNorm** normalizes each token's 768 features to mean 0 / variance 1, keeping magnitudes stable as additions accumulate across 12 layers.
+
+#### 3g. Feed forward
+
+```
+(8, 768)  ──@ W1 (768,3072)──►  (8, 3072)  ──GeLU──►  (8, 3072)  ──@ W2 (3072,768)──►  (8, 768)
+```
+
+| | shape | note |
+|---|---|---|
+| after expand | `(8, 3072)` | the only place the width changes inside a layer |
+| after contract | `(8, 768)` | restored |
+
+Applied to each of the 8 rows **independently and with the same weights**. Shuffle the tokens and the outputs shuffle identically - the FFN mixes nothing across positions. That is attention's job; this is the per-token nonlinear thinking step.
+
+#### 3h. Add & Norm again
+
+Back to `(8, 768)`.
+
+### Step 4: Repeat 12 times
+
+```
+(8,768) → layer 1 → (8,768) → layer 2 → (8,768) → … → layer 12 → (8,768)
+```
+
+::: {.callout-important}
+## The shape never changes inside the stack
+From step 2 to the end of layer 12, the tensor is `(8, 768)`. Twelve layers, 85 million parameters, and the shape is identical at entry and exit. **Only the values change.**
+
+This is the whole idea of the *residual stream*: one fixed-size notebook per token that every layer reads from and adds to. It is also why you can stack 12, 48 or 96 layers without redesigning anything.
+:::
+
+### Step 5: Collapse to a class
+
+Now, finally, the shape changes.
+
+```
+(8, 768)  ──take row 0──►  (768,)  ──@ Wc (768,5)──►  (5,)  ──softmax──►  (5,)  ──argmax──►  scalar
+```
+
+| step | shape | note |
+|---|---|---|
+| encoder output | `(8, 768)` | 6144 numbers |
+| `[CLS]` row | `(768,)` | the pooled summary |
+| classifier head | `(5,)` | 5 logits |
+| softmax | `(5,)` | probabilities, sum = 1 |
+| argmax | scalar | the predicted category |
+
+**6144 numbers in, 5 numbers out.** Classification is a funnel, and the entire funnel is that last tiny `768 × 5` matrix: 3840 parameters sitting on top of 110 million.
+
+### Why `[CLS]` works {#sec-cls}
+
+This confuses nearly everyone, so it is worth isolating.
+
+| | `[CLS]` at the **input** | `[CLS]` at the **output** |
+|---|---|---|
+| Where | bottom, after the lookup | top, after 12 layers |
+| Value | one fixed row of `E` | depends on the entire e-mail |
+| Across two different e-mails | **identical** | **completely different** |
+
+`[CLS]` starts as a blank slot carrying no information. But in every layer it attends over all 8 positions, so after 12 layers it has absorbed the whole message. It is a designated scratch space that the model is trained to fill with a sentence-level summary.
+
+Mean-pooling all 8 output rows works too, and is sometimes better, especially for sentence embeddings, where `[CLS]` without fine-tuning is known to be a weak representation.
+
+### The batch dimension {#sec-batch}
+
+Real code adds a leading axis and pads to a common length:
+
+| | traced above | real code |
+|---|---|---|
+| ids | `(8,)` | `(32, 128)` |
+| encoder output | `(8, 768)` | `(32, 128, 768)` |
+| attention scores | `(12, 8, 8)` | `(32, 12, 128, 128)` |
+| logits | `(5,)` | `(32, 5)` |
+
+An **attention mask** `(32, 128)` marks which positions are padding; their scores are set to $-\infty$ so they contribute nothing.
+
+Note that `(32, 12, 128, 128)` score tensor: it grows **quadratically** in sequence length. At 512 tokens it is 16x larger than at 128. That single tensor is why long context is expensive and why the 512-token limit exists in BERT-family models.
+
+### Case 1 at a glance
+
+```
+"Votre facture est en retard"
+            │
+            ▼  tokenize
+        (8,)                    ← length varies per e-mail
+            │
+            ▼  embed + position
+        (8, 768)
+            │
+            ▼  12 × [attn → add&norm → ffn → add&norm]
+        (8, 768)                ← shape unchanged
+            │
+            ▼  row 0
+        (768,)                  ← length is gone
+            │
+            ▼  linear + softmax
+        (5,)                    ← fixed, whatever the input length
+            │
+            ▼  argmax
+        "facturation"
+```
+
+**One forward pass. Fully parallel. Done.**
+
+---
+
+## Case 2: Decoder, variable-length generation {#sec-case2}
+
+**Task:** summarize, or answer in a chat.
+**Prompt:** `"Résume : le client signale un retard."` → 8 tokens.
+**Output:** unknown length, decided by the model.
+
+The architecture is nearly the same. The difference is that you cannot do it in one pass, because **the input to step *t*+1 includes the output of step *t***.
+
+### Phase A: Prefill
+
+All 8 prompt tokens go through in **one pass**, exactly like the encoder, with two differences.
+
+#### A1-A2. Embed
+
+| | shape |
+|---|---|
+| prompt ids | `(8,)` |
+| after embedding + position | `(8, 768)` |
+
+#### A3. The causal mask (difference #1)
+
+```
+        k=0   k=1   k=2   k=3  ...
+q=0  [   0   -inf  -inf  -inf ]
+q=1  [   0     0   -inf  -inf ]
+q=2  [   0     0     0   -inf ]
+q=3  [   0     0     0     0  ]
+```
+
+| | shape |
+|---|---|
+| mask | `(8, 8)` |
+| masked scores | `(12, 8, 8)` |
+
+Added to the scores **before** the softmax, so $-\infty$ becomes probability 0. Token 3 cannot see tokens 4-7. Without this, predicting the next token would be trivial - the answer is sitting right there in the input.
+
+#### A4. Stack of 12 layers
+
+Identical to the encoder: `(8, 768)` throughout.
+
+#### A5. Take the **last** row (difference #2)
+
+```
+(8, 768)  ──take row 7──►  (768,)
+```
+
+The encoder used row **0**. The decoder uses row **-1**, because that is the position whose job is to predict what comes *next*. The other 7 rows are computed and thrown away at inference time.
+
+::: {.callout-note}
+During **training** those 7 rows are not wasted at all - each one predicts its own next token, so a single pass over 8 tokens yields 8 training signals. That is what makes pretraining efficient, and it is the same computation.
+:::
+
+#### A6. The LM head
+
+```
+(768,)  ──@ W_lm (768, 32000)──►  (32000,)  ──softmax──►  (32000,)
+```
+
+| | shape | note |
+|---|---|---|
+| logits | `(32000,)` | one score per vocabulary entry |
+| probabilities | `(32000,)` | sums to 1 |
+| sampled token | scalar | one integer |
+
+Compare with case 1: the head is `768 × 5` there and `768 × 32000` here. Same operation, output space four thousand times larger. The LM head alone is ~24M parameters.
+
+#### A7. Save the KV cache
+
+Every layer stores the K and V it just computed:
+
+| | shape | note |
+|---|---|---|
+| `cache_k[layer]` | `(8, 768)` | one entry per layer |
+| `cache_v[layer]` | `(8, 768)` | |
+| total | 12 layers × 2 × `(8, 768)` | ≈ 150k floats |
+
+### Phase B: Decode, one token at a time
+
+Now the loop. Each iteration processes **one** token.
+
+#### B1. Embed just the new token
+
+| | shape | note |
+|---|---|---|
+| new token embedded | `(1, 768)` | **one row**, not 8 |
+
+#### B2. Attention against the cache
+
+```
+Q from the new token only:   (12, 1, 64)
+K from the cache + new K:    (12, 9, 64)
+                    ──────────────────
+scores:                      (12, 1, 9)
+```
+
+| | shape | note |
+|---|---|---|
+| scores | `(12, 1, 9)` | **rectangular**: 1 query, 9 keys |
+
+This is the payoff. In prefill the score matrix was `8 × 8`; here it is `1 × 9`. You compute **one row** instead of recomputing the whole square, because the previous 8 rows have not changed and are sitting in the cache.
+
+No mask is needed - the new token is the last position, so everything it can see is legitimately in the past.
+
+#### B3. Repeat
+
+Verified output from the script:
+
+```
+step 1: query rows=1   cached keys= 9   scores=1x9    -> token
+step 2: query rows=1   cached keys=10   scores=1x10   -> token
+step 3: query rows=1   cached keys=11   scores=1x11   -> token
+step 4: query rows=1   cached keys=12   scores=1x12   -> token
+```
+
+The query dimension stays at **1** forever. The key dimension grows by one each step. The cache grows by `(1, 768)` per layer per step.
+
+#### B4. Stop
+
+The loop ends when the model emits `<eos>`, or a maximum length is reached. The output length was never specified in advance - the model chose it.
+
+### With and without the cache
+
+| | no cache | with cache |
+|---|---|---|
+| Input per step | `(n, 768)`, everything | `(1, 768)`, new token only |
+| Score matrix | `(12, n, n)` | `(12, 1, n)` |
+| Work per step | $O(n^2)$ | $O(n)$ |
+| Work for $n$ tokens | $O(n^3)$ | $O(n^2)$ |
+| Memory | - | grows linearly with $n$ |
+
+Without a cache you would recompute the entire prefix from scratch at every step - the same keys and values, again and again, for identical inputs. The cache trades memory for that redundant compute, and for long contexts it becomes the dominant memory cost of serving a model.
+
+This is also the direct explanation for what you *feel* when using a chat model: a pause before the first token (prefill, one big parallel pass over the prompt) and then a steady stream (decode, one small sequential pass per token).
+
+### From logits to a token
+
+The `(32000,)` vector is a distribution, and how you collapse it is a real choice:
+
+| Method | Operation | Use |
+|---|---|---|
+| Greedy | `argmax` | deterministic, repetitive |
+| Temperature | `softmax(logits / T)` | `T<1` sharper, `T>1` flatter |
+| Top-k | keep $k$ best, renormalize | bounded randomness |
+| Top-p | keep smallest set with cumulative prob > $p$ | adaptive; the usual default |
+| Beam search | track $k$ best sequences | translation, not chat |
+
+All of them operate on that same `(32000,)` vector. None of them touch the network.
+
+### Case 2 at a glance
+
+```
+"Résume : le client signale un retard."
+            │
+            ▼  tokenize, embed
+        (8, 768)
+            │
+   ┌────────┴──────── PREFILL: one parallel pass ────────┐
+            ▼  12 layers, causal mask
+        (8, 768)  ──► cache K,V: 12 × 2 × (8,768)
+            │
+            ▼  LAST row only
+        (768,) ──► (32000,) ──► sample ──► token #1
+            │
+   └────────┬──────── DECODE: loop, 1 token per pass ────┘
+            ▼
+        (1, 768) ──► scores (12,1,9)  ──► (32000,) ──► token #2
+        (1, 768) ──► scores (12,1,10) ──► (32000,) ──► token #3
+        (1, 768) ──► scores (12,1,11) ──► (32000,) ──► token #4
+            ⋮                                            ⋮
+                                                      <eos>
+```
+
+---
+
+## The two side by side
+
+| | Case 1: classification | Case 2: generation |
+|---|---|---|
+| Half of the diagram | encoder (left) | decoder (right) |
+| Mask | none, bidirectional | causal, triangular |
+| Which output row | row **0** (`[CLS]`) | row **-1** (last) |
+| Head | `768 × 5` | `768 × 32000` |
+| Output shape | `(5,)` | `(32000,)` per step |
+| Forward passes | **1** | 1 prefill + 1 per token |
+| Output length | fixed | model decides |
+| Score matrix | `(12, n, n)` square | `(12, 1, n)` rectangular after prefill |
+| Cache | none needed | K,V per layer, grows each step |
+| Pretraining | MLM (bidirectional) | causal LM |
+| Example models | BERT, CamemBERT, FlauBERT | GPT, Llama, Claude |
+
+**The structural insight:** the layers are the same. The attention formula is the same. What differs is the mask, which row you read, and how big the output matrix is. Everything else is identical machinery.
+
+---
+
+## Three shape confusions worth naming
+
+**"The embedding is the output."** No. The embedding table `(32000, 768)` is a parameter and is context-free - `retard` always gets the same row. The encoder output `(8, 768)` is an activation, recomputed for every input, and depends on the whole sentence. The transformation between them is the entire value of a pretrained model.
+
+**"The FFN changes the dimension."** It goes `768 → 3072 → 768`. The width is restored before the layer ends. The residual stream is 768-wide everywhere.
+
+**"Multi-head attention makes the tensor bigger."** `(8, 768)` → `(12, 8, 64)` is a reshape, and $12 \times 64 = 768$. The same numbers, regrouped.
+
+---
+
+## Appendix: the runnable tracer {#sec-code}
+
+The script below produced every shape in this post. It is pure NumPy with random weights: nothing is trained, and the outputs are meaningless, but the shapes are exactly those of a real BERT-base or GPT-2-small forward pass.
+
+```{.python filename="trace_shapes.py"}
+import numpy as np
+
+D_MODEL, N_HEADS, N_LAYERS = 768, 12, 12
+D_HEAD, D_FF = D_MODEL // N_HEADS, 4 * D_MODEL
+VOCAB, N_CLASSES = 32000, 5
+
+def softmax(x, axis=-1):
+    x = x - x.max(axis=axis, keepdims=True)
+    e = np.exp(x); return e / e.sum(axis=axis, keepdims=True)
+
+def layer_norm(x):
+    return (x - x.mean(-1, keepdims=True)) / (x.std(-1, keepdims=True) + 1e-5)
+
+def split_heads(x):     # (n, 768) -> (12, n, 64)
+    return x.reshape(x.shape[0], N_HEADS, D_HEAD).transpose(1, 0, 2)
+
+def merge_heads(x):     # (12, n, 64) -> (n, 768)
+    return x.transpose(1, 0, 2).reshape(x.shape[1], D_MODEL)
+
+# ---- CASE 1: encoder -> [CLS] -> class -------------------------------
+x = E[ids] + positions                       # (8, 768)
+for layer in range(N_LAYERS):
+    h = layer_norm(x)
+    q, k, v = h @ Wq[layer], h @ Wk[layer], h @ Wv[layer]
+    s = split_heads(q) @ split_heads(k).transpose(0, 2, 1) / np.sqrt(D_HEAD)
+    a = softmax(s)                           # (12, 8, 8)  square, unmasked
+    x = x + merge_heads(a @ split_heads(v)) @ Wo[layer]
+    x = x + np.maximum(0, x @ W1[layer]) @ W2[layer]
+    x = layer_norm(x)                        # (8, 768) every iteration
+probs = softmax(x[0] @ Wc)                   # row 0 -> (5,)
+
+# ---- CASE 2: decoder, prefill then decode ----------------------------
+x = E[prompt_ids] + positions                # (8, 768)
+mask = np.triu(np.full((n_p, n_p), -1e9), 1)
+for layer in range(N_LAYERS):
+    h = layer_norm(x)
+    q, k, v = h @ Wq[layer], h @ Wk[layer], h @ Wv[layer]
+    cache_k.append(k); cache_v.append(v)     # <-- the cache
+    s = split_heads(q) @ split_heads(k).transpose(0, 2, 1) / np.sqrt(D_HEAD)
+    a = softmax(s + mask)                    # (12, 8, 8)  square, MASKED
+    x = x + merge_heads(a @ split_heads(v)) @ Wo[layer]
+    x = x + np.maximum(0, x @ W1[layer]) @ W2[layer]
+    x = layer_norm(x)
+nxt = softmax(x[-1] @ Wlm).argmax()          # LAST row -> (32000,)
+
+while nxt != EOS:
+    x = E[nxt][None, :] + position           # (1, 768)  ONE row
+    for layer in range(N_LAYERS):
+        h = layer_norm(x)
+        q = h @ Wq[layer]
+        cache_k[layer] = np.vstack([cache_k[layer], h @ Wk[layer]])
+        cache_v[layer] = np.vstack([cache_v[layer], h @ Wv[layer]])
+        s = (split_heads(q) @ split_heads(cache_k[layer]).transpose(0, 2, 1)
+             / np.sqrt(D_HEAD))
+        a = softmax(s)                       # (12, 1, n)  RECTANGULAR
+        x = x + merge_heads(a @ split_heads(cache_v[layer])) @ Wo[layer]
+        x = x + np.maximum(0, x @ W1[layer]) @ W2[layer]
+        x = layer_norm(x)
+    nxt = softmax(x[0] @ Wlm).argmax()
+```
+
+The two loops differ in exactly three lines: the mask, which row feeds the head, and whether K/V come from the current input or from a growing cache.
+
+### Verified output
+
+```
+========================================================================
+CASE 1  encoder -> [CLS] -> fixed class
+========================================================================
+
+STAGE 0-2  text -> ids -> vectors
+  token ids                              (           8)  8 tokens
+  after embedding lookup                 (       8x768)  row i = E[ids[i]]
+  after + positional encoding            (       8x768)  ADDED, not concatenated
+
+STAGE 3  inside encoder layer 1
+  Q = X @ Wq                             (       8x768)  all three from the SAME source
+  Q split into heads                     (     12x8x64)  12 heads x 64 dims
+  scores = Q @ K^T / sqrt(d)             (      12x8x8)  SQUARE: n x n, unmasked
+  attn @ V                               (     12x8x64)  per head
+  merged heads @ Wo                      (       8x768)  back to d_model
+  after Add & Norm                       (       8x768)  SAME shape as the input
+  FFN expand + ReLU                      (      8x3072)  768 -> 3072
+  FFN contract + Add & Norm              (       8x768)  3072 -> 768, shape restored
+
+STAGE 4  remaining layers
+  after all 12 layers                    (       8x768)  shape NEVER changed
+
+STAGE 5  collapse to a class
+  row 0 = [CLS] vector                   (         768)  the sentence summary
+  classification head                    (           5)  768 -> 5 classes
+  softmax                                (           5)  sums to 1.0000
+  argmax                                 (      scalar)  class 1
+
+  8 x 768 = 6144 numbers in  ->  5 numbers out
+
+========================================================================
+CASE 2  decoder -> autoregressive generation
+========================================================================
+
+PHASE A  PREFILL - all 8 prompt tokens in ONE pass
+  prompt ids                             (           8)  8 tokens
+  embedded + positions                   (       8x768)
+  causal mask                            (         8x8)  upper triangle = -inf
+  masked scores, layer 1                 (      12x8x8)  SQUARE: 8 queries x 8 keys
+  after 12 layers                        (       8x768)  one vector per prompt token
+  LAST row only                          (         768)  the other 7 are discarded
+  LM head                                (       32000)  768 -> 32000, one logit per word
+  sample / argmax                        (      scalar)  token 10108
+  cache now holds K,V for 8 positions, in each of 12 layers
+
+PHASE B  DECODE - one token per pass, reusing the cache
+  new token embedded                     (       1x768)  ONE row, not 8
+  scores, layer 1                        (      12x1x9)  RECTANGULAR: 1 query x 9 keys
+  step 1: query rows=1   cached keys= 9   scores=1x9   -> token 6332
+  step 2: query rows=1   cached keys=10   scores=1x10  -> token 6332
+  step 3: query rows=1   cached keys=11   scores=1x11  -> token 24568
+  step 4: query rows=1   cached keys=12   scores=1x12  -> token 6332
+
+  prefill: 8 tokens, 1 pass (parallel)
+  decode : 1 token, 1 pass each (sequential) - this is the bottleneck
+```
+
+The repeated token in the decode steps is expected: the weights are random, so the model has no reason to prefer anything. Only the shapes are meaningful here.

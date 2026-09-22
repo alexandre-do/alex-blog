@@ -18,7 +18,7 @@ Pretrained LLMs are general-purpose. Fine-tuning adapts one to a narrower domain
 
 ## Full Fine-Tuning vs PEFT
 
-Full fine-tuning updates every weight in the model — accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like **LoRA** freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.
+Full fine-tuning updates every weight in the model - accurate, but expensive in GPU memory and easy to overfit on small datasets. Parameter-efficient fine-tuning (PEFT) methods like **LoRA** freeze the base model and train small low-rank adapter matrices instead, cutting trainable parameters by orders of magnitude while keeping most of the quality.
 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -42,31 +42,31 @@ model.print_trainable_parameters()
 ## Data Preparation
 
 - Keep examples in a consistent instruction/response format.
-- Favor quality over quantity — a few thousand well-curated examples usually beat a large noisy dataset.
+- Favor quality over quantity - a few thousand well-curated examples usually beat a large noisy dataset.
 - Deduplicate aggressively; repeated examples skew the model more than expected.
 
 ## Evaluation
 
-Track validation loss, but don't stop there — run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn't always mean the outputs are actually better for your task.
+Track validation loss, but don't stop there - run side-by-side qualitative comparisons against the base model on real prompts. Loss going down doesn't always mean the outputs are actually better for your task.
 
 Fine-tuning is iterative: start small with LoRA on a subset of data before committing to a full fine-tune or a larger training run.
 
 ## AWS Bedrock Custom Model Service
 
-Bedrock's custom model service wraps three distinct customization workflows behind one managed offering — `CreateModelCustomizationJob` with a different `customizationType` — so you don't have to run your own training infrastructure. All three read training data from S3 as `.jsonl` and write a versioned custom model artifact back to your account.
+Bedrock's custom model service wraps three distinct customization workflows behind one managed offering - `CreateModelCustomizationJob` with a different `customizationType` - so you don't have to run your own training infrastructure. All three read training data from S3 as `.jsonl` and write a versioned custom model artifact back to your account.
 
 ### Reinforcement fine-tuning (new)
 
-**How it works.** Instead of matching labeled outputs, the model generates several candidate responses per prompt, a *reward function* scores each one, and Bedrock updates the model with **Group Relative Policy Optimization (GRPO)** to prefer higher-scoring responses. There's no gradient step against a single "correct" answer — the signal is relative quality across the sampled candidates. This is why it suits tasks where correctness is graded rather than binary: multi-step reasoning, code generation, tool use, or open-ended writing where several answers are valid but some are clearly better.
+**How it works.** Instead of matching labeled outputs, the model generates several candidate responses per prompt, a *reward function* scores each one, and Bedrock updates the model with **Group Relative Policy Optimization (GRPO)** to prefer higher-scoring responses. There's no gradient step against a single "correct" answer - the signal is relative quality across the sampled candidates. This is why it suits tasks where correctness is graded rather than binary: multi-step reasoning, code generation, tool use, or open-ended writing where several answers are valid but some are clearly better.
 
 Reward functions come in two flavors:
 
-- **RLVR** (verifiable rewards) — a rule-based grader for objective tasks (math, code execution, format checking).
-- **RLAIF** (AI feedback) — an LLM-as-judge grader for subjective tasks (instruction following, tone, RAG faithfulness), using Bedrock's built-in judge prompt templates.
+- **RLVR** (verifiable rewards) - a rule-based grader for objective tasks (math, code execution, format checking).
+- **RLAIF** (AI feedback) - an LLM-as-judge grader for subjective tasks (instruction following, tone, RAG faithfulness), using Bedrock's built-in judge prompt templates.
 
 As of early 2026, supported base models are Amazon Nova 2 Lite, OpenAI gpt-oss-20B, and Qwen3 32B.
 
-**Data format.** Each record is an OpenAI-style chat-completion object with a `reference_answer` the reward function uses to grade the response — the field isn't restricted to plain text, it can be any structure your grader understands. A minimum of 100 records is required; extra fields (e.g. `difficulty_level`, `domain`) are passed through to the grader as metadata:
+**Data format.** Each record is an OpenAI-style chat-completion object with a `reference_answer` the reward function uses to grade the response - the field isn't restricted to plain text, it can be any structure your grader understands. A minimum of 100 records is required; extra fields (e.g. `difficulty_level`, `domain`) are passed through to the grader as metadata:
 
 ```json
 {
@@ -90,7 +90,7 @@ def lambda_handler(event, context):
         response_text = sample["messages"][-1]["content"]
         reference = sample["metadata"]["reference_answer"]
 
-        # your scoring logic — exact match, execution check, semantic diff, etc.
+        # your scoring logic - exact match, execution check, semantic diff, etc.
         score = score_response(response_text, reference)
 
         results.append({
@@ -130,7 +130,7 @@ response = client.create_model_customization_job(
 )
 ```
 
-**Evaluation metrics.** Training emits **average reward** and **validation reward** curves per checkpoint (validation reward is expected to trail training reward — a widening gap signals overfitting), plus **validation episode length** to track response verbosity. Beyond the training curves, Bedrock lets you A/B the RFT model against the base model with the same prompt set in the Playground, or run a full **Model Evaluation** job with your own test set for a systematic before/after comparison.
+**Evaluation metrics.** Training emits **average reward** and **validation reward** curves per checkpoint (validation reward is expected to trail training reward - a widening gap signals overfitting), plus **validation episode length** to track response verbosity. Beyond the training curves, Bedrock lets you A/B the RFT model against the base model with the same prompt set in the Playground, or run a full **Model Evaluation** job with your own test set for a systematic before/after comparison.
 
 ### Supervised fine-tuning
 
@@ -152,7 +152,7 @@ response = client.create_model_customization_job(
 }
 ```
 
-Minimums vary by model — e.g. 32 records for Claude 3 Haiku, 100 for Llama 3.1/3.3 — up to 10,000 training records by default (adjustable via service quota).
+Minimums vary by model - e.g. 32 records for Claude 3 Haiku, 100 for Llama 3.1/3.3 - up to 10,000 training records by default (adjustable via service quota).
 
 **Launching a job (boto3):**
 
@@ -170,13 +170,13 @@ response = client.create_model_customization_job(
 )
 ```
 
-**Evaluation metrics.** Bedrock reports **training and validation loss** curves after the job completes — useful for spotting under/overfitting, but not a proxy for task quality. Pair it with a Bedrock **Model Evaluation** job on held-out prompts using reference-based automatic metrics — **ROUGE** for summarization, token-level **F1** for QA/extraction, **BERTScore** for semantic similarity where wording legitimately varies — and, for open-ended output, an LLM-as-judge score alongside a manual side-by-side read against the base model.
+**Evaluation metrics.** Bedrock reports **training and validation loss** curves after the job completes - useful for spotting under/overfitting, but not a proxy for task quality. Pair it with a Bedrock **Model Evaluation** job on held-out prompts using reference-based automatic metrics - **ROUGE** for summarization, token-level **F1** for QA/extraction, **BERTScore** for semantic similarity where wording legitimately varies - and, for open-ended output, an LLM-as-judge score alongside a manual side-by-side read against the base model.
 
 ### Distillation
 
-**How it works.** A large **teacher** model generates (or already has, via invocation logs) responses to your prompts, and those responses fine-tune a smaller, cheaper **student** model. Bedrock can also apply proprietary data-synthesis techniques — generating paraphrased prompts, expanding coverage — to enrich a small seed set up to 15k prompt-response pairs before training the student. In practice this trades a few points of accuracy for large latency and cost wins: AWS reports distilled models running up to 500% faster and 75% cheaper, with well under 2% accuracy loss on tasks like RAG.
+**How it works.** A large **teacher** model generates (or already has, via invocation logs) responses to your prompts, and those responses fine-tune a smaller, cheaper **student** model. Bedrock can also apply proprietary data-synthesis techniques - generating paraphrased prompts, expanding coverage - to enrich a small seed set up to 15k prompt-response pairs before training the student. In practice this trades a few points of accuracy for large latency and cost wins: AWS reports distilled models running up to 500% faster and 75% cheaper, with well under 2% accuracy loss on tasks like RAG.
 
-**Data format.** The input is just prompts — no labels needed unless you want to anchor quality:
+**Data format.** The input is just prompts - no labels needed unless you want to anchor quality:
 
 ```json
 {"prompt": "Classify the sentiment of this review: 'The battery life is incredible.'"}
@@ -188,7 +188,7 @@ Alternatively, reuse **invocation logs** already stored in S3 (with CloudWatch i
 {"requestMetadata": {"project": "CustomerService", "priority": "High"}}
 ```
 
-If the teacher model matches the model that produced the logs, Bedrock reuses the logged responses directly instead of re-querying the teacher — cheaper, since no new teacher inference is billed.
+If the teacher model matches the model that produced the logs, Bedrock reuses the logged responses directly instead of re-querying the teacher - cheaper, since no new teacher inference is billed.
 
 **Launching a job (boto3):**
 
@@ -211,4 +211,4 @@ response = client.create_model_customization_job(
 
 **Evaluation metrics.** Because the whole point is a favorable accuracy/latency/cost trade, evaluate the student against the teacher on all three axes rather than accuracy alone: run a Bedrock **Model Evaluation** job with the same test prompts through both models to get a direct accuracy delta, then separately track p50/p90 **latency** and **cost per 1K tokens** for the student versus teacher to confirm the trade you're accepting is the one you intended.
 
-Across all three, the pattern is the same: RFT trades labeled data for a scored signal on hard, multi-step tasks; SFT is the direct route when you already have good labeled examples; distillation isn't really about teaching new behavior — it's compressing a model you already trust into something faster and cheaper to run.
+Across all three, the pattern is the same: RFT trades labeled data for a scored signal on hard, multi-step tasks; SFT is the direct route when you already have good labeled examples; distillation isn't really about teaching new behavior - it's compressing a model you already trust into something faster and cheaper to run.

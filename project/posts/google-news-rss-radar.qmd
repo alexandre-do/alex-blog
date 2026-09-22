@@ -1,7 +1,7 @@
 ---
 title: "Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis"
 date: "2024-03-01"
-description: "A four-stage pipeline that collects Google News RSS entries, downloads and extracts full article text, and stores everything as flexible documents in MongoDB — then exposes it through a search/trends API and React dashboard."
+description: "A four-stage pipeline that collects Google News RSS entries, downloads and extracts full article text, and stores everything as flexible documents in MongoDB - then exposes it through a search/trends API and React dashboard."
 image: "images/google-news-rss-radar.gif"
 categories:
     - Node.js
@@ -11,9 +11,9 @@ categories:
 
 # Google News RSS Radar: Collecting News Into MongoDB for Search and Trend Analysis
 
-![](images/google-news-rss-radar.gif){.post-banner fig-alt="Google News RSS Radar demo — collecting, searching, and browsing trends across news articles"}
+![](images/google-news-rss-radar.gif){.post-banner fig-alt="Google News RSS Radar demo - collecting, searching, and browsing trends across news articles"}
 
-Google News RSS Radar is a four-stage Node.js pipeline — collect, download, extract, enrich — that turns a keyword and a date range into a searchable, trend-analyzable archive of full article text. It's fundamentally a data engineering project: pull raw entries from an RSS feed, progressively enrich each one into a single flexible document, land everything in MongoDB, and build search and trend analysis on top of that one collection. Each stage's choices keep it dependency-light: no headless browser unless the plain HTTP fetch actually needs one, and no external search/analytics service beyond MongoDB itself.
+Google News RSS Radar is a four-stage Node.js pipeline - collect, download, extract, enrich - that turns a keyword and a date range into a searchable, trend-analyzable archive of full article text. It's fundamentally a data engineering project: pull raw entries from an RSS feed, progressively enrich each one into a single flexible document, land everything in MongoDB, and build search and trend analysis on top of that one collection. Each stage's choices keep it dependency-light: no headless browser unless the plain HTTP fetch actually needs one, and no external search/analytics service beyond MongoDB itself.
 
 ```mermaid
 flowchart LR
@@ -26,7 +26,7 @@ flowchart LR
     Search --> Dashboard[React Dashboard]
 ```
 
-## Stage 1: Collect — Google News RSS Has No Pagination, So Fake It With Date Chunks
+## Stage 1: Collect - Google News RSS Has No Pagination, So Fake It With Date Chunks
 
 Google News RSS supports `after:`/`before:` query operators, but each feed only returns a capped number of items regardless of the date range requested. `splitDateRange` works around this by chunking a wide date range into fixed windows (7 days by default) and firing one RSS request per chunk:
 
@@ -49,9 +49,9 @@ export function splitDateRange(dateFrom, dateTo, timeDeltaDays = DEFAULT_TIME_DE
 }
 ```
 
-Each chunk becomes its own query URL against `news.google.com/rss/search`, and `collectBatch` fans this out further — a plain text file of `keyword;dateFrom;dateTo` lines lets a full backfill run as one CLI command instead of one invocation per keyword. Every entry is upserted into MongoDB immediately, so the collection is the pipeline's single source of truth from the very first stage.
+Each chunk becomes its own query URL against `news.google.com/rss/search`, and `collectBatch` fans this out further - a plain text file of `keyword;dateFrom;dateTo` lines lets a full backfill run as one CLI command instead of one invocation per keyword. Every entry is upserted into MongoDB immediately, so the collection is the pipeline's single source of truth from the very first stage.
 
-## Stage 2: Download — Try Plain HTTP First, Fall Back to a Browser
+## Stage 2: Download - Try Plain HTTP First, Fall Back to a Browser
 
 Downloading is the stage most scrapers over-engineer by reaching for a headless browser on every request. This pipeline only pays that cost when it has to:
 
@@ -68,11 +68,11 @@ async function downloadOne(article) {
 }
 ```
 
-`isContentSufficient` is a cheap heuristic — parse with Cheerio, check the body text is at least 500 characters and there's an `<article>` tag or at least 3 `<p>` tags. Most publisher sites serve usable HTML on a plain `fetch`; the ones that don't (client-side-rendered pages, JS-gated paywalls) fall through to a Playwright-driven Chromium instance that waits for `networkidle` before grabbing `page.content()`. The browser is lazily launched once and reused across the whole batch via a memoized promise, and explicitly closed at the end of the run — a headless Chromium process left running is an easy leak to introduce in a script that's supposed to exit.
+`isContentSufficient` is a cheap heuristic - parse with Cheerio, check the body text is at least 500 characters and there's an `<article>` tag or at least 3 `<p>` tags. Most publisher sites serve usable HTML on a plain `fetch`; the ones that don't (client-side-rendered pages, JS-gated paywalls) fall through to a Playwright-driven Chromium instance that waits for `networkidle` before grabbing `page.content()`. The browser is lazily launched once and reused across the whole batch via a memoized promise, and explicitly closed at the end of the run - a headless Chromium process left running is an easy leak to introduce in a script that's supposed to exit.
 
-Concurrency is capped with `p-limit` (4 by default) rather than firing every pending article's fetch at once, which matters more for the browser fallback path than the HTTP one — a handful of concurrent Chromium contexts is a very different memory footprint than a handful of `fetch` calls.
+Concurrency is capped with `p-limit` (4 by default) rather than firing every pending article's fetch at once, which matters more for the browser fallback path than the HTTP one - a handful of concurrent Chromium contexts is a very different memory footprint than a handful of `fetch` calls.
 
-## Stage 3: Extract — JSON-LD First, Readability Second, Meta Tags as a Last Resort
+## Stage 3: Extract - JSON-LD First, Readability Second, Meta Tags as a Last Resort
 
 Article extraction layers three signal sources with a clear precedence, because no single one is reliable across every publisher:
 
@@ -85,11 +85,11 @@ const title = jsonLd?.headline || parsed?.title || metaContent(document, [...]) 
 const publishedRaw = jsonLd?.datePublished || metaContent(document, [...]) || document.querySelector("time")?.getAttribute("datetime");
 ```
 
-JSON-LD (`<script type="application/ld+json">` with an `Article`/`NewsArticle` `@type`) is structured data publishers embed specifically for search engines and social previews — when it's present, it's more precise than anything Readability infers from DOM shape. Readability (the same library behind Firefox's Reader Mode) handles the body text extraction, stripping nav bars, ads, and related-article rails. Meta tags (`og:title`, `article:published_time`) are the fallback when neither of the above is present. The extraction method used (`readability+jsonld`, `readability`, or `meta-fallback`) gets stored alongside the result, which turns "why is this article's title wrong" from a debugging session into a one-field lookup.
+JSON-LD (`<script type="application/ld+json">` with an `Article`/`NewsArticle` `@type`) is structured data publishers embed specifically for search engines and social previews - when it's present, it's more precise than anything Readability infers from DOM shape. Readability (the same library behind Firefox's Reader Mode) handles the body text extraction, stripping nav bars, ads, and related-article rails. Meta tags (`og:title`, `article:published_time`) are the fallback when neither of the above is present. The extraction method used (`readability+jsonld`, `readability`, or `meta-fallback`) gets stored alongside the result, which turns "why is this article's title wrong" from a debugging session into a one-field lookup.
 
 ## Storing Everything as One Flexible Document
 
-Every stage writes back onto the same `articles` document by `uuid` — RSS metadata, downloaded HTML, extracted text, enrichment output — rather than splitting the pipeline across separate tables. A `status` field (`collected` → `downloaded` → `extracted` → `enriched`, with `*_failed` variants) tracks how far along each article is, so re-running a stage is just a query for documents stuck at the previous status:
+Every stage writes back onto the same `articles` document by `uuid` - RSS metadata, downloaded HTML, extracted text, enrichment output - rather than splitting the pipeline across separate tables. A `status` field (`collected` → `downloaded` → `extracted` → `enriched`, with `*_failed` variants) tracks how far along each article is, so re-running a stage is just a query for documents stuck at the previous status:
 
 ```js
 export const STATUS = {
@@ -105,9 +105,9 @@ export const STATUS = {
 
 This is where MongoDB's schema flexibility earns its keep: an RSS entry, a downloaded HTML blob, and a structured extraction result don't look anything alike, but they can all live as nested fields on the same document without a migration every time a stage's output shape changes.
 
-## Stage 4: Enrich — Local Entity Extraction Over the Stored Text
+## Stage 4: Enrich - Local Entity Extraction Over the Stored Text
 
-The enrichment stage runs a small local NLP model over each article's extracted text to pull out structured tags for analysis — people, organizations, places — rather than leaving the article as an opaque text blob:
+The enrichment stage runs a small local NLP model over each article's extracted text to pull out structured tags for analysis - people, organizations, places - rather than leaving the article as an opaque text blob:
 
 ```python
 LABEL_MAP = {
@@ -125,11 +125,11 @@ def ner(req: NerRequest):
     ...
 ```
 
-A tiny FastAPI service (`packages/ner-service`, `en_core_web_sm`) does this tagging over plain HTTP, called from the Node pipeline. The output — a list of `{text, type, count}` entries per article — becomes another indexable field on the document, which is what turns "search for articles mentioning a company" from a text-match guess into a structured filter.
+A tiny FastAPI service (`packages/ner-service`, `en_core_web_sm`) does this tagging over plain HTTP, called from the Node pipeline. The output - a list of `{text, type, count}` entries per article - becomes another indexable field on the document, which is what turns "search for articles mentioning a company" from a text-match guess into a structured filter.
 
 ## Search and Trends Without a Search Engine
 
-With four pipeline stages landing structured data in MongoDB, search and trend analysis are both just queries against one `articles` collection — no Elasticsearch, no separate analytics store:
+With four pipeline stages landing structured data in MongoDB, search and trend analysis are both just queries against one `articles` collection - no Elasticsearch, no separate analytics store:
 
 ```js
 await articles.createIndex(
@@ -161,7 +161,7 @@ npm run dev                                                    # API on :4000, d
 ## Lessons Learned
 
 - **A cheap heuristic beats a blanket policy.** Checking body-text length and paragraph count before reaching for Playwright keeps the common case fast and only pays the browser-automation cost where it's actually needed.
-- **One flexible document per article beats a rigid multi-table schema.** RSS metadata, raw HTML, extracted text, and enrichment tags all live on the same evolving document, keyed by status — adding a new stage's output is a new nested field, not a migration.
+- **One flexible document per article beats a rigid multi-table schema.** RSS metadata, raw HTML, extracted text, and enrichment tags all live on the same evolving document, keyed by status - adding a new stage's output is a new nested field, not a migration.
 - **Storing the extraction method alongside the result pays off during debugging.** Knowing whether a title came from JSON-LD, Readability, or a meta-tag fallback turns "this field looks wrong" into an immediate diagnosis instead of a re-scrape.
 
 Next: extend the trends API with more dimensions (entity co-occurrence, source-over-time breakdowns) now that enrichment tags are already stored per article, and look at pre-aggregating the heavier trend queries instead of computing them on read.
