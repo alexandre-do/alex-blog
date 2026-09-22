@@ -1,10 +1,10 @@
 ---
 title: "Scaling Laws for LLMs: Kaplan vs. Chinchilla"
-subtitle: "Two answers to the same question, and why the 0.23 gap between them turned out to be a bug"
+subtitle: "Two answers to the same question, and why the 0.23 gap between them turned out to be methodology"
 description: >
   A practitioner's walkthrough of the two scaling laws that shaped LLM pre-training,
   why their compute-allocation exponents disagreed, what the 2024 replications found,
-  and what to actually do with any of it. Every figure is computed from published constants.
+  and what to actually do with any of it. Every number is either printed in a cited paper or computed from published constants.
 date: "2026-09-21"
 categories:
     - LLM
@@ -217,7 +217,7 @@ L(N, D) = E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}
 $$
 
 $E = 1.6934,\ A = 406.4,\ B = 410.7$
-$\alpha = 0.3392,\ \beta = 0.2849$
+$\alpha = 0.3392,\ \beta = 0.2849$ (TeX-source precision)
 $a = \beta/(\alpha{+}\beta) = 0.46$
 
 *An irreducible-loss term.* $E$ is the entropy of natural text you can never fit
@@ -420,8 +420,7 @@ for C_budget, col in [(1e21, PAL["third"]), (1e23, PAL["kaplan"]),
     D = C_budget / (6 * N)
     L = loss(N, D, **HOFFMANN)
     ax.plot(N, L, color=col, lw=2.2, zorder=4,
-            label=f"$C = ${C_budget:.0e} FLOPs".replace("e+", r"\times 10^{") + "}$"
-            if False else f"C = {C_budget:.1e} FLOPs")
+            label=f"C = {C_budget:.1e} FLOPs")
     i = int(np.argmin(L))
     ax.scatter(N[i], L[i], s=48, color=col, zorder=6,
                edgecolor=PAL["surface"], linewidth=2)
@@ -463,8 +462,8 @@ head-FLOP and warmup issues put back, they get 0.717, essentially Kaplan's 0.73
 #| echo: false
 #| fig-cap: >
 #|   Walking Kaplan's exponent to Chinchilla's, one fix at a time. Each point is a
-#|   re-measurement of *a* after a single methodological correction, applied
-#|   cumulatively. Source: Porian et al. (2024), Table 1, RefinedWeb column, with
+#|   re-measurement of *a* after one more correction; the last step also switches
+#|   to a constant learning rate. Source: Porian et al. (2024), Table 1, RefinedWeb column, with
 #|   95% confidence intervals as printed. Their OpenWebText2 column follows the
 #|   same path (0.864 → 0.699 → 0.603 → 0.574 → 0.518).
 
@@ -671,8 +670,8 @@ Muennighoff et al. ran more than 400 models, 10M to 9B parameters, for up to 1,5
 epochs, and their finding is unusually actionable: **up to roughly 4 epochs of
 repeated data is nearly free**. Their 8.7B model at four epochs on 44B unique
 tokens ended "with only 0.5% higher validation loss than the single-epoch model."
-Returns then decay fast, with the fitted half-life at $R_D^* \approx 15$
-repetitions, and runs at 44 epochs diverge outright. They model it by replacing
+Returns then decay fast, with $R_D^* \approx 15$ repetitions as the point where repeated tokens have
+lost about 63% of their value, and runs at 44 epochs diverge outright. They model it by replacing
 $D$ with effective data [@muennighoff2023]
 
 $$
@@ -742,8 +741,8 @@ this note.
 
 ## Sources {.unnumbered}
 
-Figures @fig-ratio, @fig-frontier and @fig-waterfall plot values printed in the
-cited papers. @fig-isoflop and every code output above are computed from published
+Figures @fig-ratio and @fig-waterfall plot values printed in the cited papers.
+@fig-frontier, @fig-isoflop and every code output above are computed from published
 constants and are reproducible by rendering this document. Where a number is our
 arithmetic rather than a paper's, the caption says so.
 
