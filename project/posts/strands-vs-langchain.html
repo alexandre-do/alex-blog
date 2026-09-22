@@ -203,7 +203,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="strands-vs.-langchain-choose-the-execution-model-not-the-agent-loop" class="level1">
 <h1>Strands vs.&nbsp;LangChain: Choose the Execution Model, Not the Agent Loop</h1>
 <p><img src="images/strands-vs-langchain.png" class="post-banner img-fluid" alt="Strands vs. LangChain"></p>
-<p>Every few months, a team asks some version of the same question: <em>we are building an agent—should we use Strands or LangChain?</em></p>
+<p>Every few months, a team asks some version of the same question: <em>we are building an agent - should we use Strands or LangChain?</em></p>
 <p>The question is reasonable, but the comparison is slightly off. Neither framework’s interesting innovation is the basic model → tool → observation loop. Both can do that. The useful question is where each system puts the structure around that loop:</p>
 <ul>
 <li>How do you model state and control flow?</li>
@@ -274,17 +274,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> result.stop_reason <span class="op">==</span> <span class="st">"limit_turns"</span>:</span>
 <span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The budget was exhausted; decide whether to resume or report partial work.</span></span>
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">pass</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>This seems small until an agent ends unexpectedly in production. A named reason—such as a turn budget, token budget, cancellation, content filtering, provider token cap, or natural end of turn—gives operators a concrete place to start.</p>
+<p>This seems small until an agent ends unexpectedly in production. A named reason - such as a turn budget, token budget, cancellation, content filtering, provider token cap, or natural end of turn - gives operators a concrete place to start.</p>
 <p>Strands also treats cancellation and concurrent invocation as first-class concerns. A Python agent can be cancelled safely from another thread; cancellation is observed at defined points in the loop. One agent instance rejects overlapping calls by default, because an invocation mutates its conversation history. Those are sensible defaults for a stateful SDK.</p>
 <p><strong>Choose by what hurts more:</strong> LangChain is stronger when you need to change what happens <em>during</em> the loop. Strands is particularly pleasant when you need to understand why a run <em>ended</em>.</p>
 </section>
 </section>
-<section id="axis-2-orchestration-composed-vs.-configured" class="level2">
-<h2 class="anchored" data-anchor-id="axis-2-orchestration-composed-vs.-configured">Axis 2: orchestration — composed vs.&nbsp;configured</h2>
+<section id="axis-2-orchestration---composed-vs.-configured" class="level2">
+<h2 class="anchored" data-anchor-id="axis-2-orchestration---composed-vs.-configured">Axis 2: orchestration - composed vs.&nbsp;configured</h2>
 <p>This is the axis that should drive your decision: do you need a runtime that lets you build an unusual multi-agent topology, or one that already ships the standard shapes?</p>
 <section id="langchain-a-runtime-you-compose" class="level3">
 <h3 class="anchored" data-anchor-id="langchain-a-runtime-you-compose">LangChain: a runtime you compose</h3>
-<p>The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five <em>patterns</em> — subagents, handoffs, skills, router, custom workflow — and you build the one you need on <code>StateGraph</code>:</p>
+<p>The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five <em>patterns</em> - subagents, handoffs, skills, router, custom workflow - and you build the one you need on <code>StateGraph</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Annotated, TypedDict</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> operator <span class="im">import</span> add</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.graph <span class="im">import</span> StateGraph, START, END</span>
@@ -311,20 +311,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>builder.add_edge(<span class="st">"report"</span>, END)</span>
 <span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>graph <span class="op">=</span> builder.<span class="bu">compile</span>(checkpointer<span class="op">=</span>InMemorySaver())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The state model is the real feature here. Every key can have its own reducer — <code>Annotated[list, add]</code> appends, the default overwrites, and you can write custom merge functions. That’s how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.</p>
+<p>The state model is the real feature here. Every key can have its own reducer - <code>Annotated[list, add]</code> appends, the default overwrites, and you can write custom merge functions. That’s how you get correct behaviour when parallel branches write to the same field, and Strands has no direct equivalent.</p>
 <p>Dynamic fan-out is also cleaner:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.types <span class="im">import</span> Send</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fan_out(state: State):</span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [Send(<span class="st">"analyse_doc"</span>, {<span class="st">"doc"</span>: d}) <span class="cf">for</span> d <span class="kw">in</span> state[<span class="st">"documents"</span>]]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>Send</code> spawns one node execution per item at runtime — genuine map-reduce, where Strands’ parallelism comes from static graph branches. And <code>Command</code> lets a node update state and route in one return:</p>
+<p><code>Send</code> spawns one node execution per item at runtime - genuine map-reduce, where Strands’ parallelism comes from static graph branches. And <code>Command</code> lets a node update state and route in one return:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.types <span class="im">import</span> Command</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Literal</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> triage(state: State) <span class="op">-&gt;</span> Command[Literal[<span class="st">"billing"</span>, <span class="st">"technical"</span>]]:</span>
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    kind <span class="op">=</span> classify(state[<span class="st">"messages"</span>][<span class="op">-</span><span class="dv">1</span>])</span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Command(update<span class="op">=</span>{<span class="st">"category"</span>: kind}, goto<span class="op">=</span>kind)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>You can dynamically fan work out with <code>Send</code>, route and update state in one step with <code>Command</code>, mix deterministic code with agentic nodes, and define custom joins. If your workflow is unusual, this flexibility is the point—not an implementation detail.</p>
+<p>You can dynamically fan work out with <code>Send</code>, route and update state in one step with <code>Command</code>, mix deterministic code with agentic nodes, and define custom joins. If your workflow is unusual, this flexibility is the point - not an implementation detail.</p>
 </section>
 <section id="strands-familiar-shapes-with-safety-rails" class="level3">
 <h3 class="anchored" data-anchor-id="strands-familiar-shapes-with-safety-rails">Strands: familiar shapes with safety rails</h3>
@@ -367,7 +367,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>snapshot <span class="op">=</span> history[<span class="dv">3</span>]</span>
 <span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>graph.update_state(snapshot.config, {<span class="st">"findings"</span>: [<span class="st">"corrected"</span>]})</span>
 <span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>graph.invoke(<span class="va">None</span>, config<span class="op">=</span>snapshot.config)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>LangGraph’s <code>interrupt()</code> uses the same persistence machinery. A node can pause for human approval, then resume later — even in another process — with a <code>Command</code>. That makes it suited to audit-heavy, expensive, or long-lived workflows.</p>
+<p>LangGraph’s <code>interrupt()</code> uses the same persistence machinery. A node can pause for human approval, then resume later - even in another process - with a <code>Command</code>. That makes it suited to audit-heavy, expensive, or long-lived workflows.</p>
 <p>There is one non-negotiable implementation rule: an interrupted node restarts from its beginning on resume. Make every side effect before <code>interrupt()</code> idempotent, or move it after the interruption.</p>
 </section>
 <section id="strands-interrupts-without-the-replay-story" class="level3">
@@ -399,7 +399,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="strands-comparable-ingredients-assembled-by-you" class="level3">
 <h3 class="anchored" data-anchor-id="strands-comparable-ingredients-assembled-by-you">Strands: comparable ingredients, assembled by you</h3>
-<p>Strands offers comparable components — skills, steering, context management, goal loops, plugins, and sandboxes — but leaves more of their assembly to you. That is neither a flaw nor a universal advantage. It depends on whether your team wants a designed default or a smaller set of composable parts.</p>
+<p>Strands offers comparable components - skills, steering, context management, goal loops, plugins, and sandboxes - but leaves more of their assembly to you. That is neither a flaw nor a universal advantage. It depends on whether your team wants a designed default or a smaller set of composable parts.</p>
 </section>
 </section>
 <section id="axis-5-ops" class="level2">
@@ -426,7 +426,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td>Evaluation</td>
 <td>LangSmith evaluation</td>
-<td><strong>Strands Evals SDK</strong> — ~25 evaluators, red-teaming, chaos testing, root-cause detectors</td>
+<td><strong>Strands Evals SDK</strong> - ~25 evaluators, red-teaming, chaos testing, root-cause detectors</td>
 </tr>
 <tr class="odd">
 <td>Streaming</td>
@@ -445,15 +445,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>Two things stand out. The Strands Evals SDK is a genuinely differentiated bit of kit — evaluators for correctness, faithfulness, tool selection accuracy and trajectory, plus red-teaming and chaos testing, in the same SDK. If your compliance story needs agent evaluation, that’s not nothing.</p>
+<p>Two things stand out. The Strands Evals SDK is a genuinely differentiated bit of kit - evaluators for correctness, faithfulness, tool selection accuracy and trajectory, plus red-teaming and chaos testing, in the same SDK. If your compliance story needs agent evaluation, that’s not nothing.</p>
 <p>And Strands has bidirectional streaming for realtime voice. If you’re building a voice agent, this is close to a one-option decision.</p>
 </section>
 <section id="the-traps" class="level2">
 <h2 class="anchored" data-anchor-id="the-traps">The traps</h2>
 <p>Four things that will cost you a day each if nobody tells you.</p>
-<p><strong>LangGraph subgraph streaming is opt-in.</strong> <code>create_agent</code> returns a compiled graph, so putting one inside a <code>StateGraph</code> makes it a subgraph — and without <code>subgraphs=True</code> on the parent’s stream, <code>stream_mode="messages"</code> won’t emit the inner agent’s tokens at all. You’ll think streaming is broken.</p>
+<p><strong>LangGraph subgraph streaming is opt-in.</strong> <code>create_agent</code> returns a compiled graph, so putting one inside a <code>StateGraph</code> makes it a subgraph - and without <code>subgraphs=True</code> on the parent’s stream, <code>stream_mode="messages"</code> won’t emit the inner agent’s tokens at all. You’ll think streaming is broken.</p>
 <p><strong>LangGraph’s <code>interrupt()</code> re-runs the node.</strong> Resume restarts the node function from the top, not from the interrupt line. Any side effect before the interrupt happens twice unless it’s idempotent.</p>
-<p><strong>Strands Python <code>Graph</code> defaults to OR fan-in.</strong> A node fires when <em>any</em> incoming edge’s source completes — most frameworks default to AND. To get a real join you write a condition on every incoming edge:</p>
+<p><strong>Strands Python <code>Graph</code> defaults to OR fan-in.</strong> A node fires when <em>any</em> incoming edge’s source completes - most frameworks default to AND. To get a real join you write a condition on every incoming edge:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> all_complete(required: <span class="bu">list</span>[<span class="bu">str</span>]):</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> check(state: GraphState) <span class="op">-&gt;</span> <span class="bu">bool</span>:</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="bu">all</span>(</span>
@@ -473,7 +473,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ol type="1">
 <li><strong>Need durable execution, recovery, audit history, replay, or state forking?</strong> → LangGraph.</li>
 <li><strong>Building a long-horizon research or coding agent and want planning, filesystem tools, and subagents wired together?</strong> → Start with Deep Agents.</li>
-<li><strong>Orchestration is unusual — runtime fan-out, custom merge logic, elaborate joins, or deterministic steps mixed with agents?</strong> → LangGraph.</li>
+<li><strong>Orchestration is unusual - runtime fan-out, custom merge logic, elaborate joins, or deterministic steps mixed with agents?</strong> → LangGraph.</li>
 <li><strong>Deep in AWS, deploying through Bedrock AgentCore or adjacent AWS infrastructure?</strong> → Strands.</li>
 <li><strong>Orchestration is a standard graph, swarm, or dependency workflow and you want sensible safety boundaries immediately?</strong> → Strands.</li>
 <li><strong>None of the above decisive?</strong> → Choose the stack your team can operate confidently. The cost of changing frameworks is usually lower than the cost of never shipping the first agent.</li>
@@ -489,7 +489,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </ul>
 <p>The agent loop is commodity. The durable choices are the state model, the recovery model, and the operating model. Evaluate those first, and the framework decision becomes much less ideological.</p>
 <hr>
-<p><em>Sources: the <a href="https://strandsagents.com/docs/user-guide/concepts/multi-agent/multi-agent-patterns/">Strands Agents docs</a>, the <a href="https://docs.langchain.com/oss/python/langchain/agents">LangChain agents</a>, <a href="https://docs.langchain.com/oss/python/langgraph/graph-api">LangGraph Graph API</a>, and <a href="https://docs.langchain.com/oss/python/langgraph/persistence">LangGraph persistence</a> docs, and AWS’s <a href="https://aws.amazon.com/blogs/machine-learning/market-surveillance-agent-with-langgraph-and-strands-on-agentcore/">LangGraph-and-Strands reference architecture</a>. APIs move fast in both ecosystems — check version numbers before copying code.</em></p>
+<p><em>Sources: the <a href="https://strandsagents.com/docs/user-guide/concepts/multi-agent/multi-agent-patterns/">Strands Agents docs</a>, the <a href="https://docs.langchain.com/oss/python/langchain/agents">LangChain agents</a>, <a href="https://docs.langchain.com/oss/python/langgraph/graph-api">LangGraph Graph API</a>, and <a href="https://docs.langchain.com/oss/python/langgraph/persistence">LangGraph persistence</a> docs, and AWS’s <a href="https://aws.amazon.com/blogs/machine-learning/market-surveillance-agent-with-langgraph-and-strands-on-agentcore/">LangGraph-and-Strands reference architecture</a>. APIs move fast in both ecosystems - check version numbers before copying code.</em></p>
 
 
 </section>

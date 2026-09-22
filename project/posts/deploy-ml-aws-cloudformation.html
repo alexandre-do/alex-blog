@@ -206,11 +206,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Clicking through the AWS console to deploy a model works once. Infrastructure as code makes it reproducible: the same template spins up dev, staging, and prod, and can be reviewed and versioned like any other code.</p>
 <section id="what-is-infrastructure-as-code" class="level2">
 <h2 class="anchored" data-anchor-id="what-is-infrastructure-as-code">What Is Infrastructure as Code?</h2>
-<p>Infrastructure as Code (IaC) means describing infrastructure — networks, IAM roles, compute, storage — in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:</p>
+<p>Infrastructure as Code (IaC) means describing infrastructure - networks, IAM roles, compute, storage - in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:</p>
 <ul>
-<li><strong>Reproducibility</strong> — the same definition produces the same stack in dev, staging, and prod.</li>
-<li><strong>Auditability</strong> — changes to infrastructure show up as diffs, not as an entry in someone’s shell history.</li>
-<li><strong>Idempotency</strong> — re-applying a template that already matches reality is a no-op; the tool only acts on the delta.</li>
+<li><strong>Reproducibility</strong> - the same definition produces the same stack in dev, staging, and prod.</li>
+<li><strong>Auditability</strong> - changes to infrastructure show up as diffs, not as an entry in someone’s shell history.</li>
+<li><strong>Idempotency</strong> - re-applying a template that already matches reality is a no-op; the tool only acts on the delta.</li>
 </ul>
 <p>IaC tools split along one main axis: <strong>declarative vs.&nbsp;imperative</strong>. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (Pulumi in its general-purpose-language mode, or a hand-rolled boto3/Ansible script) describe the steps to get there. Declarative is the norm for cloud infrastructure because the engine can diff current vs.&nbsp;desired state and tell you what will change <em>before</em> it changes it.</p>
 <p>CloudFormation is AWS’s own declarative engine: no install, no state file to manage, and it understands AWS resource types the day they ship. The trade-off is that it only speaks AWS.</p>
@@ -277,7 +277,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>For an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) — at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.</p>
+<p>For an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there’s no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you’re provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) - at the cost of managing state yourself. Azure’s tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.</p>
 </section>
 <section id="core-building-blocks" class="level2">
 <h2 class="anchored" data-anchor-id="core-building-blocks">Core Building Blocks</h2>
@@ -285,7 +285,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li>An <strong>S3 bucket</strong> to store model artifacts</li>
 <li>An <strong>IAM role</strong> with least-privilege access for the compute layer</li>
-<li>A <strong>compute target</strong> — a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference</li>
+<li>A <strong>compute target</strong> - a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference</li>
 </ul>
 </section>
 <section id="a-minimal-stack" class="level2">
@@ -340,13 +340,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li>Parameterize the instance type and image URI so the same template works across environments.</li>
 <li>Use one stack per environment (dev/staging/prod) rather than branching logic inside a single template.</li>
-<li>Tear down with <code>aws cloudformation delete-stack</code> when you’re done — an idle SageMaker endpoint bills by the hour.</li>
+<li>Tear down with <code>aws cloudformation delete-stack</code> when you’re done - an idle SageMaker endpoint bills by the hour.</li>
 </ul>
 <p>CloudFormation won’t replace judgment about architecture, but it turns “how did we deploy this?” from a Slack archaeology exercise into a file you can read.</p>
 </section>
 <section id="sam-vs.-plain-cloudformation" class="level2">
 <h2 class="anchored" data-anchor-id="sam-vs.-plain-cloudformation">SAM vs.&nbsp;Plain CloudFormation</h2>
-<p>AWS SAM (Serverless Application Model) isn’t a separate deployment engine — it’s a CloudFormation <em>transform</em> (<code>Transform: AWS::Serverless-2016-10-31</code>). A SAM template gets expanded into a full CloudFormation template at deploy time, plus you get a CLI built around a Lambda-centric workflow: <code>sam build</code>, <code>sam local invoke</code>, <code>sam deploy --guided</code>.</p>
+<p>AWS SAM (Serverless Application Model) isn’t a separate deployment engine - it’s a CloudFormation <em>transform</em> (<code>Transform: AWS::Serverless-2016-10-31</code>). A SAM template gets expanded into a full CloudFormation template at deploy time, plus you get a CLI built around a Lambda-centric workflow: <code>sam build</code>, <code>sam local invoke</code>, <code>sam deploy --guided</code>.</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -363,7 +363,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tbody>
 <tr class="odd">
 <td>Best fit</td>
-<td>Any AWS resource type — SageMaker, S3, IAM, VPC, RDS, whatever the stack needs</td>
+<td>Any AWS resource type - SageMaker, S3, IAM, VPC, RDS, whatever the stack needs</td>
 <td>Serverless apps: Lambda, API Gateway, Step Functions, DynamoDB</td>
 </tr>
 <tr class="even">
@@ -384,11 +384,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td>Underlying engine</td>
 <td>CloudFormation</td>
-<td>Also CloudFormation — SAM templates are valid CloudFormation with one added <code>Transform</code> line</td>
+<td>Also CloudFormation - SAM templates are valid CloudFormation with one added <code>Transform</code> line</td>
 </tr>
 </tbody>
 </table>
-<p>For the SageMaker stack above, plain CloudFormation is the right call: SAM’s shorthand only covers serverless resource types, and <code>AWS::SageMaker::Model</code>/<code>EndpointConfig</code>/<code>Endpoint</code> have no SAM equivalent to shrink. SAM earns its keep the moment the inference layer <em>is</em> a Lambda function — e.g., a lightweight CPU model invoked behind API Gateway, or a Lambda that calls out to a SageMaker endpoint. In that case the boilerplate SAM strips away (API Gateway wiring, Lambda execution roles and permissions) is exactly the boilerplate that pattern generates, and the local dev loop (<code>sam local invoke</code>) is something plain CloudFormation has no answer for at all. Nothing stops a single template from mixing both — SAM resources alongside raw CloudFormation ones — since a SAM template is just CloudFormation with a transform applied.</p>
+<p>For the SageMaker stack above, plain CloudFormation is the right call: SAM’s shorthand only covers serverless resource types, and <code>AWS::SageMaker::Model</code>/<code>EndpointConfig</code>/<code>Endpoint</code> have no SAM equivalent to shrink. SAM earns its keep the moment the inference layer <em>is</em> a Lambda function - e.g., a lightweight CPU model invoked behind API Gateway, or a Lambda that calls out to a SageMaker endpoint. In that case the boilerplate SAM strips away (API Gateway wiring, Lambda execution roles and permissions) is exactly the boilerplate that pattern generates, and the local dev loop (<code>sam local invoke</code>) is something plain CloudFormation has no answer for at all. Nothing stops a single template from mixing both - SAM resources alongside raw CloudFormation ones - since a SAM template is just CloudFormation with a transform applied.</p>
 <section id="quick-sam-how-to" class="level3">
 <h3 class="anchored" data-anchor-id="quick-sam-how-to">Quick SAM How-To</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Install the CLI</span></span>

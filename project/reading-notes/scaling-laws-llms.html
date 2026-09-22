@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="dcterms.date" content="2022-03-29">
-<meta name="description" content="Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) — and why so many early large models were undertrained.">
+<meta name="description" content="Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) - and why so many early large models were undertrained.">
 
 <title>Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla – Alexandre DO</title>
 <style>
@@ -74,7 +74,7 @@ ul.task-list li input[type="checkbox"] {
   }
 }</script>
 <style>
-/* Reading note: keep only two heading levels visible — the page
+/* Reading note: keep only two heading levels visible - the page
    title (from the title block above) and the H2 sections below.
    Quarto/Pandoc always emits a body-level H1 matching the title
    when content starts at H2; hide that duplicate here. */
@@ -180,7 +180,7 @@ window.Quarto = {
 
 <div>
   <div class="description">
-    Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) — and why so many early large models were undertrained.
+    Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) - and why so many early large models were undertrained.
   </div>
 </div>
 
@@ -204,22 +204,22 @@ window.Quarto = {
 
 
 <blockquote class="blockquote">
-<p><strong>Source:</strong> <a href="https://arxiv.org/abs/2203.15556">Training Compute-Optimal Large Language Models (Chinchilla)</a> — Hoffmann et al., DeepMind, 2022</p>
+<p><strong>Source:</strong> <a href="https://arxiv.org/abs/2203.15556">Training Compute-Optimal Large Language Models (Chinchilla)</a> - Hoffmann et al., DeepMind, 2022</p>
 </blockquote>
 <p>For comparison, this note also references the earlier <a href="https://arxiv.org/abs/2001.08361">Kaplan et al., “Scaling Laws for Neural Language Models” (2020)</a>, which the Chinchilla paper directly revises.</p>
 <section id="kaplans-rule-2020" class="level2">
 <h2 class="anchored" data-anchor-id="kaplans-rule-2020">Kaplan’s rule (2020)</h2>
-<p>Given a fixed compute budget, Kaplan et al.&nbsp;found that loss improves most by growing model size aggressively while under-scaling the amount of training data — practically, this meant training very large models on comparatively few tokens. This rule shaped a generation of models (GPT-3 at 175B parameters trained on ~300B tokens is the canonical example): go big on parameters first, worry about data later.</p>
+<p>Given a fixed compute budget, Kaplan et al.&nbsp;found that loss improves most by growing model size aggressively while under-scaling the amount of training data - practically, this meant training very large models on comparatively few tokens. This rule shaped a generation of models (GPT-3 at 175B parameters trained on ~300B tokens is the canonical example): go big on parameters first, worry about data later.</p>
 </section>
 <section id="chinchillas-correction-2022" class="level2">
 <h2 class="anchored" data-anchor-id="chinchillas-correction-2022">Chinchilla’s correction (2022)</h2>
 <p>Hoffmann et al.&nbsp;re-ran the scaling experiments more carefully and found the original fit was off. The compute-optimal rule is closer to scaling model size (N) and training tokens (D) <em>at roughly the same rate</em> with compute (C):</p>
 <p><span class="math display">\[N \propto C^{0.5}, \quad D \propto C^{0.5}\]</span></p>
-<p>To prove it, they trained Chinchilla — 70B parameters on ~1.4T tokens — and it outperformed Gopher, a 280B-parameter model trained on far fewer tokens, despite using the same compute budget. A model 4x smaller beat one 4x larger, purely by being trained on proportionally more data.</p>
+<p>To prove it, they trained Chinchilla - 70B parameters on ~1.4T tokens - and it outperformed Gopher, a 280B-parameter model trained on far fewer tokens, despite using the same compute budget. A model 4x smaller beat one 4x larger, purely by being trained on proportionally more data.</p>
 </section>
 <section id="takeaway" class="level2">
 <h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
-<p>“Bigger is better” was subtly wrong on its own — it’s “bigger <em>and proportionally more data</em> is better.” Most pre-2022 large models were undertrained relative to their parameter count: they’d hit diminishing returns on parameters long before they’d seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn’t “how big can the model be” but “what’s the compute-optimal split between size and data” — and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default.</p>
+<p>“Bigger is better” was subtly wrong on its own - it’s “bigger <em>and proportionally more data</em> is better.” Most pre-2022 large models were undertrained relative to their parameter count: they’d hit diminishing returns on parameters long before they’d seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn’t “how big can the model be” but “what’s the compute-optimal split between size and data” - and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default.</p>
 
 
 </section>

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="dcterms.date" content="2025-10-10">
-<meta name="description" content="How Amazon Bedrock AgentCore deploys Strands, CrewAI, LangGraph, and Pydantic AI multi-agent systems through the same Runtime, Memory, and Observability primitives — so the framework choice stops being a deployment decision.">
+<meta name="description" content="How Amazon Bedrock AgentCore deploys Strands, CrewAI, LangGraph, and Pydantic AI multi-agent systems through the same Runtime, Memory, and Observability primitives - so the framework choice stops being a deployment decision.">
 
 <title>Bedrock AgentCore: One Runtime, Any Multi-Agent Framework – Alexandre DO</title>
 <style>
@@ -178,7 +178,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <div>
   <div class="description">
-    How Amazon Bedrock AgentCore deploys Strands, CrewAI, LangGraph, and Pydantic AI multi-agent systems through the same Runtime, Memory, and Observability primitives — so the framework choice stops being a deployment decision.
+    How Amazon Bedrock AgentCore deploys Strands, CrewAI, LangGraph, and Pydantic AI multi-agent systems through the same Runtime, Memory, and Observability primitives - so the framework choice stops being a deployment decision.
   </div>
 </div>
 
@@ -205,11 +205,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h1>Bedrock AgentCore: One Runtime, Any Multi-Agent Framework</h1>
 <p><img src="images/bedrock-agentcore-multi-agent-deployment.png" class="post-banner img-fluid" alt="Bedrock AgentCore multi-agent deployment"></p>
 <p>A multi-agent system that works on a laptop and one that survives production are two different engineering problems. The laptop version is a script: a crew, a swarm, or a graph that runs to completion and exits. The production version needs session isolation between users, memory that survives a container restart, secure sandboxes for code the LLM writes, and enough observability to answer “why did agent B never get the handoff from agent A?” at 2 a.m.</p>
-<p>Building that infrastructure yourself, per framework, is months of work you didn’t sign up for. <strong>Amazon Bedrock AgentCore</strong> exists to make that infrastructure a managed layer instead — and its most useful property is that it does not care which orchestration framework produced your agents. Strands Swarms, CrewAI crews, LangGraph graphs, and Pydantic AI agents all deploy through the <em>same</em> entrypoint, the <em>same</em> memory service, and the <em>same</em> observability dashboard.</p>
-<p>This post walks through what AgentCore actually is, the one decorator that makes any agent — single or multi — deployable, and how the shared services (Memory, Runtime, Observability) let a multi-framework organization standardize on infrastructure without standardizing on a framework.</p>
+<p>Building that infrastructure yourself, per framework, is months of work you didn’t sign up for. <strong>Amazon Bedrock AgentCore</strong> exists to make that infrastructure a managed layer instead - and its most useful property is that it does not care which orchestration framework produced your agents. Strands Swarms, CrewAI crews, LangGraph graphs, and Pydantic AI agents all deploy through the <em>same</em> entrypoint, the <em>same</em> memory service, and the <em>same</em> observability dashboard.</p>
+<p>This post walks through what AgentCore actually is, the one decorator that makes any agent - single or multi - deployable, and how the shared services (Memory, Runtime, Observability) let a multi-framework organization standardize on infrastructure without standardizing on a framework.</p>
 <section id="what-agentcore-actually-is" class="level2">
 <h2 class="anchored" data-anchor-id="what-agentcore-actually-is">What AgentCore actually is</h2>
-<p>AgentCore is not one product — it’s a set of independent services you can use separately or together:</p>
+<p>AgentCore is not one product - it’s a set of independent services you can use separately or together:</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -263,9 +263,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </table>
 <p>You reach these services through three layers, each a different level of abstraction:</p>
 <ol type="1">
-<li><strong>Control Plane / Data Plane APIs</strong> — raw <code>boto3</code> access, maximum control, minimum convenience.</li>
-<li><strong>AgentCore SDK</strong> — Python helpers (<code>BedrockAgentCoreApp</code>, memory config classes, session managers) that you import directly into agent code.</li>
-<li><strong>Starter Toolkit / CLI</strong> — <code>agentcore configure</code>, <code>agentcore launch</code>, <code>agentcore invoke</code>, <code>agentcore status</code>, <code>agentcore destroy</code>. This is what automates containerization, ECR, IAM roles, and wiring the services together.</li>
+<li><strong>Control Plane / Data Plane APIs</strong> - raw <code>boto3</code> access, maximum control, minimum convenience.</li>
+<li><strong>AgentCore SDK</strong> - Python helpers (<code>BedrockAgentCoreApp</code>, memory config classes, session managers) that you import directly into agent code.</li>
+<li><strong>Starter Toolkit / CLI</strong> - <code>agentcore configure</code>, <code>agentcore launch</code>, <code>agentcore invoke</code>, <code>agentcore status</code>, <code>agentcore destroy</code>. This is what automates containerization, ECR, IAM roles, and wiring the services together.</li>
 </ol>
 <p>Almost everything in this post uses layers 2 and 3.</p>
 </section>
@@ -284,7 +284,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    app.run()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>payload</code> carries the request, <code>context</code> carries session/actor headers and the AgentCore session ID. Everything inside <code>invoke()</code> is yours — a single Strands <code>Agent</code>, a CrewAI <code>crew().kickoff()</code>, or a compiled LangGraph graph’s <code>.invoke()</code>. AgentCore doesn’t inspect what’s inside the function; it just needs something that takes a payload and returns a result.</p>
+<p><code>payload</code> carries the request, <code>context</code> carries session/actor headers and the AgentCore session ID. Everything inside <code>invoke()</code> is yours - a single Strands <code>Agent</code>, a CrewAI <code>crew().kickoff()</code>, or a compiled LangGraph graph’s <code>.invoke()</code>. AgentCore doesn’t inspect what’s inside the function; it just needs something that takes a payload and returns a result.</p>
 <p>Deployment is the same three commands regardless of what’s inside:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run agentcore configure <span class="at">-e</span> agent_deployment/agent.py   <span class="co"># wire up IAM, ECR, memory</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run agentcore launch                                    <span class="co"># build container, deploy</span></span>
@@ -294,7 +294,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="the-same-pattern-three-frameworks" class="level2">
 <h2 class="anchored" data-anchor-id="the-same-pattern-three-frameworks">The same pattern, three frameworks</h2>
 <p>Because the entrypoint contract is just “function in, JSON out,” the framework-specific code only changes what happens <em>inside</em> <code>invoke()</code>.</p>
-<p><strong>CrewAI</strong> — a multi-agent crew becomes one entrypoint call:</p>
+<p><strong>CrewAI</strong> - a multi-agent crew becomes one entrypoint call:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> bedrock_agentcore <span class="im">import</span> BedrockAgentCoreApp</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>app <span class="op">=</span> BedrockAgentCoreApp()</span>
@@ -303,8 +303,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> invoke(payload, context<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> AgentcoreCrewAi().crew().kickoff(inputs<span class="op">=</span>payload)</span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result.raw</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Two agents — a Researcher and a Reporting Analyst, each with a role, goal, and backstory defined in YAML — run through <code>Process.sequential</code> inside that single call. AgentCore never sees the handoff between them; it only sees one request and one response.</p>
-<p><strong>LangGraph</strong> — a compiled state graph, invoked the same way:</p>
+<p>Two agents - a Researcher and a Reporting Analyst, each with a role, goal, and backstory defined in YAML - run through <code>Process.sequential</code> inside that single call. AgentCore never sees the handoff between them; it only sees one request and one response.</p>
+<p><strong>LangGraph</strong> - a compiled state graph, invoked the same way:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Annotated, TypedDict</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> langgraph.graph.message <span class="im">import</span> add_messages</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -318,7 +318,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    store_conversation(context, payload[<span class="st">"prompt"</span>], result)  <span class="co"># store the raw prompt, not the enhanced one</span></span>
 <span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"response"</span>: result[<span class="st">"messages"</span>][<span class="op">-</span><span class="dv">1</span>].content}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Note the detail that will bite you if you skip it: you enhance the <em>outgoing</em> prompt with retrieved memory context, but you store the <em>original</em> prompt back to Memory. Store the enhanced version instead and each turn’s memory retrieval compounds into the next, until your context window is mostly recycled memory.</p>
-<p><strong>Strands</strong> — a <code>Swarm</code> or <code>Graph</code> instead of a single <code>Agent</code>, same decorator:</p>
+<p><strong>Strands</strong> - a <code>Swarm</code> or <code>Graph</code> instead of a single <code>Agent</code>, same decorator:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strands.multiagent <span class="im">import</span> Swarm</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="at">@app.entrypoint</span></span>
@@ -326,14 +326,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    swarm <span class="op">=</span> Swarm([researcher, coder, reviewer], entry_point<span class="op">=</span>researcher, max_handoffs<span class="op">=</span><span class="dv">20</span>)</span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> swarm(payload.get(<span class="st">"prompt"</span>, <span class="st">"Hello!"</span>))</span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"response"</span>: <span class="bu">str</span>(result)}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The multi-agent complexity — swarm handoffs, graph edges, crew roles, LangGraph conditional routing — is entirely internal to the framework you picked. AgentCore’s job stops at the function boundary. That’s the whole point: <strong>the deployment story doesn’t change when the orchestration story gets more complicated.</strong></p>
+<p>The multi-agent complexity - swarm handoffs, graph edges, crew roles, LangGraph conditional routing - is entirely internal to the framework you picked. AgentCore’s job stops at the function boundary. That’s the whole point: <strong>the deployment story doesn’t change when the orchestration story gets more complicated.</strong></p>
 </section>
 <section id="memory-the-one-service-every-framework-shares" class="level2">
 <h2 class="anchored" data-anchor-id="memory-the-one-service-every-framework-shares">Memory: the one service every framework shares</h2>
 <p>The most concrete evidence that AgentCore is framework-agnostic is that the same <code>MemoryManager</code> pattern is reported to work unchanged across CrewAI, Strands, Pydantic AI, LlamaIndex, and LangGraph in AWS’s own multi-framework example series. Memory has two tiers:</p>
 <ul>
-<li><strong>Short-term memory (STM)</strong> — exact conversation history, keyed by session, survives container restarts.</li>
-<li><strong>Long-term memory (LTM)</strong> — facts and preferences extracted <em>across</em> sessions, keyed by actor (user), retrieved by semantic relevance.</li>
+<li><strong>Short-term memory (STM)</strong> - exact conversation history, keyed by session, survives container restarts.</li>
+<li><strong>Long-term memory (LTM)</strong> - facts and preferences extracted <em>across</em> sessions, keyed by actor (user), retrieved by semantic relevance.</li>
 </ul>
 <p>For frameworks with native session-manager hooks (Strands), it looks like this:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> bedrock_agentcore.memory.integrations.strands.config <span class="im">import</span> AgentCoreMemoryConfig, RetrievalConfig</span>
@@ -353,10 +353,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="why-every-example-uses-lazy-agent-creation" class="level2">
 <h2 class="anchored" data-anchor-id="why-every-example-uses-lazy-agent-creation">Why every example uses lazy agent creation</h2>
-<p>Almost every AgentCore tutorial builds the agent inside a <code>get_or_create_agent()</code> function guarded by a module-level <code>None</code>, instead of at import time. This isn’t boilerplate — it’s forced by how Runtime actually schedules work:</p>
+<p>Almost every AgentCore tutorial builds the agent inside a <code>get_or_create_agent()</code> function guarded by a module-level <code>None</code>, instead of at import time. This isn’t boilerplate - it’s forced by how Runtime actually schedules work:</p>
 <ul>
 <li>Each <strong>session ID</strong> gets its own dedicated container, alive for up to 8 hours or 15 minutes of inactivity.</li>
-<li><code>actor_id</code> and <code>session_id</code> are only known once a request arrives — not at container start.</li>
+<li><code>actor_id</code> and <code>session_id</code> are only known once a request arrives - not at container start.</li>
 <li>Memory configuration needs both before it can be constructed.</li>
 <li>You want to build the agent/crew/graph exactly once per container and reuse it for every subsequent invocation in that session.</li>
 </ul>
@@ -419,25 +419,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    runtimeSessionId<span class="op">=</span><span class="st">"production_session_2026_user456_webapp_xyz123"</span>,  <span class="co"># 33+ chars</span></span>
 <span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    payload<span class="op">=</span><span class="st">b'{"prompt": "What is 25 * 4 + 10?"}'</span>,</span>
 <span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>No SDK-specific client, no framework detection — it’s the same call whether the agent behind that ARN is a single Strands agent or a five-node LangGraph graph.</p>
+<p>No SDK-specific client, no framework detection - it’s the same call whether the agent behind that ARN is a single Strands agent or a five-node LangGraph graph.</p>
 </section>
 <section id="observability-doesnt-need-extra-wiring" class="level2">
 <h2 class="anchored" data-anchor-id="observability-doesnt-need-extra-wiring">Observability doesn’t need extra wiring</h2>
-<p><code>agentcore launch</code> enables a CloudWatch GenAI Observability dashboard automatically — no separate instrumentation step. It gives you a service map (agent → Memory → Code Interpreter → model calls), request-level latency/throughput/error metrics, and X-Ray traces you can drill into for individual invocations, memory retrievals, and tool executions. For a multi-agent system, this matters more than for a single agent: it’s the difference between “the crew produced a wrong answer” and “the Researcher agent’s tool call timed out and the Reporting Analyst silently continued with a partial result.”</p>
+<p><code>agentcore launch</code> enables a CloudWatch GenAI Observability dashboard automatically - no separate instrumentation step. It gives you a service map (agent → Memory → Code Interpreter → model calls), request-level latency/throughput/error metrics, and X-Ray traces you can drill into for individual invocations, memory retrievals, and tool executions. For a multi-agent system, this matters more than for a single agent: it’s the difference between “the crew produced a wrong answer” and “the Researcher agent’s tool call timed out and the Reporting Analyst silently continued with a partial result.”</p>
 </section>
 <section id="the-traps" class="level2">
 <h2 class="anchored" data-anchor-id="the-traps">The traps</h2>
 <p><strong>Flat-layout packaging errors on <code>agentcore launch</code>.</strong> If your agent code and its supporting modules sit directly in the deployment folder instead of a <code>src/</code> layout, setuptools’ build backend can refuse with “Multiple top-level modules discovered in a flat-layout.” Structure the deployment package properly rather than fighting the build backend.</p>
 <p><strong>Storing the memory-enhanced prompt instead of the original.</strong> Covered above, but worth repeating: enhance the outgoing prompt with retrieved context, persist the original. Otherwise each retrieved memory becomes part of the next memory.</p>
-<p><strong>Skipping the memory prompts during <code>configure</code>.</strong> If you answer “no” to long-term memory extraction, or pick an existing memory resource instead of letting the toolkit create a new one, you’ll need to reconfigure — and an existing memory resource isn’t cleaned up by <code>agentcore destroy</code> the way an auto-created one is.</p>
+<p><strong>Skipping the memory prompts during <code>configure</code>.</strong> If you answer “no” to long-term memory extraction, or pick an existing memory resource instead of letting the toolkit create a new one, you’ll need to reconfigure - and an existing memory resource isn’t cleaned up by <code>agentcore destroy</code> the way an auto-created one is.</p>
 <p><strong>Library import paths move.</strong> <code>bedrock_agentcore</code>, <code>bedrock-agentcore-starter-toolkit</code>, and framework-specific integration packages (<code>strands-agents-tools[agent_core_code_interpreter]</code>, etc.) are young enough that import paths for things like the Code Interpreter tool have already shifted between releases. Pin versions and check the changelog before copying tutorial code verbatim.</p>
 </section>
 <section id="so-when-does-this-actually-matter" class="level2">
 <h2 class="anchored" data-anchor-id="so-when-does-this-actually-matter">So when does this actually matter?</h2>
-<p>If you’re deploying one agent, in one framework, for one team — AgentCore is still worth it for Runtime’s session isolation and Observability alone, but you could plausibly build a thinner version yourself.</p>
-<p>The case gets much stronger the moment you have <strong>multiple teams choosing different frameworks</strong> — one team on CrewAI because they think in roles, another on LangGraph because they need custom state reducers, another on Strands because they want Swarm’s built-in handoff safety rails. Standardizing Memory, Identity, and Observability at the AgentCore layer means that choice stays a <em>team-level</em> decision instead of an <em>organization-level</em> one, without anyone losing production-grade infrastructure for picking the “wrong” framework.</p>
+<p>If you’re deploying one agent, in one framework, for one team - AgentCore is still worth it for Runtime’s session isolation and Observability alone, but you could plausibly build a thinner version yourself.</p>
+<p>The case gets much stronger the moment you have <strong>multiple teams choosing different frameworks</strong> - one team on CrewAI because they think in roles, another on LangGraph because they need custom state reducers, another on Strands because they want Swarm’s built-in handoff safety rails. Standardizing Memory, Identity, and Observability at the AgentCore layer means that choice stays a <em>team-level</em> decision instead of an <em>organization-level</em> one, without anyone losing production-grade infrastructure for picking the “wrong” framework.</p>
 <hr>
-<p><em>Sources: Mike Chambers’ <a href="https://builder.aws.com/content/33duot88gLusLRgJkalulTJLUrx/turn-your-ai-script-into-a-production-ready-agent">Turn Your AI Script into a Production-Ready Agent</a> on AWS Builder Center, and the <a href="https://dev.to/aws/building-production-ready-ai-agents-a-multi-framework-journey-with-amazon-bedrock-agentcore-p32">Building Production-Ready AI Agents</a> multi-framework series on dev.to (Strands, CrewAI, Pydantic AI, LlamaIndex, and LangGraph parts), with code from AWS’s <a href="https://github.com/danilop/agentcore-multi-framework-examples">agentcore-multi-framework-examples</a> repository. AgentCore’s CLI and SDK are evolving quickly — check version numbers before copying commands.</em></p>
+<p><em>Sources: Mike Chambers’ <a href="https://builder.aws.com/content/33duot88gLusLRgJkalulTJLUrx/turn-your-ai-script-into-a-production-ready-agent">Turn Your AI Script into a Production-Ready Agent</a> on AWS Builder Center, and the <a href="https://dev.to/aws/building-production-ready-ai-agents-a-multi-framework-journey-with-amazon-bedrock-agentcore-p32">Building Production-Ready AI Agents</a> multi-framework series on dev.to (Strands, CrewAI, Pydantic AI, LlamaIndex, and LangGraph parts), with code from AWS’s <a href="https://github.com/danilop/agentcore-multi-framework-examples">agentcore-multi-framework-examples</a> repository. AgentCore’s CLI and SDK are evolving quickly - check version numbers before copying commands.</em></p>
 
 
 </section>

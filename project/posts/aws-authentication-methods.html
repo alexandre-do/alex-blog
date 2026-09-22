@@ -167,7 +167,7 @@ ul.task-list li input[type="checkbox"] {
 
 <section id="eight-ways-in-notes-for-aws-certification" class="level1">
 <h1>Eight Ways In: Notes for AWS Certification</h1>
-<p><img src="images/aws-authentication-methods.png" class="post-banner img-fluid" alt="Eight Ways In — AWS authentication"></p>
+<p><img src="images/aws-authentication-methods.png" class="post-banner img-fluid" alt="Eight Ways In - AWS authentication"></p>
 <p>Every AWS authentication question comes down to two things: <strong>who is signing in</strong>, and <strong>what do they need to access</strong>. Once you know those two answers, the right method almost picks itself.</p>
 <section id="choose-based-on-whos-authenticating" class="level2">
 <h2 class="anchored" data-anchor-id="choose-based-on-whos-authenticating">Choose Based on Who’s Authenticating</h2>
@@ -191,7 +191,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Customers sign into your web/mobile app</td>
 <td><strong>Cognito User Pool</strong></td>
 <td>Managed user directory, login screens, JWTs, password reset, MFA, passkeys, social login</td>
-<td>IAM users or access keys — those are for AWS administrators/services, not app users</td>
+<td>IAM users or access keys - those are for AWS administrators/services, not app users</td>
 </tr>
 <tr class="even">
 <td>Customer uses Google, Apple, Microsoft, or a company IdP</td>
@@ -203,25 +203,25 @@ ul.task-list li input[type="checkbox"] {
 <td>Employees access AWS accounts, the console, or internal AWS apps</td>
 <td><strong>IAM Identity Center</strong></td>
 <td>Central workforce SSO, group-based AWS account permissions, integration with corporate identity providers</td>
-<td>Cognito — it’s primarily for application end users</td>
+<td>Cognito - it’s primarily for application end users</td>
 </tr>
 <tr class="even">
 <td>Mobile/web users upload directly to S3 or call AWS services from their device</td>
 <td><strong>Cognito Identity Pool + IAM roles</strong></td>
 <td>Exchanges a login token for short-lived, narrowly scoped AWS credentials</td>
-<td>Embedding AWS access keys in an app — never do this</td>
+<td>Embedding AWS access keys in an app - never do this</td>
 </tr>
 <tr class="odd">
 <td>A public API has logged-in users</td>
 <td><strong>Cognito User Pool + API Gateway JWT authorizer</strong></td>
 <td>API Gateway verifies tokens before requests reach your code</td>
-<td>API keys alone — they identify a consumer, but don’t establish a human identity</td>
+<td>API keys alone - they identify a consumer, but don’t establish a human identity</td>
 </tr>
 <tr class="even">
 <td>One service calls another (Lambda → S3/DynamoDB, ECS → SQS)</td>
 <td><strong>IAM roles</strong></td>
-<td>Automatic, short-lived credentials — no secrets deployed with your code</td>
-<td>Cognito — there’s no human end user to authenticate</td>
+<td>Automatic, short-lived credentials - no secrets deployed with your code</td>
+<td>Cognito - there’s no human end user to authenticate</td>
 </tr>
 <tr class="odd">
 <td>A Kubernetes workload calls AWS services</td>
@@ -254,16 +254,16 @@ ul.task-list li input[type="checkbox"] {
 <h2 class="anchored" data-anchor-id="a-mental-model-for-the-table">A Mental Model for the Table</h2>
 <p>Each method is really answering a different question:</p>
 <ul>
-<li><strong>Cognito User Pool</strong> — “Who is this app user?” → returns JWTs.</li>
-<li><strong>Cognito Identity Pool</strong> — “Can this client receive temporary AWS credentials?” → returns scoped AWS credentials.</li>
-<li><strong>IAM Identity Center</strong> — “Which employee can access which AWS account or application?” → workforce SSO.</li>
-<li><strong>IAM roles</strong> — “Which AWS workload is making this request?” → service-to-service identity.</li>
-<li><strong>API keys</strong> — “Which client or app is consuming this API?” → metering, not strong authentication.</li>
+<li><strong>Cognito User Pool</strong> - “Who is this app user?” → returns JWTs.</li>
+<li><strong>Cognito Identity Pool</strong> - “Can this client receive temporary AWS credentials?” → returns scoped AWS credentials.</li>
+<li><strong>IAM Identity Center</strong> - “Which employee can access which AWS account or application?” → workforce SSO.</li>
+<li><strong>IAM roles</strong> - “Which AWS workload is making this request?” → service-to-service identity.</li>
+<li><strong>API keys</strong> - “Which client or app is consuming this API?” → metering, not strong authentication.</li>
 </ul>
 </section>
 <section id="the-one-to-avoid" class="level2">
 <h2 class="anchored" data-anchor-id="the-one-to-avoid">The One to Avoid</h2>
-<p><strong>IAM user access keys</strong> (<code>AKIA…</code>) are a permanent secret and password, all in one. There’s no expiry and no third party attesting anything — the key itself is the entire proof. They still exist for a handful of legacy cases (services that genuinely can’t use roles), but AWS’s own documentation now marks them “not recommended.” If a design calls for one, that’s usually a sign a role would fit better.</p>
+<p><strong>IAM user access keys</strong> (<code>AKIA…</code>) are a permanent secret and password, all in one. There’s no expiry and no third party attesting anything - the key itself is the entire proof. They still exist for a handful of legacy cases (services that genuinely can’t use roles), but AWS’s own documentation now marks them “not recommended.” If a design calls for one, that’s usually a sign a role would fit better.</p>
 </section>
 <section id="rule-of-thumb" class="level2">
 <h2 class="anchored" data-anchor-id="rule-of-thumb">Rule of Thumb</h2>
@@ -273,7 +273,7 @@ ul.task-list li input[type="checkbox"] {
 <li>Add a <strong>Cognito Identity Pool</strong> only if the frontend itself needs to call AWS directly (e.g.&nbsp;uploading to S3 from the browser).</li>
 <li>Use <strong>IAM roles</strong> for every backend service talking to another AWS service.</li>
 </ol>
-<p>Cognito’s User Pools support passwords, passkeys, one-time codes, MFA, and federated identity providers out of the box; its Identity Pools turn a trusted login into temporary AWS credentials. That combination — plus IAM roles for everything server-side — covers the large majority of real-world designs.</p>
+<p>Cognito’s User Pools support passwords, passkeys, one-time codes, MFA, and federated identity providers out of the box; its Identity Pools turn a trusted login into temporary AWS credentials. That combination - plus IAM roles for everything server-side - covers the large majority of real-world designs.</p>
 </section>
 <section id="sources" class="level2">
 <h2 class="anchored" data-anchor-id="sources">Sources</h2>
@@ -282,7 +282,7 @@ ul.task-list li input[type="checkbox"] {
 <li><a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html">What is IAM Identity Center</a></li>
 <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction_identity-management.html">Comparing IAM identities and credentials</a> · <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_sts-comparison.html">Credential comparison</a></li>
 <li><a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html">EKS Pod Identity</a> · <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html">IRSA</a></li>
-<li><a href="https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html">IAM Roles Anywhere — introduction</a></li>
+<li><a href="https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html">IAM Roles Anywhere - introduction</a></li>
 </ul>
 
 

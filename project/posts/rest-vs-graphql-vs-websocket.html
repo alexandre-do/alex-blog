@@ -237,7 +237,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="websocket" class="level2">
 <h2 class="anchored" data-anchor-id="websocket">WebSocket</h2>
-<p>A persistent, bidirectional connection — the right tool when the server needs to push data without the client asking first.</p>
+<p>A persistent, bidirectional connection - the right tool when the server needs to push data without the client asking first.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastapi <span class="im">import</span> WebSocket</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">@app.websocket</span>(<span class="st">"/ws"</span>)</span>
@@ -250,11 +250,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="when-to-use-which" class="level2">
 <h2 class="anchored" data-anchor-id="when-to-use-which">When to Use Which</h2>
 <ul>
-<li><strong>REST</strong> — public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.</li>
-<li><strong>GraphQL</strong> — nested or variable data shapes, multiple client types (web/mobile) with different needs.</li>
-<li><strong>WebSocket</strong> — real-time features like chat, live dashboards, or notifications.</li>
+<li><strong>REST</strong> - public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.</li>
+<li><strong>GraphQL</strong> - nested or variable data shapes, multiple client types (web/mobile) with different needs.</li>
+<li><strong>WebSocket</strong> - real-time features like chat, live dashboards, or notifications.</li>
 </ul>
-<p>They’re not mutually exclusive — a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature.</p>
+<p>They’re not mutually exclusive - a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature.</p>
 
 
 </section>

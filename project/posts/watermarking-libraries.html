@@ -203,25 +203,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="watermarking-libraries-a-practical-guide" class="level1">
 <h1>Watermarking Libraries: A Practical Guide</h1>
 <p><img src="images/watermarking-libraries.png" class="post-banner img-fluid" alt="Watermarking Libraries: A Practical Guide"></p>
-<p>As generated text, images, and audio become harder to distinguish from human-made content, watermarking has become the default technical answer to “was this AI-generated?” The idea is simple — embed a signal at generation time that a detector can later recognize — but the mechanism differs a lot by modality, and the real design constraint isn’t embedding the signal, it’s making it survive. This post covers how each modality’s watermarking actually works, then which libraries implement it — with a closer look at text, since that’s the modality most people building on top of LLMs will touch.</p>
+<p>As generated text, images, and audio become harder to distinguish from human-made content, watermarking has become the default technical answer to “was this AI-generated?” The idea is simple - embed a signal at generation time that a detector can later recognize - but the mechanism differs a lot by modality, and the real design constraint isn’t embedding the signal, it’s making it survive. This post covers how each modality’s watermarking actually works, then which libraries implement it - with a closer look at text, since that’s the modality most people building on top of LLMs will touch.</p>
 <section id="why-watermark-at-all" class="level2">
 <h2 class="anchored" data-anchor-id="why-watermark-at-all">Why Watermark at All</h2>
-<p>The motivating cases are provenance and misuse detection: labeling AI-generated content for platform policy, catching academic dishonesty, tracing deepfakes back to the model that made them, and giving downstream systems (search engines, content moderation, other models scraping training data) a way to know what they’re looking at. It’s a softer control than the input/output filtering in something like a <a href="../../project/posts/guardrail-stack-bedrock.html">guardrail stack</a> — watermarking doesn’t stop generation, it labels what already happened.</p>
+<p>The motivating cases are provenance and misuse detection: labeling AI-generated content for platform policy, catching academic dishonesty, tracing deepfakes back to the model that made them, and giving downstream systems (search engines, content moderation, other models scraping training data) a way to know what they’re looking at. It’s a softer control than the input/output filtering in something like a <a href="../../project/posts/guardrail-stack-bedrock.html">guardrail stack</a> - watermarking doesn’t stop generation, it labels what already happened.</p>
 </section>
 <section id="text-watermarking" class="level2">
 <h2 class="anchored" data-anchor-id="text-watermarking">Text Watermarking</h2>
-<p>Text is the hardest modality to watermark, because there’s no redundant channel to hide a signal in the way there is in pixels or audio samples — every token is visible, meaningful content.</p>
+<p>Text is the hardest modality to watermark, because there’s no redundant channel to hide a signal in the way there is in pixels or audio samples - every token is visible, meaningful content.</p>
 <p>The dominant approach (Kirchenbauer et al.’s green-red list scheme, and variants of it used in production systems) works at the logit level during sampling:</p>
 <ol type="1">
 <li>Before sampling each token, use a hash of the preceding tokens to seed a pseudorandom split of the vocabulary into a “green” list and a “red” list.</li>
-<li>Bias the logits to favor green-list tokens — a soft boost, not a hard restriction, so output quality doesn’t visibly degrade.</li>
+<li>Bias the logits to favor green-list tokens - a soft boost, not a hard restriction, so output quality doesn’t visibly degrade.</li>
 <li>A detector with the same hashing scheme can count green-vs-red token ratios in a text sample and compute a statistical test: naturally-written text splits roughly 50/50, watermarked text skews green.</li>
 </ol>
-<p>No embedded payload, no changes to model weights — it’s a sampling-time intervention, which is why it can be toggled per-request cheaply. The cost is a small, usually imperceptible shift in output distribution, and detection requires either the original hashing key or API access to a detector that has it. Google’s SynthID Text is a variant on the same idea.</p>
+<p>No embedded payload, no changes to model weights - it’s a sampling-time intervention, which is why it can be toggled per-request cheaply. The cost is a small, usually imperceptible shift in output distribution, and detection requires either the original hashing key or API access to a detector that has it. Google’s SynthID Text is a variant on the same idea.</p>
 </section>
 <section id="image-and-video-watermarking" class="level2">
 <h2 class="anchored" data-anchor-id="image-and-video-watermarking">Image and Video Watermarking</h2>
-<p>Images have more room to hide a signal, and the state of the art (Google DeepMind’s SynthID is the most deployed example) embeds it directly in pixel values in a way that’s statistically invisible to the human eye but recoverable by a matched detector — conceptually similar to spread-spectrum steganography, tuned to survive common transformations. Most practical libraries embed the signal in the frequency domain (DWT/DCT) or via a trained encoder/decoder network.</p>
+<p>Images have more room to hide a signal, and the state of the art (Google DeepMind’s SynthID is the most deployed example) embeds it directly in pixel values in a way that’s statistically invisible to the human eye but recoverable by a matched detector - conceptually similar to spread-spectrum steganography, tuned to survive common transformations. Most practical libraries embed the signal in the frequency domain (DWT/DCT) or via a trained encoder/decoder network.</p>
 <p>Video mostly reduces to per-frame image watermarking plus temporal consistency, so the signal doesn’t flicker or get exploited by frame-dropping.</p>
 <table class="caption-top table">
 <thead>
@@ -250,7 +250,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td>Pillow / OpenCV</td>
 <td>Direct pixel overlay</td>
-<td>Not a real watermark — just stamping a visible logo or text. Fine for branding, trivially removed, don’t use it for provenance</td>
+<td>Not a real watermark - just stamping a visible logo or text. Fine for branding, trivially removed, don’t use it for provenance</td>
 </tr>
 </tbody>
 </table>
@@ -341,23 +341,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>Text watermarks are the most fragile of the three, precisely because the channel carrying the signal (token choice) is also the entire content — there’s no redundancy to sacrifice. A few sentences of paraphrasing can knock detection confidence down substantially. Image and audio watermarks tend to be more robust because they exploit genuinely redundant channels (pixel-level noise, inaudible frequency bands), but aggressive enough transformation still degrades them.</p>
+<p>Text watermarks are the most fragile of the three, precisely because the channel carrying the signal (token choice) is also the entire content - there’s no redundancy to sacrifice. A few sentences of paraphrasing can knock detection confidence down substantially. Image and audio watermarks tend to be more robust because they exploit genuinely redundant channels (pixel-level noise, inaudible frequency bands), but aggressive enough transformation still degrades them.</p>
 <p>This is also why watermarking is a <em>detection aid</em>, not a security control: it’s meant to catch casual and accidental cases, not resist an adversary specifically trying to strip it. Treating it as a substitute for content moderation or authentication is the most common design mistake.</p>
 </section>
 <section id="provenance-standards-c2pa" class="level2">
 <h2 class="anchored" data-anchor-id="provenance-standards-c2pa">Provenance Standards: C2PA</h2>
-<p>Separately from statistical watermarking, the <a href="https://c2pa.org/">C2PA standard</a> (backed by Adobe, Microsoft, OpenAI, and others) takes a metadata-and-signing approach: a cryptographically signed manifest travels with the file, recording generation tool, edit history, and a content hash. It’s not hidden in the pixels — it’s an explicit, verifiable chain of custody, closer to a digital signature than a watermark.</p>
-<p>The two approaches are complementary rather than competing: C2PA metadata is strong when it survives (cryptographically verifiable, tamper-evident) but trivially stripped by re-saving a file without preserving metadata. Statistical watermarking survives common re-encoding but only gives a probabilistic answer. A system that cares about provenance uses both — C2PA for the strong claim when metadata is intact, watermark detection as the fallback when it isn’t.</p>
+<p>Separately from statistical watermarking, the <a href="https://c2pa.org/">C2PA standard</a> (backed by Adobe, Microsoft, OpenAI, and others) takes a metadata-and-signing approach: a cryptographically signed manifest travels with the file, recording generation tool, edit history, and a content hash. It’s not hidden in the pixels - it’s an explicit, verifiable chain of custody, closer to a digital signature than a watermark.</p>
+<p>The two approaches are complementary rather than competing: C2PA metadata is strong when it survives (cryptographically verifiable, tamper-evident) but trivially stripped by re-saving a file without preserving metadata. Statistical watermarking survives common re-encoding but only gives a probabilistic answer. A system that cares about provenance uses both - C2PA for the strong claim when metadata is intact, watermark detection as the fallback when it isn’t.</p>
 </section>
 <section id="text-watermarking-the-practical-focus" class="level2">
 <h2 class="anchored" data-anchor-id="text-watermarking-the-practical-focus">Text Watermarking: The Practical Focus</h2>
-<p>Text is where most people actually need this today — labeling LLM output — and it’s also the modality with the least redundancy to hide a signal in, so the tooling matters more.</p>
+<p>Text is where most people actually need this today - labeling LLM output - and it’s also the modality with the least redundancy to hide a signal in, so the tooling matters more.</p>
 <section id="built-into-hugging-face-transformers" class="level3">
 <h3 class="anchored" data-anchor-id="built-into-hugging-face-transformers">Built into Hugging Face <code>transformers</code></h3>
 <p>The lowest-friction option: no separate package, just a config object passed to <code>generate()</code>. <code>transformers</code> ships two schemes:</p>
 <ul>
-<li><strong><code>WatermarkingConfig</code></strong> — the Kirchenbauer et al.&nbsp;green/red list scheme, tunable via <code>bias</code> and <code>seeding_scheme</code>.</li>
-<li><strong><code>SynthIDTextWatermarkingConfig</code></strong> — Google DeepMind’s SynthID Text, open-sourced and merged upstream.</li>
+<li><strong><code>WatermarkingConfig</code></strong> - the Kirchenbauer et al.&nbsp;green/red list scheme, tunable via <code>bias</code> and <code>seeding_scheme</code>.</li>
+<li><strong><code>SynthIDTextWatermarkingConfig</code></strong> - Google DeepMind’s SynthID Text, open-sourced and merged upstream.</li>
 </ul>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> (</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    AutoModelForCausalLM,</span>
@@ -380,7 +380,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="lm-watermarking-the-reference-implementation" class="level3">
 <h3 class="anchored" data-anchor-id="lm-watermarking-the-reference-implementation"><code>lm-watermarking</code> (the reference implementation)</h3>
-<p><a href="https://github.com/jwkirchenbauer/lm-watermarking">jwkirchenbauer/lm-watermarking</a> is the original research implementation of the green/red list scheme, exposed as a <code>LogitsProcessor</code> you drop into generation, plus a matching detector. It exposes more knobs than the <code>transformers</code> built-in (<code>gamma</code> — green list size, <code>delta</code> — logit bias strength, <code>seeding_scheme</code> — how the list is derived), which makes it the better pick when you’re tuning the detectability/quality trade-off yourself rather than taking the defaults.</p>
+<p><a href="https://github.com/jwkirchenbauer/lm-watermarking">jwkirchenbauer/lm-watermarking</a> is the original research implementation of the green/red list scheme, exposed as a <code>LogitsProcessor</code> you drop into generation, plus a matching detector. It exposes more knobs than the <code>transformers</code> built-in (<code>gamma</code> - green list size, <code>delta</code> - logit bias strength, <code>seeding_scheme</code> - how the list is derived), which makes it the better pick when you’re tuning the detectability/quality trade-off yourself rather than taking the defaults.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> extended_watermark_processor <span class="im">import</span> WatermarkLogitsProcessor, WatermarkDetector</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> LogitsProcessorList</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -405,7 +405,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="markllm-compare-schemes-without-committing-to-one" class="level3">
 <h3 class="anchored" data-anchor-id="markllm-compare-schemes-without-committing-to-one">MarkLLM (compare schemes without committing to one)</h3>
-<p><a href="https://github.com/THU-BPM/MarkLLM">THU-BPM/MarkLLM</a> is a unified toolkit bundling roughly ten watermarking algorithms — KGW, a SynthID reimplementation, Unigram, EXP, SIR, and others — behind one API, with built-in detection and visualization. Reach for this when you’re evaluating which scheme fits your use case rather than shipping one from day one; it’s the tool for running an apples-to-apples comparison before committing.</p>
+<p><a href="https://github.com/THU-BPM/MarkLLM">THU-BPM/MarkLLM</a> is a unified toolkit bundling roughly ten watermarking algorithms - KGW, a SynthID reimplementation, Unigram, EXP, SIR, and others - behind one API, with built-in detection and visualization. Reach for this when you’re evaluating which scheme fits your use case rather than shipping one from day one; it’s the tool for running an apples-to-apples comparison before committing.</p>
 </section>
 <section id="unigram-watermark" class="level3">
 <h3 class="anchored" data-anchor-id="unigram-watermark">Unigram-Watermark</h3>
@@ -453,7 +453,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="where-this-actually-bites" class="level2">
 <h2 class="anchored" data-anchor-id="where-this-actually-bites">Where This Actually Bites</h2>
-<p>The gap that trips up most watermarking deployments — and every library above inherits it — is treating detection confidence as binary. Watermark detectors return a statistical score, not a yes/no — a short text sample or a heavily cropped image will produce a weak signal even from genuinely watermarked content, and reporting that as a hard “AI-generated: false” is the wrong conclusion. Picking a library solves the integration problem, not the robustness one: a paraphrase or regeneration pass can still knock detection confidence down substantially. If you’re building on top of watermark detection (content moderation, provenance UI, academic integrity tooling), surface the confidence level and the attack surface it’s vulnerable to, not just a pass/fail badge.</p>
+<p>The gap that trips up most watermarking deployments - and every library above inherits it - is treating detection confidence as binary. Watermark detectors return a statistical score, not a yes/no - a short text sample or a heavily cropped image will produce a weak signal even from genuinely watermarked content, and reporting that as a hard “AI-generated: false” is the wrong conclusion. Picking a library solves the integration problem, not the robustness one: a paraphrase or regeneration pass can still knock detection confidence down substantially. If you’re building on top of watermark detection (content moderation, provenance UI, academic integrity tooling), surface the confidence level and the attack surface it’s vulnerable to, not just a pass/fail badge.</p>
 
 
 </section>
