@@ -132,14 +132,15 @@ GOPHER_BUDGET = 5.76e23   # FLOPs, Hoffmann et al. (2022) Fig. 2 caption
     tokens beat the 280B Gopher trained on the same FLOPs. [@hoffmann2022]
 
 3.  **Kaplan's exponent was a methodology artifact**, and it has since been
-    reproduced and decomposed. Porian et al. walk $0.835 \rightarrow 0.497$ in
-    three steps: counting the output layer's FLOPs, fixing a fixed-length warmup,
-    and tuning the optimizer per scale. Notably, the cosine-schedule explanation
+    reproduced and decomposed. Porian et al. reproduce Kaplan's raw fit (0.835)
+    and walk it down to 0.497 by counting the output layer's FLOPs, scaling
+    warmup with model size, and tuning the optimizer per scale. Notably, the cosine-schedule explanation
     Chinchilla itself offered accounts for only a small part of the gap. [@porian2024]
 
-4.  **Chinchilla's own Approach 3 is also wrong** — Epoch AI's replication shows
-    its parametric fit is inconsistent with the paper's other two methods and
-    reports confidence intervals that would require ~600,000 training runs.
+4.  **Chinchilla's own Approach 3 is also off.** Epoch AI's replication shows
+    its parametric fit disagrees with the paper's other two methods, and that its
+    reported confidence intervals would need about 600,000 training runs to be
+    that narrow. The cause was an optimizer that stopped before converging.
     [@besiroglu2024] *And* Chinchilla-optimal is the wrong objective if you plan
     to serve the model: it minimizes loss per *training* FLOP and ignores
     inference entirely.
@@ -159,8 +160,8 @@ generation actually looked like, in the one ratio that matters.
 #| label: fig-ratio
 #| echo: false
 #| fig-cap: >
-#|   Training tokens per parameter. Every large model of the Kaplan era clusters
-#|   around 1–2; Chinchilla sits at 20, on the same training budget as Gopher.
+#|   Training tokens per parameter. Every large model of the Kaplan era sits
+#|   between 0.5 and 1.7; Chinchilla sits at 20, on the same training budget as Gopher.
 #|   Source: Hoffmann et al. (2022), Table 1. The dashed rule marks ≈20
 #|   tokens/parameter — the ratio implied by the paper's Approach 1 projections
 #|   (Table 3: a 1B model → 20.2B tokens) and the ratio Chinchilla was trained at.
@@ -203,7 +204,7 @@ $$
 
 $\alpha_N = 0.076,\ N_c = 8.8\!\times\!10^{13}$
 $\alpha_D = 0.095,\ D_c = 5.4\!\times\!10^{13}$
-$\alpha_C = 0.050,\ C_c = 3.1\!\times\!10^{8}$ PF-days
+$\alpha_C^{\min} = 0.050,\ C_c^{\min} = 3.1\!\times\!10^{8}$ PF-days
 
 *Pure power laws, no offset.* Loss goes to zero as $N \to \infty$. $N$ counts
 **non-embedding** parameters — "excluding all vocabulary and positional
@@ -248,7 +249,8 @@ immediate.
 #| code-summary: "The two allocation laws, as published"
 
 def kaplan_N(C):
-    """Kaplan's *adjusted* law, as quoted by Porian et al. (2024)."""
+    """Kaplan Fig. 14 / Table 6: N = 1.3e9 * (C_min / 1 PF-day)^0.73, non-embedding
+    params. 'Adjusted' for batch size, as Porian et al. (2024) call it."""
     return 1.3e9 * (C / 8.64e19) ** 0.73
 
 def chinchilla_N(C):
@@ -265,7 +267,8 @@ def chinchilla_N(C):
 #|   labs actually spent. Model markers use each paper's published parameter and
 #|   token counts; compute for GPT-3, Jurassic-1, LaMDA and MT-NLG is 6ND (our
 #|   arithmetic), while Gopher and Chinchilla use the 5.76e23 FLOPs printed in
-#|   Hoffmann et al. Fig. 2.
+#|   Hoffmann et al. Fig. 2. Kaplan's curve is in non-embedding parameters, so
+#|   the gap to Chinchilla is slightly overstated at small budgets.
 
 C = np.logspace(19, 26, 300)
 fig, ax = plt.subplots(figsize=(9, 5.2))
@@ -327,10 +330,10 @@ profiles — nine fixed FLOP budgets from $6\times10^{18}$ to $3\times10^{21}$,
 sweeping model size within each and finding the parabola's minimum. **Approach 3**
 fits the parametric loss and derives the frontier analytically.
 
-Approach 3's $a = 0.46$ looks close enough to 0.5 to ignore. It is not. Because
-the exponent compounds, a 0.04 difference becomes a large difference in the
-recommended tokens-per-parameter ratio as budgets grow — and you can check this
-yourself from the paper's own printed constants.
+Approach 3's $a = 0.46$ looks close enough to 0.5 to ignore. It is not, for two
+reasons: the fitted constants already put the ratio near 40 tokens per parameter
+at $10^{22}$ FLOPs, and the 0.08 gap between $b$ and $a$ makes it climb from
+there. You can check both from the paper's own printed constants.
 
 ```{python}
 #| label: repro-a3
@@ -376,6 +379,10 @@ $a = 0.5126$ (SE 0.02). That agrees with Approaches 1 and 2, and with how
 Chinchilla was actually trained. They also note the published intervals on $a$
 (0.454–0.455) are implausibly tight: *"intervals this narrow would require over
 600,000 experiments, while they likely only ran fewer than 500."* [@besiroglu2024]
+
+The cause, confirmed by one of Hoffmann's lead authors: the Huber loss was
+averaged rather than summed over points, so L-BFGS hit its stopping tolerance
+early, both in the main fit and in every bootstrap.
 :::
 
 Swap the Epoch constants into the same function and the ratio stabilises where
@@ -397,8 +404,8 @@ for C_budget in [1e22, 1e23, GOPHER_BUDGET, 1e25]:
 pd.DataFrame(rows)
 ```
 
-The Epoch refit is flat near 20 across four orders of magnitude. That flatness is
-what makes "20 tokens per parameter" a usable rule of thumb rather than a
+The Epoch refit stays between 17 and 20 tokens per parameter across three orders
+of magnitude, drifting slowly down rather than up. That stability is what makes "20 tokens per parameter" a usable rule of thumb rather than a
 coincidence at one budget — and it is worth knowing that the rule comes from
 Approaches 1 and 2 and the replication, *not* from the equation most people copy.
 
@@ -408,7 +415,7 @@ Approaches 1 and 2 and the replication, *not* from the equation most people copy
 #| fig-cap: >
 #|   IsoFLOP curves drawn straight from Hoffmann et al.'s published loss function,
 #|   with tokens set by D = C/6N. No refitting. At the Gopher budget the minimum
-#|   lands at 39.8B, matching the paper's stated 40B projection. These are the
+#|   lands at about 40B, matching the paper's stated 40B projection. These are the
 #|   model's predictions, not measured runs — the paper's *measured* IsoFLOP
 #|   minima (Approach 2) sit closer to 63B at that budget.
 
@@ -440,15 +447,23 @@ plt.show()
 ## Where 0.73 actually came from
 
 Chinchilla's own explanation for the discrepancy was the learning-rate schedule:
-Kaplan used one cosine decay sized for 130B tokens across all runs, so a model
+Kaplan used one cosine decay sized for about 131B tokens across all runs, so a model
 evaluated at an intermediate checkpoint looks worse than a model whose schedule
-was sized to stop there. That biases short runs downward and pushes the fit toward
-bigger models on less data.
+was sized to stop there. That makes short runs look worse than they are, and pushes
+the fit toward bigger models on less data.
 
 It is a good hypothesis. It is also mostly wrong, and we know this because Porian
 et al. ran over 900 training runs — 16 model sizes from 5M to 901M parameters on
 OpenWebText2 and RefinedWeb — reproducing Kaplan's setup and then removing one
 confounder at a time.
+
+One wrinkle before the numbers. Kaplan's raw fit was actually $N \propto C^{0.88}$;
+the famous 0.73 is their *adjusted* law, after correcting for using too large a
+batch at small scale. Porian et al.'s baseline (0.835 on RefinedWeb) reproduces
+the raw 0.88 setup, and their per-scale tuning step does roughly the job Kaplan's
+batch adjustment did. They check this directly: with tuned hyperparameters but the
+head-FLOP and warmup issues put back, they get 0.717, essentially Kaplan's 0.73
+(their Appendix H). So the gap from 0.73 to 0.5 is mostly the two fixes below.
 
 ```{python}
 #| label: fig-waterfall
@@ -458,7 +473,7 @@ confounder at a time.
 #|   re-measurement of *a* after a single methodological correction, applied
 #|   cumulatively. Source: Porian et al. (2024), Table 1, RefinedWeb column, with
 #|   95% confidence intervals as printed. Their OpenWebText2 column follows the
-#|   same path (0.835 → 0.699 → 0.603 → 0.574 → 0.518).
+#|   same path (0.864 → 0.699 → 0.603 → 0.574 → 0.518).
 
 fig, ax = plt.subplots(figsize=(9, 4.6))
 ys = np.arange(len(WATERFALL))[::-1]
@@ -491,22 +506,22 @@ plt.show()
 
 ### 1. Count the output layer's FLOPs — −0.13
 
-Kaplan excluded embeddings from $N$, and because the output head shared weights
-with the input embedding, its per-token FLOPs got discounted too. The resulting
+Kaplan excluded embeddings from $N$ and, probably because the output head shared
+weights with the input embedding, its per-token FLOPs were left out of the compute
+count too. The resulting
 under-approximation of compute runs from "roughly 10% at larger models to roughly
 90% at smaller models" — a bias that scales with the very axis you are fitting
 against. Counting it correctly moves $a$ from 0.835 to 0.706.
 
-Pearce & Song attack the same issue analytically and reach a compatible
-conclusion: model total parameters as $N_T = N_E + \omega N_E^{1/3}$ (fitting
+Pearce & Song come at a closely related issue analytically: model total parameters as $N_T = N_E + \omega N_E^{1/3}$ (fitting
 $\omega = 47{,}491$ to Chinchilla's own configurations) and the non-embedding
 relationship stops being a power law at all. It has a small-scale regime and a
 large-scale regime, with the crossover where embeddings are half the model —
 around $10^7$ non-embedding parameters. Kaplan's entire sweep, 768 to 1.5B,
-straddles that. Simulating Kaplan-scale models from the Chinchilla loss surface
-and fitting the way Kaplan did, they recover
-$N^*_E \propto C_E^{0.74\text{–}0.78}$. The 0.73 falls out of the measurement
-convention. [@pearce2024]
+straddles that. Taking the Chinchilla (or Epoch) loss surface and measuring it in Kaplan's
+non-embedding units, they get a local exponent of 0.74 (or 0.78). Their
+decomposition puts more weight on the embedding convention than Porian's does,
+partly because a fitted loss surface has no warmup problem to find. [@pearce2024]
 
 ### 2. Stop warming up for 1.57B tokens — −0.10
 
@@ -521,7 +536,7 @@ warmup tokens proportional to $N$ moves $a$ to 0.602.
 
 Sweeping learning rate, batch size and AdamW's $\beta_2$ per model size — they fit
 $\mathrm{BS} = 0.00037\,N^{0.703}$ and $\mathrm{LR} = 3.7\,N^{-0.36}$, and find
-$\beta_2 = 0.95$ is actively bad at small batch sizes — lands at
+$\beta_2 = 0.95$ is too low at small batch sizes — lands at
 **$a = 0.497$, 95% CI (0.49, 0.50)**. Their summary: the exponent matches 0.5 "to
 within 0.6%" and the predicted model size at Chinchilla compute lands "within 15%
 of Chinchilla's size."
@@ -530,9 +545,9 @@ of Chinchilla's size."
 ## And the cosine schedule?
 
 Porian et al. tested it in isolation (§3.4) and it moves $a$ from 0.60 to 0.57 —
-"most of the gap remains." Their reasoning is sharp: with decay targeted at 131B
+"most of the gap remains." Their reasoning is sharp: with decay targeted at about 131B
 tokens, Kaplan's compute-constrained runs "see virtually no learning rate decay,"
-under 1.5% of the cosine. Their final 0.497 is achieved with a *constant* learning
+less than 1.5% of the decay. Their final 0.497 is achieved with a *constant* learning
 rate. Pearce & Song find the same thing independently: switching from Kaplan's
 schedule to Chinchilla's *raised* their coefficient from 0.46 to 0.49 rather than
 lowering it.
@@ -604,7 +619,9 @@ short enough to reproduce:
 
 from scipy.optimize import brentq, minimize_scalar
 
-# Sardana et al. Appendix A: Chinchilla's A, B, E with alpha/beta de-rounded.
+# Sardana et al. Appendix A: Chinchilla's A, B, E with alpha = 0.336, beta = 0.283,
+# taken from De Vries (2023) to better match Hoffmann's Table A3 (not the
+# TeX-source values above).
 SARDANA = dict(E=1.69, A=406.4, B=410.7, alpha=0.336, beta=0.283)
 
 def tokens_for_loss(N, target, E, A, B, alpha, beta):
@@ -683,6 +700,12 @@ to the small models: "we also train our smaller models for much longer than is
 compute-optimal… The resulting models perform better than compute-optimal models
 at the same inference budget." [@llama3]
 
+Note the ratio: 15.6T tokens on 405B parameters is about 39 tokens per parameter,
+and Meta's own fit (402B on 16.55T) says 41. That is roughly double Chinchilla's
+20, from IsoFLOP curves on their own data mix. The planner table above, which puts
+Chinchilla-optimal at 544B on 12T for the same budget, shows how much the
+"optimal" ratio moves with the data and stack.
+
 That is the field's settled position. Chinchilla-optimal is the right target for
 the flagship, where training cost dominates; heavy over-training is the right
 target for the models you actually serve.
@@ -692,9 +715,10 @@ target for the models you actually serve.
 -   **Never use Kaplan's allocation exponents.** 0.73/0.27 is a measurement
     artifact with a known, reproduced cause. The loss-vs-scale *phenomenology* —
     smooth power laws, predictable returns — survives intact.
--   **Use ~20 tokens/parameter as the training-optimal anchor**, and know it comes
+-   **Use ~20 tokens/parameter as a starting anchor, not a constant.** It comes
     from Approaches 1 and 2 plus the Epoch refit, not from Chinchilla's published
-    Eq. 10, which drifts to 59+ at frontier budgets.
+    Eq. 10, which drifts to 59+ at frontier budgets. Meta's own IsoFLOP fit for
+    Llama 3 landed near 40.
 -   **If you will serve the model, over-train it.** Compute the inference-inclusive
     objective before sizing. At $10^{12}$–$10^{13}$ lifetime tokens the optimum
     moves substantially smaller-and-longer.
@@ -702,8 +726,12 @@ target for the models you actually serve.
     entangled with tokenizer, data mix, optimizer tuning and architecture.
     Chinchilla's own three approaches disagreed on their own data.
 -   **Sweep hyperparameters per scale, and warm up proportionally to model size.**
-    Both papers' discrepancies trace back to holding something fixed across scales
-    that should not have been.
+    Kaplan's discrepancy traces back to holding warmup and optimizer settings fixed
+    across scales that should not have been.
+-   **Check that your scaling-law fit actually converged.** Chinchilla's Approach 3
+    constants came from an L-BFGS run that stopped early because the Huber loss was
+    averaged instead of summed, which is also why its bootstrap intervals came out
+    absurdly narrow.
 -   **Include the output layer in your FLOP accounting.** The single largest term
     in the reconciliation was an accounting choice, not a scientific finding.
 
