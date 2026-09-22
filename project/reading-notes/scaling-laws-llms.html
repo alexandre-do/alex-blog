@@ -6,8 +6,8 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2022-03-29">
-<meta name="description" content="Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) - and why so many early large models were undertrained.">
+<meta name="dcterms.date" content="2026-09-21">
+<meta name="description" content="A practitioner’s walkthrough of the two scaling laws that shaped LLM pre-training, why their compute-allocation exponents disagreed, what the 2024 replications found, and what to actually do with any of it. Every figure is computed from published constants.">
 
 <title>Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla – Alexandre DO</title>
 <style>
@@ -25,10 +25,64 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
-</style>
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
 
 
-<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
 <script src="../../site_libs/quarto-nav/headroom.min.js"></script>
 <script src="../../site_libs/clipboard/clipboard.min.js"></script>
 <script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
@@ -45,7 +99,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-9833238ecdbb2ccdfc875fe502b022df.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-8f93e13990d70c67ef3732ba9f7c024c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -73,6 +127,9 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 <style>
 /* Reading note: keep only two heading levels visible - the page
    title (from the title block above) and the H2 sections below.
@@ -116,7 +173,7 @@ window.Quarto = {
 <link rel="stylesheet" href="../../styles.css">
 </head>
 
-<body class="nav-fixed fullcontent quarto-light">
+<body class="nav-fixed quarto-light">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -164,23 +221,39 @@ window.Quarto = {
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Contents</h2>
+   
+  <ul class="collapse">
+  <li><a href="#what-each-paper-actually-fit" id="toc-what-each-paper-actually-fit" class="nav-link active" data-scroll-target="#what-each-paper-actually-fit">What each paper actually fit</a></li>
+  <li><a href="#three-approaches-and-one-that-doesnt-agree" id="toc-three-approaches-and-one-that-doesnt-agree" class="nav-link" data-scroll-target="#three-approaches-and-one-that-doesnt-agree">Three approaches, and one that doesn’t agree</a></li>
+  <li><a href="#where-0.73-actually-came-from" id="toc-where-0.73-actually-came-from" class="nav-link" data-scroll-target="#where-0.73-actually-came-from">Where 0.73 actually came from</a></li>
+  <li><a href="#what-each-law-tells-you-to-build" id="toc-what-each-law-tells-you-to-build" class="nav-link" data-scroll-target="#what-each-law-tells-you-to-build">What each law tells you to build</a></li>
+  <li><a href="#chinchilla-optimal-is-not-deployment-optimal" id="toc-chinchilla-optimal-is-not-deployment-optimal" class="nav-link" data-scroll-target="#chinchilla-optimal-is-not-deployment-optimal">Chinchilla-optimal is not deployment-optimal</a></li>
+  <li><a href="#the-practitioners-checklist" id="toc-the-practitioners-checklist" class="nav-link" data-scroll-target="#the-practitioners-checklist">The practitioner’s checklist</a></li>
+  <li><a href="#sources" id="toc-sources" class="nav-link" data-scroll-target="#sources">Sources</a></li>
+  </ul>
+</nav>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla</h1>
+<div class="quarto-title-block"><div><h1 class="title">Scaling Laws for LLMs: Kaplan vs.&nbsp;Chinchilla</h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+<p class="subtitle lead">Two answers to the same question, and why the 0.23 gap between them turned out to be a bug</p>
   <div class="quarto-categories">
     <div class="quarto-category">LLM</div>
     <div class="quarto-category">Scaling Laws</div>
     <div class="quarto-category">Research</div>
+    <div class="quarto-category">Reproducibility</div>
   </div>
   </div>
 
 <div>
   <div class="description">
-    Notes on how the compute-optimal scaling rule for LLMs changed between Kaplan et al.&nbsp;(2020) and Chinchilla (2022) - and why so many early large models were undertrained.
+    <p>A practitioner’s walkthrough of the two scaling laws that shaped LLM pre-training, why their compute-allocation exponents disagreed, what the 2024 replications found, and what to actually do with any of it. Every figure is computed from published constants.</p>
   </div>
 </div>
 
@@ -191,7 +264,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">March 29, 2022</p>
+      <p class="date">September 21, 2026</p>
     </div>
   </div>
   
@@ -203,24 +276,632 @@ window.Quarto = {
 </header>
 
 
-<blockquote class="blockquote">
-<p><strong>Source:</strong> <a href="https://arxiv.org/abs/2203.15556">Training Compute-Optimal Large Language Models (Chinchilla)</a> - Hoffmann et al., DeepMind, 2022</p>
-</blockquote>
-<p>For comparison, this note also references the earlier <a href="https://arxiv.org/abs/2001.08361">Kaplan et al., “Scaling Laws for Neural Language Models” (2020)</a>, which the Chinchilla paper directly revises.</p>
-<section id="kaplans-rule-2020" class="level2">
-<h2 class="anchored" data-anchor-id="kaplans-rule-2020">Kaplan’s rule (2020)</h2>
-<p>Given a fixed compute budget, Kaplan et al.&nbsp;found that loss improves most by growing model size aggressively while under-scaling the amount of training data - practically, this meant training very large models on comparatively few tokens. This rule shaped a generation of models (GPT-3 at 175B parameters trained on ~300B tokens is the canonical example): go big on parameters first, worry about data later.</p>
+<div class="callout callout-style-default callout-important no-icon callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>The short version
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ol type="1">
+<li><p><strong>Kaplan et al.&nbsp;(2020)</strong> found that compute-optimal training puts almost everything into parameters: <span class="math inline">\(N \propto C^{0.73}\)</span>, <span class="math inline">\(D \propto C^{0.27}\)</span>. Their advice was to train very large models and stop “significantly before convergence.” <span class="citation" data-cites="kaplan2020">(<a href="#ref-kaplan2020" role="doc-biblioref">Kaplan et al. 2020</a>)</span></p></li>
+<li><p><strong>Hoffmann et al.&nbsp;(2022)</strong> — Chinchilla — found the two should scale <em>equally</em>: <span class="math inline">\(a \approx b \approx 0.5\)</span>, i.e.&nbsp;“for every doubling of model size the number of training tokens should also be doubled.” A 70B model on 1.4T tokens beat the 280B Gopher trained on the same FLOPs. <span class="citation" data-cites="hoffmann2022">(<a href="#ref-hoffmann2022" role="doc-biblioref">Hoffmann et al. 2022</a>)</span></p></li>
+<li><p><strong>Kaplan’s exponent was a methodology artifact</strong>, and it has since been reproduced and decomposed. Porian et al.&nbsp;walk <span class="math inline">\(0.835 \rightarrow 0.497\)</span> in three steps: counting the output layer’s FLOPs, fixing a fixed-length warmup, and tuning the optimizer per scale. Notably, the cosine-schedule explanation Chinchilla itself offered accounts for only a small part of the gap. <span class="citation" data-cites="porian2024">(<a href="#ref-porian2024" role="doc-biblioref">Porian et al. 2024</a>)</span></p></li>
+<li><p><strong>Chinchilla’s own Approach 3 is also wrong</strong> — Epoch AI’s replication shows its parametric fit is inconsistent with the paper’s other two methods and reports confidence intervals that would require ~600,000 training runs. <span class="citation" data-cites="besiroglu2024">(<a href="#ref-besiroglu2024" role="doc-biblioref">Besiroglu et al. 2024</a>)</span> <em>And</em> Chinchilla-optimal is the wrong objective if you plan to serve the model: it minimizes loss per <em>training</em> FLOP and ignores inference entirely.</p></li>
+</ol>
+</div>
+</div>
+<p>Between 2020 and 2022 essentially every frontier lab trained models on roughly 300 billion tokens and competed on parameter count. That was not laziness. It was the direct, correct reading of the scaling law everyone had: if the optimal model size grows like <span class="math inline">\(C^{0.73}\)</span> and the optimal token count only like <span class="math inline">\(C^{0.27}\)</span>, then a 10× compute increase buys you 5.4× the parameters and only 1.9× the data. Parameters are where the returns are.</p>
+<p>Chinchilla showed that the data axis had been starved. Here is what the 2020–2022 generation actually looked like, in the one ratio that matters.</p>
+<div id="cell-fig-ratio" class="cell" data-execution_count="2">
+<div class="cell-output cell-output-display">
+<div id="fig-ratio" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-ratio-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="scaling-laws-llms_files/figure-html/fig-ratio-output-1.svg" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ratio-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: Training tokens per parameter. Every large model of the Kaplan era clusters around 1–2; Chinchilla sits at 20, on the same training budget as Gopher. Source: Hoffmann et al.&nbsp;(2022), Table 1. The dashed rule marks ≈20 tokens/parameter — the ratio implied by the paper’s Approach 1 projections (Table 3: a 1B model → 20.2B tokens) and the ratio Chinchilla was trained at.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<section id="what-each-paper-actually-fit" class="level2">
+<h2 class="anchored" data-anchor-id="what-each-paper-actually-fit">What each paper actually fit</h2>
+<p>The two papers are not two measurements of the same quantity. They fit different equations to different data, and the difference in form matters as much as the difference in exponent.</p>
+<div class="quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><strong>Kaplan et al.&nbsp;2020</strong> — Eq. 1.1–1.3</p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><span class="math display">\[
+L(N) = \left(\tfrac{N_c}{N}\right)^{\alpha_N}\!,\quad
+L(D) = \left(\tfrac{D_c}{D}\right)^{\alpha_D}\!,\quad
+L(C_{\min}) = \left(\tfrac{C_c}{C_{\min}}\right)^{\alpha_C}
+\]</span></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><span class="math inline">\(\alpha_N = 0.076,\ N_c = 8.8\!\times\!10^{13}\)</span> <span class="math inline">\(\alpha_D = 0.095,\ D_c = 5.4\!\times\!10^{13}\)</span> <span class="math inline">\(\alpha_C = 0.050,\ C_c = 3.1\!\times\!10^{8}\)</span> PF-days</p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><em>Pure power laws, no offset.</em> Loss goes to zero as <span class="math inline">\(N \to \infty\)</span>. <span class="math inline">\(N\)</span> counts <strong>non-embedding</strong> parameters — “excluding all vocabulary and positional embeddings.” Models spanned 768 to 1.5B non-embedding params; data 22M to 23B tokens.</p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><strong>Hoffmann et al.&nbsp;2022</strong> — Eq. 2 / Eq. 10</p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><span class="math display">\[
+L(N, D) = E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}
+\]</span></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><span class="math inline">\(E = 1.6934,\ A = 406.4,\ B = 410.7\)</span> <span class="math inline">\(\alpha = 0.3392,\ \beta = 0.2849\)</span> <span class="math inline">\(a = \beta/(\alpha{+}\beta) = 0.46\)</span></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<p><em>An irreducible-loss term.</em> <span class="math inline">\(E\)</span> is the entropy of natural text you can never fit away. <span class="math inline">\(N\)</span> is <strong>total</strong> parameters, embeddings included. Models ran up to 16B params, budgets <span class="math inline">\(6\!\times\!10^{18} \to 3\!\times\!10^{21}\)</span> FLOPs.</p>
+</div>
+</div>
+</div>
+<p>Three structural differences are doing real work here, and it is worth naming them before the exponents:</p>
+<ul>
+<li><strong>The offset term.</strong> Kaplan’s form has no <span class="math inline">\(E\)</span>. Without an irreducible floor, a power-law fit has to bend the exponents to accommodate the flattening it sees at scale.</li>
+<li><strong>Embedding parameters.</strong> Kaplan excludes them, Chinchilla includes them. At 768 non-embedding parameters with a 50,257-token vocabulary, the embedding matrix <em>is</em> the model. This is not a rounding difference.</li>
+<li><strong>What “compute” counts.</strong> Both use <span class="math inline">\(C \approx 6ND\)</span>, but Kaplan’s <span class="math inline">\(N\)</span> excludes the output layer, so the FLOPs of the final projection go uncounted — an under-approximation that Porian et al.&nbsp;measure at “roughly 10% at larger models to roughly 90% at smaller models.”</li>
+</ul>
+<p>Put the two allocation rules on the same axes and the practical consequence is immediate.</p>
+<div id="laws" class="cell" data-execution_count="3">
+<details class="code-fold">
+<summary>The two allocation laws, as published</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kaplan_N(C):</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Kaplan's *adjusted* law, as quoted by Porian et al. (2024)."""</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fl">1.3e9</span> <span class="op">*</span> (C <span class="op">/</span> <span class="fl">8.64e19</span>) <span class="op">**</span> <span class="fl">0.73</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> chinchilla_N(C):</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Chinchilla Approach 1, anchored on Hoffmann et al. Table 3</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">    (67B parameters at the 5.76e23 FLOP Gopher budget)."""</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fl">6.7e10</span> <span class="op">*</span> (C <span class="op">/</span> GOPHER_BUDGET) <span class="op">**</span> <span class="fl">0.50</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<div id="cell-fig-frontier" class="cell" data-execution_count="4">
+<div class="cell-output cell-output-display">
+<div id="fig-frontier" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-frontier-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="scaling-laws-llms_files/figure-html/fig-frontier-output-1.svg" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-frontier-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2: Compute-optimal model size under each law, extrapolated across the budgets labs actually spent. Model markers use each paper’s published parameter and token counts; compute for GPT-3, Jurassic-1, LaMDA and MT-NLG is 6ND (our arithmetic), while Gopher and Chinchilla use the 5.76e23 FLOPs printed in Hoffmann et al.&nbsp;Fig. 2.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
 </section>
-<section id="chinchillas-correction-2022" class="level2">
-<h2 class="anchored" data-anchor-id="chinchillas-correction-2022">Chinchilla’s correction (2022)</h2>
-<p>Hoffmann et al.&nbsp;re-ran the scaling experiments more carefully and found the original fit was off. The compute-optimal rule is closer to scaling model size (N) and training tokens (D) <em>at roughly the same rate</em> with compute (C):</p>
-<p><span class="math display">\[N \propto C^{0.5}, \quad D \propto C^{0.5}\]</span></p>
-<p>To prove it, they trained Chinchilla - 70B parameters on ~1.4T tokens - and it outperformed Gopher, a 280B-parameter model trained on far fewer tokens, despite using the same compute budget. A model 4x smaller beat one 4x larger, purely by being trained on proportionally more data.</p>
-</section>
-<section id="takeaway" class="level2">
-<h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
-<p>“Bigger is better” was subtly wrong on its own - it’s “bigger <em>and proportionally more data</em> is better.” Most pre-2022 large models were undertrained relative to their parameter count: they’d hit diminishing returns on parameters long before they’d seen enough tokens to justify their size. When thinking about a fixed training budget now, the first question isn’t “how big can the model be” but “what’s the compute-optimal split between size and data” - and for a lot of practical fine-tuning/pretraining decisions, leaning toward more data over more parameters is usually the safer default.</p>
+<section id="three-approaches-and-one-that-doesnt-agree" class="level2">
+<h2 class="anchored" data-anchor-id="three-approaches-and-one-that-doesnt-agree">Three approaches, and one that doesn’t agree</h2>
+<p>Chinchilla’s credibility rests on measuring the same quantity three independent ways. Two agree tightly. The third — the one everybody quotes, because it is the one that gives you a closed-form equation — is the odd one out.</p>
+<div id="tbl-approaches" class="quarto-float quarto-figure quarto-figure-center anchored" data-tbl-colwidths="[40,12,18,12,18]">
+<figure class="quarto-float quarto-float-tbl figure">
+<div aria-describedby="tbl-approaches-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<colgroup>
+<col style="width: 40%">
+<col style="width: 12%">
+<col style="width: 18%">
+<col style="width: 12%">
+<col style="width: 18%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Approach</th>
+<th style="text-align: right;"><span class="math inline">\(a\)</span> (<span class="math inline">\(N^* \propto C^a\)</span>)</th>
+<th style="text-align: center;">interval</th>
+<th style="text-align: right;"><span class="math inline">\(b\)</span> (<span class="math inline">\(D^* \propto C^b\)</span>)</th>
+<th style="text-align: center;">interval</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1. Minimum over training curves</td>
+<td style="text-align: right;">0.50</td>
+<td style="text-align: center;">(0.488, 0.502)</td>
+<td style="text-align: right;">0.50</td>
+<td style="text-align: center;">(0.501, 0.512)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2. IsoFLOP profiles</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: center;">(0.462, 0.534)</td>
+<td style="text-align: right;">0.51</td>
+<td style="text-align: center;">(0.483, 0.529)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">3. Parametric loss modelling</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: center;">(0.454, 0.455)</td>
+<td style="text-align: right;">0.54</td>
+<td style="text-align: center;">(0.542, 0.543)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Kaplan et al.&nbsp;(2020)</td>
+<td style="text-align: right;">0.73</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: center;">—</td>
+</tr>
+</tbody>
+</table>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-tbl" id="tbl-approaches-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Hoffmann et al.&nbsp;(2022), Table 2 — 10th/90th percentiles from bootstrap.
+</figcaption>
+</figure>
+</div>
+<p><strong>Approach 1</strong> takes the minimum over training curves: train a fixed set of model sizes, vary the token count, and read off the envelope. <strong>Approach 2</strong> runs IsoFLOP profiles — nine fixed FLOP budgets from <span class="math inline">\(6\times10^{18}\)</span> to <span class="math inline">\(3\times10^{21}\)</span>, sweeping model size within each and finding the parabola’s minimum. <strong>Approach 3</strong> fits the parametric loss and derives the frontier analytically.</p>
+<p>Approach 3’s <span class="math inline">\(a = 0.46\)</span> looks close enough to 0.5 to ignore. It is not. Because the exponent compounds, a 0.04 difference becomes a large difference in the recommended tokens-per-parameter ratio as budgets grow — and you can check this yourself from the paper’s own printed constants.</p>
+<div id="repro-a3" class="cell" data-execution_count="5">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Hoffmann et al. (2022), Eq. 10 constants. Printed as 0.34 / 0.28 in the body;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># the extra digits come from the arXiv TeX source, recovered by Besiroglu et al.</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>HOFFMANN <span class="op">=</span> <span class="bu">dict</span>(E<span class="op">=</span><span class="fl">1.6934</span>, A<span class="op">=</span><span class="fl">406.4</span>,  B<span class="op">=</span><span class="fl">410.7</span>,   alpha<span class="op">=</span><span class="fl">0.3392</span>, beta<span class="op">=</span><span class="fl">0.2849</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>EPOCH    <span class="op">=</span> <span class="bu">dict</span>(E<span class="op">=</span><span class="fl">1.8172</span>, A<span class="op">=</span><span class="fl">482.01</span>, B<span class="op">=</span><span class="fl">2085.43</span>, alpha<span class="op">=</span><span class="fl">0.3478</span>, beta<span class="op">=</span><span class="fl">0.3658</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> loss(N, D, E, A, B, alpha, beta):</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Predicted cross-entropy for N parameters trained on D tokens."""</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> E <span class="op">+</span> A <span class="op">/</span> N<span class="op">**</span>alpha <span class="op">+</span> B <span class="op">/</span> D<span class="op">**</span>beta</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> frontier(C, E, A, B, alpha, beta):</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Closed-form compute-optimal (N*, D*) for budget C. Hoffmann Eq. 4."""</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    a <span class="op">=</span> beta <span class="op">/</span> (alpha <span class="op">+</span> beta)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    b <span class="op">=</span> alpha <span class="op">/</span> (alpha <span class="op">+</span> beta)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    G <span class="op">=</span> (alpha <span class="op">*</span> A <span class="op">/</span> (beta <span class="op">*</span> B)) <span class="op">**</span> (<span class="dv">1</span> <span class="op">/</span> (alpha <span class="op">+</span> beta))</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> G <span class="op">*</span> (C <span class="op">/</span> <span class="dv">6</span>) <span class="op">**</span> a, (C <span class="op">/</span> <span class="dv">6</span>) <span class="op">**</span> b <span class="op">/</span> G</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>N_star, D_star <span class="op">=</span> frontier(GOPHER_BUDGET, <span class="op">**</span>HOFFMANN)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"N* = </span><span class="sc">{</span>N_star<span class="op">/</span><span class="fl">1e9</span><span class="sc">:.1f}</span><span class="ss">B   D* = </span><span class="sc">{</span>D_star<span class="op">/</span><span class="fl">1e12</span><span class="sc">:.2f}</span><span class="ss">T   D/N = </span><span class="sc">{</span>D_star<span class="op">/</span>N_star<span class="sc">:.0f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>N* = 40.3B   D* = 2.38T   D/N = 59</code></pre>
+</div>
+</div>
+<p>That 40.3B is a genuine check on the arithmetic: Hoffmann et al.’s Figure 4 caption reads <em>“We project the optimal model size given the Gopher FLOP budget to be 40B parameters.”</em> The constants reproduce the paper’s own figure.</p>
+<p>But look at the ratio the same code prints. Approach 3 says <strong>59 tokens per parameter</strong> at the Gopher budget — and the number keeps climbing with compute. Approach 1, on the same budget, says 67B parameters on 1.5T tokens: <strong>22 tokens per parameter</strong>. The paper trained Chinchilla at 20. Its own headline model does not follow its own headline equation.</p>
+<div class="callout callout-style-default callout-warning no-icon callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The replication
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Besiroglu et al.&nbsp;digitised 240 points out of Hoffmann’s Figure 4 — by parsing the PDF’s SVG scatter and mapping fill colours back to loss values — and refit the law. Their result is <span class="math inline">\(L(N,D) = 1.8172 + 482.01\,N^{-0.3478} + 2085.43\,D^{-0.3658}\)</span>, giving <span class="math inline">\(a = 0.5126\)</span> (SE 0.02). That agrees with Approaches 1 and 2, and with how Chinchilla was actually trained. They also note the published intervals on <span class="math inline">\(a\)</span> (0.454–0.455) are implausibly tight: <em>“intervals this narrow would require over 600,000 experiments, while they likely only ran fewer than 500.”</em> <span class="citation" data-cites="besiroglu2024">(<a href="#ref-besiroglu2024" role="doc-biblioref">Besiroglu et al. 2024</a>)</span></p>
+</div>
+</div>
+<p>Swap the Epoch constants into the same function and the ratio stabilises where practitioners expect it:</p>
+<div class="cell" data-execution_count="6">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> C_budget <span class="kw">in</span> [<span class="fl">1e22</span>, <span class="fl">1e23</span>, GOPHER_BUDGET, <span class="fl">1e25</span>]:</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    nh, dh <span class="op">=</span> frontier(C_budget, <span class="op">**</span>HOFFMANN)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    ne, de <span class="op">=</span> frontier(C_budget, <span class="op">**</span>EPOCH)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    rows.append({</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Compute (FLOPs)"</span>:  <span class="ss">f"</span><span class="sc">{</span>C_budget<span class="sc">:.1e}</span><span class="ss">"</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Hoffmann A3 — N*"</span>: human(nh), <span class="st">"tok/param "</span>:  <span class="ss">f"</span><span class="sc">{</span>dh<span class="op">/</span>nh<span class="sc">:.0f}</span><span class="ss">"</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Epoch refit — N*"</span>: human(ne), <span class="st">"tok/param"</span>:   <span class="ss">f"</span><span class="sc">{</span>de<span class="op">/</span>ne<span class="sc">:.0f}</span><span class="ss">"</span>,</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    })</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(rows)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="tbl-compare" class="cell quarto-float quarto-figure quarto-figure-center anchored" data-execution_count="6">
+<figure class="quarto-float quarto-float-tbl figure">
+<div aria-describedby="tbl-compare-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output cell-output-display" data-execution_count="6">
+<div>
 
+
+<table class="dataframe cell table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Compute (FLOPs)</th>
+<th data-quarto-table-cell-role="th">Hoffmann A3 — N*</th>
+<th data-quarto-table-cell-role="th">tok/param</th>
+<th data-quarto-table-cell-role="th">Epoch refit — N*</th>
+<th data-quarto-table-cell-role="th">tok/param</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">0</th>
+<td>1.0e+22</td>
+<td>6.3B</td>
+<td>42</td>
+<td>9.0B</td>
+<td>20</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">1</th>
+<td>1.0e+23</td>
+<td>18B</td>
+<td>51</td>
+<td>29B</td>
+<td>19</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">2</th>
+<td>5.8e+23</td>
+<td>40B</td>
+<td>59</td>
+<td>72B</td>
+<td>18</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">3</th>
+<td>1.0e+25</td>
+<td>148B</td>
+<td>76</td>
+<td>312B</td>
+<td>17</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-tbl" id="tbl-compare-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: Compute-optimal allocation under Hoffmann’s Approach 3 versus Epoch AI’s refit.
+</figcaption>
+</figure>
+</div>
+</div>
+<p>The Epoch refit is flat near 20 across four orders of magnitude. That flatness is what makes “20 tokens per parameter” a usable rule of thumb rather than a coincidence at one budget — and it is worth knowing that the rule comes from Approaches 1 and 2 and the replication, <em>not</em> from the equation most people copy.</p>
+<div id="cell-fig-isoflop" class="cell" data-execution_count="7">
+<div class="cell-output cell-output-display">
+<div id="fig-isoflop" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-isoflop-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="scaling-laws-llms_files/figure-html/fig-isoflop-output-1.svg" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-isoflop-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3: IsoFLOP curves drawn straight from Hoffmann et al.’s published loss function, with tokens set by D = C/6N. No refitting. At the Gopher budget the minimum lands at 39.8B, matching the paper’s stated 40B projection. These are the model’s predictions, not measured runs — the paper’s <em>measured</em> IsoFLOP minima (Approach 2) sit closer to 63B at that budget.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="where-0.73-actually-came-from" class="level2">
+<h2 class="anchored" data-anchor-id="where-0.73-actually-came-from">Where 0.73 actually came from</h2>
+<p>Chinchilla’s own explanation for the discrepancy was the learning-rate schedule: Kaplan used one cosine decay sized for 130B tokens across all runs, so a model evaluated at an intermediate checkpoint looks worse than a model whose schedule was sized to stop there. That biases short runs downward and pushes the fit toward bigger models on less data.</p>
+<p>It is a good hypothesis. It is also mostly wrong, and we know this because Porian et al.&nbsp;ran over 900 training runs — 16 model sizes from 5M to 901M parameters on OpenWebText2 and RefinedWeb — reproducing Kaplan’s setup and then removing one confounder at a time.</p>
+<div id="cell-fig-waterfall" class="cell" data-execution_count="8">
+<div class="cell-output cell-output-display">
+<div id="fig-waterfall" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-waterfall-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="scaling-laws-llms_files/figure-html/fig-waterfall-output-1.svg" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-waterfall-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4: Walking Kaplan’s exponent to Chinchilla’s, one fix at a time. Each point is a re-measurement of <em>a</em> after a single methodological correction, applied cumulatively. Source: Porian et al.&nbsp;(2024), Table 1, RefinedWeb column, with 95% confidence intervals as printed. Their OpenWebText2 column follows the same path (0.835 → 0.699 → 0.603 → 0.574 → 0.518).
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<section id="count-the-output-layers-flops-0.13" class="level3">
+<h3 class="anchored" data-anchor-id="count-the-output-layers-flops-0.13">1. Count the output layer’s FLOPs — −0.13</h3>
+<p>Kaplan excluded embeddings from <span class="math inline">\(N\)</span>, and because the output head shared weights with the input embedding, its per-token FLOPs got discounted too. The resulting under-approximation of compute runs from “roughly 10% at larger models to roughly 90% at smaller models” — a bias that scales with the very axis you are fitting against. Counting it correctly moves <span class="math inline">\(a\)</span> from 0.835 to 0.706.</p>
+<p>Pearce &amp; Song attack the same issue analytically and reach a compatible conclusion: model total parameters as <span class="math inline">\(N_T = N_E + \omega N_E^{1/3}\)</span> (fitting <span class="math inline">\(\omega = 47{,}491\)</span> to Chinchilla’s own configurations) and the non-embedding relationship stops being a power law at all. It has a small-scale regime and a large-scale regime, with the crossover where embeddings are half the model — around <span class="math inline">\(10^7\)</span> non-embedding parameters. Kaplan’s entire sweep, 768 to 1.5B, straddles that. Simulating Kaplan-scale models from the Chinchilla loss surface and fitting the way Kaplan did, they recover <span class="math inline">\(N^*_E \propto C_E^{0.74\text{–}0.78}\)</span>. The 0.73 falls out of the measurement convention. <span class="citation" data-cites="pearce2024">(<a href="#ref-pearce2024" role="doc-biblioref">Pearce and Song 2024</a>)</span></p>
+</section>
+<section id="stop-warming-up-for-1.57b-tokens-0.10" class="level3">
+<h3 class="anchored" data-anchor-id="stop-warming-up-for-1.57b-tokens-0.10">2. Stop warming up for 1.57B tokens — −0.10</h3>
+<p>This is the subtle one. Kaplan used a fixed 3,000-step warmup at a <span class="math inline">\(2^{19}\)</span>-token batch — about <strong>1.57 billion warmup tokens</strong>, identical for every model. For a small model at a small budget, the compute-optimal token count is <em>at or below the warmup length</em>. Those runs never leave warmup, so they look terrible, so small models look worse than they are, so the fit tilts toward large models. Setting warmup tokens proportional to <span class="math inline">\(N\)</span> moves <span class="math inline">\(a\)</span> to 0.602.</p>
+</section>
+<section id="tune-the-optimizer-per-scale-0.07" class="level3">
+<h3 class="anchored" data-anchor-id="tune-the-optimizer-per-scale-0.07">3. Tune the optimizer per scale — −0.07</h3>
+<p>Sweeping learning rate, batch size and AdamW’s <span class="math inline">\(\beta_2\)</span> per model size — they fit <span class="math inline">\(\mathrm{BS} = 0.00037\,N^{0.703}\)</span> and <span class="math inline">\(\mathrm{LR} = 3.7\,N^{-0.36}\)</span>, and find <span class="math inline">\(\beta_2 = 0.95\)</span> is actively bad at small batch sizes — lands at <strong><span class="math inline">\(a = 0.497\)</span>, 95% CI (0.49, 0.50)</strong>. Their summary: the exponent matches 0.5 “to within 0.6%” and the predicted model size at Chinchilla compute lands “within 15% of Chinchilla’s size.”</p>
+<div class="callout callout-style-default callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>And the cosine schedule?
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Porian et al.&nbsp;tested it in isolation (§3.4) and it moves <span class="math inline">\(a\)</span> from 0.60 to 0.57 — “most of the gap remains.” Their reasoning is sharp: with decay targeted at 131B tokens, Kaplan’s compute-constrained runs “see virtually no learning rate decay,” under 1.5% of the cosine. Their final 0.497 is achieved with a <em>constant</em> learning rate. Pearce &amp; Song find the same thing independently: switching from Kaplan’s schedule to Chinchilla’s <em>raised</em> their coefficient from 0.46 to 0.49 rather than lowering it.</p>
+</div>
+</div>
+<p>So the field’s canonical story — “Kaplan got it wrong because of the learning rate schedule” — is itself wrong. The dominant factors are an accounting error in the compute axis and a warmup length that poisoned the small-model end of the fit.</p>
+</section>
+</section>
+<section id="what-each-law-tells-you-to-build" class="level2">
+<h2 class="anchored" data-anchor-id="what-each-law-tells-you-to-build">What each law tells you to build</h2>
+<p>Four laws, one budget.</p>
+<div class="cell" data-execution_count="9">
+<details class="code-fold">
+<summary>Show the allocation code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> allocate(C):</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    kN <span class="op">=</span> kaplan_N(C)<span class="op">;</span>     kD <span class="op">=</span> C <span class="op">/</span> (<span class="dv">6</span> <span class="op">*</span> kN)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    cN <span class="op">=</span> chinchilla_N(C)<span class="op">;</span> cD <span class="op">=</span> C <span class="op">/</span> (<span class="dv">6</span> <span class="op">*</span> cN)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    hN, hD <span class="op">=</span> frontier(C, <span class="op">**</span>HOFFMANN)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    eN, eD <span class="op">=</span> frontier(C, <span class="op">**</span>EPOCH)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [(<span class="st">"Kaplan 2020 (adjusted)"</span>, kN, kD),</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>            (<span class="st">"Chinchilla · Approach 1"</span>, cN, cD),</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>            (<span class="st">"Chinchilla · Approach 3"</span>, hN, hD),</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>            (<span class="st">"Epoch AI refit (2024)"</span>,   eN, eD)]</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>BUDGETS <span class="op">=</span> {<span class="st">"Chinchilla / Gopher"</span>: GOPHER_BUDGET, <span class="st">"1e24"</span>: <span class="fl">1e24</span>, <span class="st">"Llama 3 405B"</span>: <span class="fl">3.8e25</span>}</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ratio(r):</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"</span><span class="sc">{</span>r<span class="sc">:.2f}</span><span class="ss">"</span> <span class="cf">if</span> r <span class="op">&lt;</span> <span class="dv">1</span> <span class="cf">else</span> (<span class="ss">f"</span><span class="sc">{</span>r<span class="sc">:.1f}</span><span class="ss">"</span> <span class="cf">if</span> r <span class="op">&lt;</span> <span class="dv">10</span> <span class="cf">else</span> <span class="ss">f"</span><span class="sc">{</span>r<span class="sc">:,.0f}</span><span class="ss">"</span>)</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>out <span class="op">=</span> []</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name, C_budget <span class="kw">in</span> BUDGETS.items():</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> law, n, d <span class="kw">in</span> allocate(C_budget):</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>        out.append({<span class="st">"Budget"</span>: name, <span class="st">"Law"</span>: law, <span class="st">"N*"</span>: human(n),</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>                    <span class="st">"D*"</span>: human(d), <span class="st">"tok/param"</span>: ratio(d <span class="op">/</span> n)})</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(out).set_index([<span class="st">"Budget"</span>, <span class="st">"Law"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div id="tbl-planner" class="cell quarto-float quarto-figure quarto-figure-center anchored" data-execution_count="9">
+<figure class="quarto-float quarto-float-tbl figure">
+<div aria-describedby="tbl-planner-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output cell-output-display" data-execution_count="9">
+<div>
+
+
+<table class="dataframe cell table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">N*</th>
+<th data-quarto-table-cell-role="th">D*</th>
+<th data-quarto-table-cell-role="th">tok/param</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Budget</th>
+<th data-quarto-table-cell-role="th">Law</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th rowspan="4" data-quarto-table-cell-role="th" data-valign="top">Chinchilla / Gopher</th>
+<th data-quarto-table-cell-role="th">Kaplan 2020 (adjusted)</th>
+<td>804B</td>
+<td>119B</td>
+<td>0.15</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Chinchilla · Approach 1</th>
+<td>67B</td>
+<td>1.4T</td>
+<td>21</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">Chinchilla · Approach 3</th>
+<td>40B</td>
+<td>2.4T</td>
+<td>59</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Epoch AI refit (2024)</th>
+<td>72B</td>
+<td>1.3T</td>
+<td>18</td>
+</tr>
+<tr class="odd">
+<th rowspan="4" data-quarto-table-cell-role="th" data-valign="top">1e24</th>
+<th data-quarto-table-cell-role="th">Kaplan 2020 (adjusted)</th>
+<td>1.2T</td>
+<td>139B</td>
+<td>0.12</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Chinchilla · Approach 1</th>
+<td>88B</td>
+<td>1.9T</td>
+<td>21</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">Chinchilla · Approach 3</th>
+<td>52B</td>
+<td>3.2T</td>
+<td>62</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Epoch AI refit (2024)</th>
+<td>96B</td>
+<td>1.7T</td>
+<td>18</td>
+</tr>
+<tr class="odd">
+<th rowspan="4" data-quarto-table-cell-role="th" data-valign="top">Llama 3 405B</th>
+<th data-quarto-table-cell-role="th">Kaplan 2020 (adjusted)</th>
+<td>17T</td>
+<td>370B</td>
+<td>0.02</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Chinchilla · Approach 1</th>
+<td>544B</td>
+<td>12T</td>
+<td>21</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">Chinchilla · Approach 3</th>
+<td>273B</td>
+<td>23T</td>
+<td>85</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Epoch AI refit (2024)</th>
+<td>619B</td>
+<td>10T</td>
+<td>17</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-tbl" id="tbl-planner-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: Each row applies one published law to the same training budget. Kaplan uses the adjusted law with D = C/6N; Chinchilla A1 uses the Table 3 anchor; A3 and the Epoch refit use the closed form. Extrapolating any of these far beyond its fitting range is exactly the move this whole story is a cautionary tale about.
+</figcaption>
+</figure>
+</div>
+</div>
+</section>
+<section id="chinchilla-optimal-is-not-deployment-optimal" class="level2">
+<h2 class="anchored" data-anchor-id="chinchilla-optimal-is-not-deployment-optimal">Chinchilla-optimal is not deployment-optimal</h2>
+<p>Here is the part that matters most for anyone shipping a model, and it is a limitation both papers share rather than a disagreement between them. Both optimise <em>loss given a training budget</em>. Neither includes a single inference FLOP. If you train once and serve billions of tokens, you are optimising the wrong objective.</p>
+<section id="add-inference-to-the-objective" class="level3">
+<h3 class="anchored" data-anchor-id="add-inference-to-the-objective">Add inference to the objective</h3>
+<p>Sardana et al.&nbsp;invert the problem: fix a quality target, minimise total compute. Training costs <span class="math inline">\(6N\)</span> per token, inference costs <span class="math inline">\(2N\)</span> per token, so the objective becomes <span class="citation" data-cites="sardana2024">(<a href="#ref-sardana2024" role="doc-biblioref">Sardana et al. 2024</a>)</span></p>
+<p><span class="math display">\[
+N^*,\, D^*_{\text{tr}} \;=\;
+\operatorname*{argmin}_{N,\, D_{\text{tr}} \;\mid\; L(N, D_{\text{tr}}) = \ell}
+\;\; 6N D_{\text{tr}} + 2N D_{\text{inf}}
+\]</span></p>
+<p>where <span class="math inline">\(D_{\text{inf}}\)</span> is total lifetime inference tokens, input plus output. With <span class="math inline">\(D_{\text{inf}} &gt; 0\)</span> there is no closed form; they solve it by root-finding. It is short enough to reproduce:</p>
+<div id="inference-aware" class="cell" data-execution_count="10">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy.optimize <span class="im">import</span> brentq, minimize_scalar</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Sardana et al. Appendix A: Chinchilla's A, B, E with alpha/beta de-rounded.</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>SARDANA <span class="op">=</span> <span class="bu">dict</span>(E<span class="op">=</span><span class="fl">1.69</span>, A<span class="op">=</span><span class="fl">406.4</span>, B<span class="op">=</span><span class="fl">410.7</span>, alpha<span class="op">=</span><span class="fl">0.336</span>, beta<span class="op">=</span><span class="fl">0.283</span>)</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tokens_for_loss(N, target, E, A, B, alpha, beta):</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Tokens needed for N parameters to reach a given loss."""</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    residual <span class="op">=</span> target <span class="op">-</span> E <span class="op">-</span> A <span class="op">/</span> N<span class="op">**</span>alpha</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.inf <span class="cf">if</span> residual <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">else</span> (B <span class="op">/</span> residual) <span class="op">**</span> (<span class="dv">1</span> <span class="op">/</span> beta)</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> total_flops(N, target, D_inf, p):</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">6</span> <span class="op">*</span> N <span class="op">*</span> tokens_for_loss(N, target, <span class="op">**</span>p) <span class="op">+</span> <span class="dv">2</span> <span class="op">*</span> N <span class="op">*</span> D_inf</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> inference_aware(N_chinchilla, D_inf, p<span class="op">=</span>SARDANA):</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Cheapest (N, D) reaching the quality of a Chinchilla-optimal model</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co">    of size N_chinchilla, once D_inf inference tokens are paid for."""</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    budget <span class="op">=</span> <span class="dv">10</span> <span class="op">**</span> brentq(<span class="kw">lambda</span> lc: frontier(<span class="dv">10</span><span class="op">**</span>lc, <span class="op">**</span>p)[<span class="dv">0</span>] <span class="op">-</span> N_chinchilla, <span class="dv">18</span>, <span class="dv">30</span>)</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>    N0, D0 <span class="op">=</span> frontier(budget, <span class="op">**</span>p)</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>    target <span class="op">=</span> loss(N0, D0, <span class="op">**</span>p)</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    floor <span class="op">=</span> (p[<span class="st">"A"</span>] <span class="op">/</span> (target <span class="op">-</span> p[<span class="st">"E"</span>])) <span class="op">**</span> (<span class="dv">1</span> <span class="op">/</span> p[<span class="st">"alpha"</span>])   <span class="co"># N below this can't reach it</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>    best <span class="op">=</span> minimize_scalar(<span class="kw">lambda</span> x: total_flops(np.exp(x), target, D_inf, p),</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>                           bounds<span class="op">=</span>(np.log(floor <span class="op">*</span> <span class="fl">1.001</span>), np.log(N_chinchilla)),</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>                           method<span class="op">=</span><span class="st">"bounded"</span>)</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>    N1 <span class="op">=</span> np.exp(best.x)</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    saved <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> total_flops(N1, target, D_inf, p) <span class="op">/</span> total_flops(N0, target, D_inf, p)</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> N0, D0, N1, tokens_for_loss(N1, target, <span class="op">**</span>p), saved</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>N0, D0, N1, D1, saved <span class="op">=</span> inference_aware(<span class="fl">30e9</span>, D_inf<span class="op">=</span><span class="fl">1e13</span>)</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Chinchilla-optimal : </span><span class="sc">{</span>N0<span class="op">/</span><span class="fl">1e9</span><span class="sc">:5.1f}</span><span class="ss">B on </span><span class="sc">{</span>D0<span class="op">/</span><span class="fl">1e12</span><span class="sc">:.2f}</span><span class="ss">T tokens"</span>)</span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Inference-aware    : </span><span class="sc">{</span>N1<span class="op">/</span><span class="fl">1e9</span><span class="sc">:5.1f}</span><span class="ss">B on </span><span class="sc">{</span>D1<span class="op">/</span><span class="fl">1e12</span><span class="sc">:.2f}</span><span class="ss">T tokens "</span></span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"(</span><span class="sc">{</span>D1<span class="op">/</span>D0<span class="sc">:.2f}</span><span class="ss">x the data)"</span>)</span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Total FLOPs saved  : </span><span class="sc">{</span>saved<span class="sc">:.0%}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Chinchilla-optimal :  30.0B on 1.56T tokens
+Inference-aware    :  13.6B on 4.43T tokens (2.84x the data)
+Total FLOPs saved  : 28%</code></pre>
+</div>
+</div>
+<p>That reproduces the paper’s stated result exactly: a developer expecting a 30B-Chinchilla-quality model to see <span class="math inline">\(10^{13}\)</span> inference tokens “can reduce their total FLOPs by 28% by training a 13.6B model on 2.84× the data.” In dollar terms, with realistic MFU asymmetry between training and autoregressive generation, the same quality target at 17.5B requests is reached ~58% cheaper by an 8.58B model trained on 12.1T tokens.</p>
+<div class="callout callout-style-default callout-caution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Caution</span>The honest caveat, from the same paper
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Fitting scaling-law coefficients only on typical token/parameter ratios “overestimates the impact of additional tokens at these extreme ranges.” Refitting with their extreme-ratio data (47 models, 150M–6B, up to 10,000 tokens/param) gives <span class="math inline">\(\alpha = 0.18\)</span>, <span class="math inline">\(\beta = 0.24\)</span> against Chinchilla’s 0.34 / 0.28. Extrapolating Chinchilla’s constants out to 1,000+ tokens/param will flatter your plan.</p>
+</div>
+</div>
+</section>
+<section id="what-if-you-run-out-of-data" class="level3">
+<h3 class="anchored" data-anchor-id="what-if-you-run-out-of-data">What if you run out of data?</h3>
+<p>Muennighoff et al.&nbsp;ran more than 400 models, 10M to 9B parameters, for up to 1,500 epochs, and their finding is unusually actionable: <strong>up to roughly 4 epochs of repeated data is nearly free</strong> — their 8.7B model at four epochs on 44B unique tokens ended “with only 0.5% higher validation loss than the single-epoch model.” Returns then decay fast, with the fitted half-life at <span class="math inline">\(R_D^* \approx 15\)</span> repetitions, and runs at 44 epochs diverge outright. They model it by replacing <span class="math inline">\(D\)</span> with effective data <span class="citation" data-cites="muennighoff2023">(<a href="#ref-muennighoff2023" role="doc-biblioref">Muennighoff et al. 2023</a>)</span></p>
+<p><span class="math display">\[
+D' = U_D + U_D \, R_D^* \left(1 - e^{-R_D / R_D^*}\right)
+\]</span></p>
+<p>which collapses to Chinchilla exactly when there is no repetition. Under data constraint they also find you should scale epochs faster than parameters — the opposite tilt to Chinchilla’s equal scaling.</p>
+</section>
+<section id="what-frontier-labs-actually-did" class="level3">
+<h3 class="anchored" data-anchor-id="what-frontier-labs-actually-did">What frontier labs actually did</h3>
+<p>It is worth being precise here, because the folk version is wrong. Meta’s Llama 3 paper reports IsoFLOPs experiments from <span class="math inline">\(6\times10^{18}\)</span> to <span class="math inline">\(10^{22}\)</span> FLOPs, extrapolating to a <span class="math inline">\(3.8\times10^{25}\)</span> FLOP budget and suggesting “training a 402B parameter model on 16.55T tokens.” They trained 405B on 15.6T — <em>approximately compute-optimal</em>, not over-trained. The over-training was deliberate and confined to the small models: “we also train our smaller models for much longer than is compute-optimal… The resulting models perform better than compute-optimal models at the same inference budget.” <span class="citation" data-cites="llama3">(<a href="#ref-llama3" role="doc-biblioref">Llama Team, AI @ Meta 2024</a>)</span></p>
+<p>That is the field’s settled position. Chinchilla-optimal is the right target for the flagship, where training cost dominates; heavy over-training is the right target for the models you actually serve.</p>
+</section>
+</section>
+<section id="the-practitioners-checklist" class="level2">
+<h2 class="anchored" data-anchor-id="the-practitioners-checklist">The practitioner’s checklist</h2>
+<ul>
+<li><strong>Never use Kaplan’s allocation exponents.</strong> 0.73/0.27 is a measurement artifact with a known, reproduced cause. The loss-vs-scale <em>phenomenology</em> — smooth power laws, predictable returns — survives intact.</li>
+<li><strong>Use ~20 tokens/parameter as the training-optimal anchor</strong>, and know it comes from Approaches 1 and 2 plus the Epoch refit, not from Chinchilla’s published Eq. 10, which drifts to 59+ at frontier budgets.</li>
+<li><strong>If you will serve the model, over-train it.</strong> Compute the inference-inclusive objective before sizing. At <span class="math inline">\(10^{12}\)</span>–<span class="math inline">\(10^{13}\)</span> lifetime tokens the optimum moves substantially smaller-and-longer.</li>
+<li><strong>Fit your own law on your own data and stack.</strong> Every exponent here is entangled with tokenizer, data mix, optimizer tuning and architecture. Chinchilla’s own three approaches disagreed on their own data.</li>
+<li><strong>Sweep hyperparameters per scale, and warm up proportionally to model size.</strong> Both papers’ discrepancies trace back to holding something fixed across scales that should not have been.</li>
+<li><strong>Include the output layer in your FLOP accounting.</strong> The single largest term in the reconciliation was an accounting choice, not a scientific finding.</li>
+</ul>
+<div class="callout callout-style-default callout-tip no-icon callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>The meta-lesson
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Kaplan’s paper was careful, influential, and wrong about one thing — and the field spent two years and enormous compute acting on it. Chinchilla corrected it, and had a serious flaw of its own in the very equation everyone copied. Both were caught only when independent groups re-derived the numbers from scratch. Reproduction is not bookkeeping in this field; it is where the results come from.</p>
+</div>
+</div>
+</section>
+<section id="sources" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="sources">Sources</h2>
+<p>Figures <a href="#fig-ratio" class="quarto-xref">Figure&nbsp;1</a>, <a href="#fig-frontier" class="quarto-xref">Figure&nbsp;2</a> and <a href="#fig-waterfall" class="quarto-xref">Figure&nbsp;4</a> plot values printed in the cited papers. <a href="#fig-isoflop" class="quarto-xref">Figure&nbsp;3</a> and every code output above are computed from published constants and are reproducible by rendering this document. Where a number is our arithmetic rather than a paper’s, the caption says so.</p>
+<div id="refs" class="references csl-bib-body hanging-indent" role="list">
+<div id="ref-besiroglu2024" class="csl-entry" role="listitem">
+Besiroglu, Tamay, Ege Erdil, Matthew Barnett, and Josh You. 2024. <span>“Chinchilla Scaling: A Replication Attempt.”</span> <em>arXiv Preprint arXiv:2404.10102</em>. <a href="https://arxiv.org/abs/2404.10102">https://arxiv.org/abs/2404.10102</a>.
+</div>
+<div id="ref-hoffmann2022" class="csl-entry" role="listitem">
+Hoffmann, Jordan, Sebastian Borgeaud, Arthur Mensch, et al. 2022. <span>“Training Compute-Optimal Large Language Models.”</span> <em>arXiv Preprint arXiv:2203.15556</em>. <a href="https://arxiv.org/abs/2203.15556">https://arxiv.org/abs/2203.15556</a>.
+</div>
+<div id="ref-kaplan2020" class="csl-entry" role="listitem">
+Kaplan, Jared, Sam McCandlish, Tom Henighan, et al. 2020. <span>“Scaling Laws for Neural Language Models.”</span> <em>arXiv Preprint arXiv:2001.08361</em>. <a href="https://arxiv.org/abs/2001.08361">https://arxiv.org/abs/2001.08361</a>.
+</div>
+<div id="ref-llama3" class="csl-entry" role="listitem">
+Llama Team, AI @ Meta. 2024. <span>“The Llama 3 Herd of Models.”</span> <em>arXiv Preprint arXiv:2407.21783</em>. <a href="https://arxiv.org/abs/2407.21783">https://arxiv.org/abs/2407.21783</a>.
+</div>
+<div id="ref-muennighoff2023" class="csl-entry" role="listitem">
+Muennighoff, Niklas, Alexander Rush, Boaz Barak, et al. 2023. <span>“Scaling Data-Constrained Language Models.”</span> <em>Advances in Neural Information Processing Systems (NeurIPS)</em>. <a href="https://arxiv.org/abs/2305.16264">https://arxiv.org/abs/2305.16264</a>.
+</div>
+<div id="ref-pearce2024" class="csl-entry" role="listitem">
+Pearce, Tim, and Jinyeop Song. 2024. <span>“Reconciling Kaplan and Chinchilla Scaling Laws.”</span> <em>arXiv Preprint arXiv:2406.12907</em>. <a href="https://arxiv.org/abs/2406.12907">https://arxiv.org/abs/2406.12907</a>.
+</div>
+<div id="ref-porian2024" class="csl-entry" role="listitem">
+Porian, Tomer, Mitchell Wortsman, Jenia Jitsev, Ludwig Schmidt, and Yair Carmon. 2024. <span>“Resolving Discrepancies in Compute-Optimal Scaling of Language Models.”</span> <em>arXiv Preprint arXiv:2406.19146</em>. <a href="https://arxiv.org/abs/2406.19146">https://arxiv.org/abs/2406.19146</a>.
+</div>
+<div id="ref-sardana2024" class="csl-entry" role="listitem">
+Sardana, Nikhil, Jacob Portes, Sasha Doubov, and Jonathan Frankle. 2024. <span>“Beyond Chinchilla-Optimal: Accounting for Inference in Language Model Scaling Laws.”</span> <em>arXiv Preprint arXiv:2401.00448</em>. <a href="https://arxiv.org/abs/2401.00448">https://arxiv.org/abs/2401.00448</a>.
+</div>
+</div>
+
+
+<!-- -->
 
 </section>
 
@@ -295,6 +976,57 @@ window.Quarto = {
         container: window.document.getElementById('quarto-embedded-source-code-modal')
       });
       clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const detailsSrc = window.document.querySelectorAll(".cell > details > .sourceCode");
+        for (let i=0; i<detailsSrc.length; i++) {
+          const details = detailsSrc[i].parentElement;
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell > .sourceCode");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
     }
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
@@ -624,7 +1356,737 @@ window.Quarto = {
       }
     }
   });
-  </script>
+  </script><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> "Scaling Laws for LLMs: Kaplan vs. Chinchilla"</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> "Two answers to the same question, and why the 0.23 gap between them turned out to be a bug"</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> &gt;</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co">  A practitioner's walkthrough of the two scaling laws that shaped LLM pre-training,</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co">  why their compute-allocation exponents disagreed, what the 2024 replications found,</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co">  and what to actually do with any of it. Every figure is computed from published constants.</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> "2026-09-21"</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="an">categories:</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co">    - LLM</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="co">    - Scaling Laws</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="co">    - Research</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co">    - Reproducibility</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="an">bibliography:</span><span class="co"> references.bib</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="an">include-in-header:</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="co">  text: |</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="co">    &lt;style&gt;</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="co">    /* Reading note: keep only two heading levels visible - the page</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a><span class="co">       title (from the title block above) and the H2 sections below.</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a><span class="co">       Quarto/Pandoc always emits a body-level H1 matching the title</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="co">       when content starts at H2; hide that duplicate here. */</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a><span class="co">    main#quarto-document-content &gt; section.level1 &gt; h1:first-child {</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a><span class="co">      display: none;</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a><span class="co">    }</span></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="co">    &lt;/style&gt;</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a><span class="an">format:</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a><span class="co">  html:</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a><span class="co">    toc: true</span></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a><span class="co">    toc-depth: 2</span></span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a><span class="co">    toc-title: "Contents"</span></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a><span class="co">    code-tools: true</span></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a><span class="co">    code-overflow: wrap</span></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a><span class="co">    fig-width: 9</span></span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a><span class="co">    fig-height: 4.6</span></span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a><span class="co">    fig-format: svg</span></span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a><span class="co">    fig-align: center</span></span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a><span class="co">    tbl-cap-location: bottom</span></span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a><span class="an">execute:</span></span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a><span class="co">  echo: true</span></span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a><span class="co">  warning: false</span></span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a><span class="co">  message: false</span></span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a><span class="co">  freeze: auto      # inside a Quarto website, re-executes only when this file changes</span></span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a><span class="an">jupyter:</span><span class="co"> python3</span></span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: setup</span></span>
+<span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: false</span></span>
+<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-52"><a href="#cb8-52" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb8-53"><a href="#cb8-53" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb8-54"><a href="#cb8-54" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib <span class="im">as</span> mpl</span>
+<span id="cb8-55"><a href="#cb8-55" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb8-56"><a href="#cb8-56" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.ticker <span class="im">import</span> FuncFormatter</span>
+<span id="cb8-57"><a href="#cb8-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-58"><a href="#cb8-58" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------------------------------------------------------------- style</span></span>
+<span id="cb8-59"><a href="#cb8-59" aria-hidden="true" tabindex="-1"></a><span class="co"># Figures carry their own light surface so they stay legible whatever</span></span>
+<span id="cb8-60"><a href="#cb8-60" aria-hidden="true" tabindex="-1"></a><span class="co"># theme the surrounding site uses.</span></span>
+<span id="cb8-61"><a href="#cb8-61" aria-hidden="true" tabindex="-1"></a>PAL <span class="op">=</span> <span class="bu">dict</span>(</span>
+<span id="cb8-62"><a href="#cb8-62" aria-hidden="true" tabindex="-1"></a>    kaplan<span class="op">=</span><span class="st">"#eb6834"</span>, chin<span class="op">=</span><span class="st">"#2a78d6"</span>, third<span class="op">=</span><span class="st">"#1baf7a"</span>,</span>
+<span id="cb8-63"><a href="#cb8-63" aria-hidden="true" tabindex="-1"></a>    surface<span class="op">=</span><span class="st">"#fcfcfb"</span>, ink<span class="op">=</span><span class="st">"#101318"</span>, ink2<span class="op">=</span><span class="st">"#4b5159"</span>,</span>
+<span id="cb8-64"><a href="#cb8-64" aria-hidden="true" tabindex="-1"></a>    muted<span class="op">=</span><span class="st">"#848b95"</span>, rule<span class="op">=</span><span class="st">"#e0e3e8"</span>, rule_strong<span class="op">=</span><span class="st">"#c3c9d2"</span>,</span>
+<span id="cb8-65"><a href="#cb8-65" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-66"><a href="#cb8-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-67"><a href="#cb8-67" aria-hidden="true" tabindex="-1"></a>mpl.rcParams.update({</span>
+<span id="cb8-68"><a href="#cb8-68" aria-hidden="true" tabindex="-1"></a>    <span class="st">"figure.facecolor"</span>: PAL[<span class="st">"surface"</span>], <span class="st">"axes.facecolor"</span>: PAL[<span class="st">"surface"</span>],</span>
+<span id="cb8-69"><a href="#cb8-69" aria-hidden="true" tabindex="-1"></a>    <span class="st">"savefig.facecolor"</span>: PAL[<span class="st">"surface"</span>], <span class="st">"savefig.bbox"</span>: <span class="st">"tight"</span>,</span>
+<span id="cb8-70"><a href="#cb8-70" aria-hidden="true" tabindex="-1"></a>    <span class="st">"font.family"</span>: <span class="st">"sans-serif"</span>, <span class="st">"font.size"</span>: <span class="fl">10.5</span>,</span>
+<span id="cb8-71"><a href="#cb8-71" aria-hidden="true" tabindex="-1"></a>    <span class="st">"text.color"</span>: PAL[<span class="st">"ink"</span>], <span class="st">"axes.labelcolor"</span>: PAL[<span class="st">"ink2"</span>],</span>
+<span id="cb8-72"><a href="#cb8-72" aria-hidden="true" tabindex="-1"></a>    <span class="st">"xtick.color"</span>: PAL[<span class="st">"muted"</span>], <span class="st">"ytick.color"</span>: PAL[<span class="st">"muted"</span>],</span>
+<span id="cb8-73"><a href="#cb8-73" aria-hidden="true" tabindex="-1"></a>    <span class="st">"axes.edgecolor"</span>: PAL[<span class="st">"rule_strong"</span>], <span class="st">"axes.linewidth"</span>: <span class="fl">0.8</span>,</span>
+<span id="cb8-74"><a href="#cb8-74" aria-hidden="true" tabindex="-1"></a>    <span class="st">"xtick.major.size"</span>: <span class="dv">3</span>, <span class="st">"ytick.major.size"</span>: <span class="dv">3</span>,</span>
+<span id="cb8-75"><a href="#cb8-75" aria-hidden="true" tabindex="-1"></a>    <span class="st">"xtick.minor.size"</span>: <span class="fl">1.8</span>, <span class="st">"ytick.minor.size"</span>: <span class="fl">1.8</span>,</span>
+<span id="cb8-76"><a href="#cb8-76" aria-hidden="true" tabindex="-1"></a>    <span class="st">"grid.color"</span>: PAL[<span class="st">"rule"</span>], <span class="st">"grid.linewidth"</span>: <span class="fl">0.8</span>,</span>
+<span id="cb8-77"><a href="#cb8-77" aria-hidden="true" tabindex="-1"></a>    <span class="st">"axes.grid"</span>: <span class="va">True</span>, <span class="st">"axes.axisbelow"</span>: <span class="va">True</span>,</span>
+<span id="cb8-78"><a href="#cb8-78" aria-hidden="true" tabindex="-1"></a>    <span class="st">"legend.frameon"</span>: <span class="va">False</span>, <span class="st">"axes.spines.top"</span>: <span class="va">False</span>, <span class="st">"axes.spines.right"</span>: <span class="va">False</span>,</span>
+<span id="cb8-79"><a href="#cb8-79" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb8-80"><a href="#cb8-80" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-81"><a href="#cb8-81" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> style(ax, xlabel<span class="op">=</span><span class="va">None</span>, ylabel<span class="op">=</span><span class="va">None</span>, title<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb8-82"><a href="#cb8-82" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> xlabel: ax.set_xlabel(xlabel, fontsize<span class="op">=</span><span class="dv">9</span>, labelpad<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb8-83"><a href="#cb8-83" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ylabel: ax.set_ylabel(ylabel, fontsize<span class="op">=</span><span class="dv">9</span>, labelpad<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb8-84"><a href="#cb8-84" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> title:  ax.set_title(title, fontsize<span class="op">=</span><span class="fl">11.5</span>, color<span class="op">=</span>PAL[<span class="st">"ink"</span>],</span>
+<span id="cb8-85"><a href="#cb8-85" aria-hidden="true" tabindex="-1"></a>                            loc<span class="op">=</span><span class="st">"left"</span>, pad<span class="op">=</span><span class="dv">12</span>, fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-86"><a href="#cb8-86" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ax</span>
+<span id="cb8-87"><a href="#cb8-87" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-88"><a href="#cb8-88" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> human(n, _<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb8-89"><a href="#cb8-89" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""1.4e12 -&gt; '1.4T'. Used for axis ticks and tables alike."""</span></span>
+<span id="cb8-90"><a href="#cb8-90" aria-hidden="true" tabindex="-1"></a>    n <span class="op">=</span> <span class="bu">float</span>(n)</span>
+<span id="cb8-91"><a href="#cb8-91" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> div, suf <span class="kw">in</span> ((<span class="fl">1e12</span>, <span class="st">"T"</span>), (<span class="fl">1e9</span>, <span class="st">"B"</span>), (<span class="fl">1e6</span>, <span class="st">"M"</span>)):</span>
+<span id="cb8-92"><a href="#cb8-92" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">abs</span>(n) <span class="op">&gt;=</span> div:</span>
+<span id="cb8-93"><a href="#cb8-93" aria-hidden="true" tabindex="-1"></a>            v <span class="op">=</span> n <span class="op">/</span> div</span>
+<span id="cb8-94"><a href="#cb8-94" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ss">f"</span><span class="sc">{</span>v<span class="sc">:.1f}{</span>suf<span class="sc">}</span><span class="ss">"</span> <span class="cf">if</span> v <span class="op">&lt;</span> <span class="dv">10</span> <span class="cf">else</span> <span class="ss">f"</span><span class="sc">{</span>v<span class="sc">:.0f}{</span>suf<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb8-95"><a href="#cb8-95" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"</span><span class="sc">{</span>n<span class="sc">:.0f}</span><span class="ss">"</span></span>
+<span id="cb8-96"><a href="#cb8-96" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-97"><a href="#cb8-97" aria-hidden="true" tabindex="-1"></a>HUMAN <span class="op">=</span> FuncFormatter(human)</span>
+<span id="cb8-98"><a href="#cb8-98" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-99"><a href="#cb8-99" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------------------------------------------------------------- data</span></span>
+<span id="cb8-100"><a href="#cb8-100" aria-hidden="true" tabindex="-1"></a><span class="co"># Hoffmann et al. (2022), Table 1 — parameter counts and training tokens as printed.</span></span>
+<span id="cb8-101"><a href="#cb8-101" aria-hidden="true" tabindex="-1"></a>MODELS <span class="op">=</span> pd.DataFrame([</span>
+<span id="cb8-102"><a href="#cb8-102" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"MT-NLG 530B"</span>, <span class="fl">530e9</span>, <span class="fl">270e9</span>,  <span class="dv">6</span><span class="op">*</span><span class="fl">530e9</span><span class="op">*</span><span class="fl">270e9</span>),</span>
+<span id="cb8-103"><a href="#cb8-103" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"Gopher"</span>,      <span class="fl">280e9</span>, <span class="fl">300e9</span>,  <span class="fl">5.76e23</span>),   <span class="co"># FLOPs as printed, Fig. 2 caption</span></span>
+<span id="cb8-104"><a href="#cb8-104" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"Jurassic-1"</span>,  <span class="fl">178e9</span>, <span class="fl">300e9</span>,  <span class="dv">6</span><span class="op">*</span><span class="fl">178e9</span><span class="op">*</span><span class="fl">300e9</span>),</span>
+<span id="cb8-105"><a href="#cb8-105" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"GPT-3"</span>,       <span class="fl">175e9</span>, <span class="fl">300e9</span>,  <span class="dv">6</span><span class="op">*</span><span class="fl">175e9</span><span class="op">*</span><span class="fl">300e9</span>),</span>
+<span id="cb8-106"><a href="#cb8-106" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"LaMDA"</span>,       <span class="fl">137e9</span>, <span class="fl">168e9</span>,  <span class="dv">6</span><span class="op">*</span><span class="fl">137e9</span><span class="op">*</span><span class="fl">168e9</span>),</span>
+<span id="cb8-107"><a href="#cb8-107" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"Chinchilla"</span>,   <span class="fl">70e9</span>, <span class="fl">1.4e12</span>, <span class="fl">5.76e23</span>),</span>
+<span id="cb8-108"><a href="#cb8-108" aria-hidden="true" tabindex="-1"></a>], columns<span class="op">=</span>[<span class="st">"model"</span>, <span class="st">"params"</span>, <span class="st">"tokens"</span>, <span class="st">"flops"</span>])</span>
+<span id="cb8-109"><a href="#cb8-109" aria-hidden="true" tabindex="-1"></a>MODELS[<span class="st">"tok_per_param"</span>] <span class="op">=</span> MODELS.tokens <span class="op">/</span> MODELS.params</span>
+<span id="cb8-110"><a href="#cb8-110" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-111"><a href="#cb8-111" aria-hidden="true" tabindex="-1"></a><span class="co"># Porian et al. (2024), Table 1 — RefinedWeb column, 95% CIs as printed.</span></span>
+<span id="cb8-112"><a href="#cb8-112" aria-hidden="true" tabindex="-1"></a>WATERFALL <span class="op">=</span> pd.DataFrame([</span>
+<span id="cb8-113"><a href="#cb8-113" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"Reproducing Kaplan et al."</span>,     <span class="fl">0.835</span>, <span class="fl">0.82</span>, <span class="fl">0.85</span>, <span class="st">"Baseline — Kaplan's setup reproduced"</span>),</span>
+<span id="cb8-114"><a href="#cb8-114" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"+ count last-layer FLOPs"</span>,      <span class="fl">0.706</span>, <span class="fl">0.69</span>, <span class="fl">0.72</span>, <span class="st">"Compute axis now includes the output head"</span>),</span>
+<span id="cb8-115"><a href="#cb8-115" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"+ warmup proportional to $N$"</span>,  <span class="fl">0.602</span>, <span class="fl">0.59</span>, <span class="fl">0.62</span>, <span class="st">"Replaces a fixed 1.57B-token warmup"</span>),</span>
+<span id="cb8-116"><a href="#cb8-116" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"+ matched cosine decay"</span>,        <span class="fl">0.571</span>, <span class="fl">0.56</span>, <span class="fl">0.59</span>, <span class="st">"Chinchilla's own proposed explanation"</span>),</span>
+<span id="cb8-117"><a href="#cb8-117" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"+ per-scale optimizer tuning"</span>,  <span class="fl">0.497</span>, <span class="fl">0.49</span>, <span class="fl">0.50</span>, <span class="st">"LR, batch size and AdamW $</span><span class="ch">\\</span><span class="st">beta_2$ swept per size"</span>),</span>
+<span id="cb8-118"><a href="#cb8-118" aria-hidden="true" tabindex="-1"></a>], columns<span class="op">=</span>[<span class="st">"step"</span>, <span class="st">"a"</span>, <span class="st">"lo"</span>, <span class="st">"hi"</span>, <span class="st">"what"</span>])</span>
+<span id="cb8-119"><a href="#cb8-119" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-120"><a href="#cb8-120" aria-hidden="true" tabindex="-1"></a>GOPHER_BUDGET <span class="op">=</span> <span class="fl">5.76e23</span>   <span class="co"># FLOPs, Hoffmann et al. (2022) Fig. 2 caption</span></span>
+<span id="cb8-121"><a href="#cb8-121" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-122"><a href="#cb8-122" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-123"><a href="#cb8-123" aria-hidden="true" tabindex="-1"></a>::: {.callout-important icon=false}</span>
+<span id="cb8-124"><a href="#cb8-124" aria-hidden="true" tabindex="-1"></a><span class="fu">## The short version</span></span>
+<span id="cb8-125"><a href="#cb8-125" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-126"><a href="#cb8-126" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>**Kaplan et al. (2020)** found that compute-optimal training puts almost</span>
+<span id="cb8-127"><a href="#cb8-127" aria-hidden="true" tabindex="-1"></a>    everything into parameters: $N \propto C^{0.73}$, $D \propto C^{0.27}$.</span>
+<span id="cb8-128"><a href="#cb8-128" aria-hidden="true" tabindex="-1"></a>    Their advice was to train very large models and stop "significantly before</span>
+<span id="cb8-129"><a href="#cb8-129" aria-hidden="true" tabindex="-1"></a>    convergence." <span class="co">[</span><span class="ot">@kaplan2020</span><span class="co">]</span></span>
+<span id="cb8-130"><a href="#cb8-130" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-131"><a href="#cb8-131" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>**Hoffmann et al. (2022)** — Chinchilla — found the two should scale</span>
+<span id="cb8-132"><a href="#cb8-132" aria-hidden="true" tabindex="-1"></a>    *equally*: $a \approx b \approx 0.5$, i.e. "for every doubling of model size</span>
+<span id="cb8-133"><a href="#cb8-133" aria-hidden="true" tabindex="-1"></a>    the number of training tokens should also be doubled." A 70B model on 1.4T</span>
+<span id="cb8-134"><a href="#cb8-134" aria-hidden="true" tabindex="-1"></a>    tokens beat the 280B Gopher trained on the same FLOPs. <span class="co">[</span><span class="ot">@hoffmann2022</span><span class="co">]</span></span>
+<span id="cb8-135"><a href="#cb8-135" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-136"><a href="#cb8-136" aria-hidden="true" tabindex="-1"></a><span class="ss">3.  </span>**Kaplan's exponent was a methodology artifact**, and it has since been</span>
+<span id="cb8-137"><a href="#cb8-137" aria-hidden="true" tabindex="-1"></a>    reproduced and decomposed. Porian et al. walk $0.835 \rightarrow 0.497$ in</span>
+<span id="cb8-138"><a href="#cb8-138" aria-hidden="true" tabindex="-1"></a>    three steps: counting the output layer's FLOPs, fixing a fixed-length warmup,</span>
+<span id="cb8-139"><a href="#cb8-139" aria-hidden="true" tabindex="-1"></a>    and tuning the optimizer per scale. Notably, the cosine-schedule explanation</span>
+<span id="cb8-140"><a href="#cb8-140" aria-hidden="true" tabindex="-1"></a>    Chinchilla itself offered accounts for only a small part of the gap. <span class="co">[</span><span class="ot">@porian2024</span><span class="co">]</span></span>
+<span id="cb8-141"><a href="#cb8-141" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-142"><a href="#cb8-142" aria-hidden="true" tabindex="-1"></a><span class="ss">4.  </span>**Chinchilla's own Approach 3 is also wrong** — Epoch AI's replication shows</span>
+<span id="cb8-143"><a href="#cb8-143" aria-hidden="true" tabindex="-1"></a>    its parametric fit is inconsistent with the paper's other two methods and</span>
+<span id="cb8-144"><a href="#cb8-144" aria-hidden="true" tabindex="-1"></a>    reports confidence intervals that would require ~600,000 training runs.</span>
+<span id="cb8-145"><a href="#cb8-145" aria-hidden="true" tabindex="-1"></a>    <span class="co">[</span><span class="ot">@besiroglu2024</span><span class="co">]</span> *And* Chinchilla-optimal is the wrong objective if you plan</span>
+<span id="cb8-146"><a href="#cb8-146" aria-hidden="true" tabindex="-1"></a>    to serve the model: it minimizes loss per *training* FLOP and ignores</span>
+<span id="cb8-147"><a href="#cb8-147" aria-hidden="true" tabindex="-1"></a>    inference entirely.</span>
+<span id="cb8-148"><a href="#cb8-148" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb8-149"><a href="#cb8-149" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-150"><a href="#cb8-150" aria-hidden="true" tabindex="-1"></a>Between 2020 and 2022 essentially every frontier lab trained models on roughly</span>
+<span id="cb8-151"><a href="#cb8-151" aria-hidden="true" tabindex="-1"></a>300 billion tokens and competed on parameter count. That was not laziness. It was</span>
+<span id="cb8-152"><a href="#cb8-152" aria-hidden="true" tabindex="-1"></a>the direct, correct reading of the scaling law everyone had: if the optimal model</span>
+<span id="cb8-153"><a href="#cb8-153" aria-hidden="true" tabindex="-1"></a>size grows like $C^{0.73}$ and the optimal token count only like $C^{0.27}$, then</span>
+<span id="cb8-154"><a href="#cb8-154" aria-hidden="true" tabindex="-1"></a>a 10× compute increase buys you 5.4× the parameters and only 1.9× the data.</span>
+<span id="cb8-155"><a href="#cb8-155" aria-hidden="true" tabindex="-1"></a>Parameters are where the returns are.</span>
+<span id="cb8-156"><a href="#cb8-156" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-157"><a href="#cb8-157" aria-hidden="true" tabindex="-1"></a>Chinchilla showed that the data axis had been starved. Here is what the 2020–2022</span>
+<span id="cb8-158"><a href="#cb8-158" aria-hidden="true" tabindex="-1"></a>generation actually looked like, in the one ratio that matters.</span>
+<span id="cb8-159"><a href="#cb8-159" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-162"><a href="#cb8-162" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-163"><a href="#cb8-163" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-ratio</span></span>
+<span id="cb8-164"><a href="#cb8-164" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: false</span></span>
+<span id="cb8-165"><a href="#cb8-165" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &gt;</span></span>
+<span id="cb8-166"><a href="#cb8-166" aria-hidden="true" tabindex="-1"></a><span class="co">#|   Training tokens per parameter. Every large model of the Kaplan era clusters</span></span>
+<span id="cb8-167"><a href="#cb8-167" aria-hidden="true" tabindex="-1"></a><span class="co">#|   around 1–2; Chinchilla sits at 20, on the same training budget as Gopher.</span></span>
+<span id="cb8-168"><a href="#cb8-168" aria-hidden="true" tabindex="-1"></a><span class="co">#|   Source: Hoffmann et al. (2022), Table 1. The dashed rule marks ≈20</span></span>
+<span id="cb8-169"><a href="#cb8-169" aria-hidden="true" tabindex="-1"></a><span class="co">#|   tokens/parameter — the ratio implied by the paper's Approach 1 projections</span></span>
+<span id="cb8-170"><a href="#cb8-170" aria-hidden="true" tabindex="-1"></a><span class="co">#|   (Table 3: a 1B model → 20.2B tokens) and the ratio Chinchilla was trained at.</span></span>
+<span id="cb8-171"><a href="#cb8-171" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-172"><a href="#cb8-172" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> MODELS.sort_values(<span class="st">"tok_per_param"</span>)</span>
+<span id="cb8-173"><a href="#cb8-173" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">4.2</span>))</span>
+<span id="cb8-174"><a href="#cb8-174" aria-hidden="true" tabindex="-1"></a>colors <span class="op">=</span> [PAL[<span class="st">"chin"</span>] <span class="cf">if</span> m <span class="op">==</span> <span class="st">"Chinchilla"</span> <span class="cf">else</span> PAL[<span class="st">"kaplan"</span>] <span class="cf">for</span> m <span class="kw">in</span> d.model]</span>
+<span id="cb8-175"><a href="#cb8-175" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-176"><a href="#cb8-176" aria-hidden="true" tabindex="-1"></a>ax.barh(d.model, d.tok_per_param, height<span class="op">=</span><span class="fl">0.46</span>, color<span class="op">=</span>colors,</span>
+<span id="cb8-177"><a href="#cb8-177" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span><span class="fl">1.0</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb8-178"><a href="#cb8-178" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> y, (v, m) <span class="kw">in</span> <span class="bu">enumerate</span>(<span class="bu">zip</span>(d.tok_per_param, d.model)):</span>
+<span id="cb8-179"><a href="#cb8-179" aria-hidden="true" tabindex="-1"></a>    ax.text(v <span class="op">+</span> <span class="fl">0.35</span>, y, <span class="ss">f"</span><span class="sc">{</span>v<span class="sc">:.2f}</span><span class="ss">"</span>, va<span class="op">=</span><span class="st">"center"</span>, fontsize<span class="op">=</span><span class="dv">10</span>,</span>
+<span id="cb8-180"><a href="#cb8-180" aria-hidden="true" tabindex="-1"></a>            fontweight<span class="op">=</span><span class="st">"semibold"</span>, color<span class="op">=</span>PAL[<span class="st">"ink"</span>] <span class="cf">if</span> m <span class="op">==</span> <span class="st">"Chinchilla"</span> <span class="cf">else</span> PAL[<span class="st">"ink2"</span>])</span>
+<span id="cb8-181"><a href="#cb8-181" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-182"><a href="#cb8-182" aria-hidden="true" tabindex="-1"></a>ax.axvline(<span class="dv">20</span>, color<span class="op">=</span>PAL[<span class="st">"chin"</span>], lw<span class="op">=</span><span class="fl">1.4</span>, ls<span class="op">=</span>(<span class="dv">0</span>, (<span class="dv">4</span>, <span class="dv">3</span>)), alpha<span class="op">=</span><span class="fl">.7</span>, zorder<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb8-183"><a href="#cb8-183" aria-hidden="true" tabindex="-1"></a>ax.text(<span class="dv">20</span>, <span class="bu">len</span>(d) <span class="op">-</span> <span class="fl">0.35</span>, <span class="st">"Chinchilla-optimal ≈ 20  "</span>, ha<span class="op">=</span><span class="st">"right"</span>, va<span class="op">=</span><span class="st">"bottom"</span>,</span>
+<span id="cb8-184"><a href="#cb8-184" aria-hidden="true" tabindex="-1"></a>        fontsize<span class="op">=</span><span class="fl">9.5</span>, color<span class="op">=</span>PAL[<span class="st">"chin"</span>], fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-185"><a href="#cb8-185" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-186"><a href="#cb8-186" aria-hidden="true" tabindex="-1"></a>ax.set_xlim(<span class="dv">0</span>, <span class="dv">23</span>)</span>
+<span id="cb8-187"><a href="#cb8-187" aria-hidden="true" tabindex="-1"></a>ax.grid(axis<span class="op">=</span><span class="st">"y"</span>, visible<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb8-188"><a href="#cb8-188" aria-hidden="true" tabindex="-1"></a>ax.tick_params(axis<span class="op">=</span><span class="st">"y"</span>, length<span class="op">=</span><span class="dv">0</span>, labelcolor<span class="op">=</span>PAL[<span class="st">"ink"</span>], labelsize<span class="op">=</span><span class="fl">10.5</span>)</span>
+<span id="cb8-189"><a href="#cb8-189" aria-hidden="true" tabindex="-1"></a>style(ax, xlabel<span class="op">=</span><span class="st">"TRAINING TOKENS PER PARAMETER"</span>)</span>
+<span id="cb8-190"><a href="#cb8-190" aria-hidden="true" tabindex="-1"></a>plt.show()</span>
+<span id="cb8-191"><a href="#cb8-191" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-192"><a href="#cb8-192" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-193"><a href="#cb8-193" aria-hidden="true" tabindex="-1"></a><span class="fu">## What each paper actually fit</span></span>
+<span id="cb8-194"><a href="#cb8-194" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-195"><a href="#cb8-195" aria-hidden="true" tabindex="-1"></a>The two papers are not two measurements of the same quantity. They fit different</span>
+<span id="cb8-196"><a href="#cb8-196" aria-hidden="true" tabindex="-1"></a>equations to different data, and the difference in form matters as much as the</span>
+<span id="cb8-197"><a href="#cb8-197" aria-hidden="true" tabindex="-1"></a>difference in exponent.</span>
+<span id="cb8-198"><a href="#cb8-198" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-199"><a href="#cb8-199" aria-hidden="true" tabindex="-1"></a>::: {layout-ncol=2}</span>
+<span id="cb8-200"><a href="#cb8-200" aria-hidden="true" tabindex="-1"></a>**Kaplan et al. 2020** — Eq. 1.1–1.3</span>
+<span id="cb8-201"><a href="#cb8-201" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-202"><a href="#cb8-202" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-203"><a href="#cb8-203" aria-hidden="true" tabindex="-1"></a>L(N) = \left(\tfrac{N_c}{N}\right)^{\alpha_N}<span class="sc">\!</span>,\quad</span>
+<span id="cb8-204"><a href="#cb8-204" aria-hidden="true" tabindex="-1"></a>L(D) = \left(\tfrac{D_c}{D}\right)^{\alpha_D}<span class="sc">\!</span>,\quad</span>
+<span id="cb8-205"><a href="#cb8-205" aria-hidden="true" tabindex="-1"></a>L(C_{\min}) = \left(\tfrac{C_c}{C_{\min}}\right)^{\alpha_C}</span>
+<span id="cb8-206"><a href="#cb8-206" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-207"><a href="#cb8-207" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-208"><a href="#cb8-208" aria-hidden="true" tabindex="-1"></a>$\alpha_N = 0.076,\ N_c = 8.8<span class="sc">\!</span>\times<span class="sc">\!</span>10^{13}$</span>
+<span id="cb8-209"><a href="#cb8-209" aria-hidden="true" tabindex="-1"></a>$\alpha_D = 0.095,\ D_c = 5.4<span class="sc">\!</span>\times<span class="sc">\!</span>10^{13}$</span>
+<span id="cb8-210"><a href="#cb8-210" aria-hidden="true" tabindex="-1"></a>$\alpha_C = 0.050,\ C_c = 3.1<span class="sc">\!</span>\times<span class="sc">\!</span>10^{8}$ PF-days</span>
+<span id="cb8-211"><a href="#cb8-211" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-212"><a href="#cb8-212" aria-hidden="true" tabindex="-1"></a>*Pure power laws, no offset.* Loss goes to zero as $N \to \infty$. $N$ counts</span>
+<span id="cb8-213"><a href="#cb8-213" aria-hidden="true" tabindex="-1"></a>**non-embedding** parameters — "excluding all vocabulary and positional</span>
+<span id="cb8-214"><a href="#cb8-214" aria-hidden="true" tabindex="-1"></a>embeddings." Models spanned 768 to 1.5B non-embedding params; data 22M to 23B</span>
+<span id="cb8-215"><a href="#cb8-215" aria-hidden="true" tabindex="-1"></a>tokens.</span>
+<span id="cb8-216"><a href="#cb8-216" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-217"><a href="#cb8-217" aria-hidden="true" tabindex="-1"></a>**Hoffmann et al. 2022** — Eq. 2 / Eq. 10</span>
+<span id="cb8-218"><a href="#cb8-218" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-219"><a href="#cb8-219" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-220"><a href="#cb8-220" aria-hidden="true" tabindex="-1"></a>L(N, D) = E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}</span>
+<span id="cb8-221"><a href="#cb8-221" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-222"><a href="#cb8-222" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-223"><a href="#cb8-223" aria-hidden="true" tabindex="-1"></a>$E = 1.6934,\ A = 406.4,\ B = 410.7$</span>
+<span id="cb8-224"><a href="#cb8-224" aria-hidden="true" tabindex="-1"></a>$\alpha = 0.3392,\ \beta = 0.2849$</span>
+<span id="cb8-225"><a href="#cb8-225" aria-hidden="true" tabindex="-1"></a>$a = \beta/(\alpha{+}\beta) = 0.46$</span>
+<span id="cb8-226"><a href="#cb8-226" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-227"><a href="#cb8-227" aria-hidden="true" tabindex="-1"></a>*An irreducible-loss term.* $E$ is the entropy of natural text you can never fit</span>
+<span id="cb8-228"><a href="#cb8-228" aria-hidden="true" tabindex="-1"></a>away. $N$ is **total** parameters, embeddings included. Models ran up to 16B</span>
+<span id="cb8-229"><a href="#cb8-229" aria-hidden="true" tabindex="-1"></a>params, budgets $6<span class="sc">\!</span>\times<span class="sc">\!</span>10^{18} \to 3<span class="sc">\!</span>\times<span class="sc">\!</span>10^{21}$ FLOPs.</span>
+<span id="cb8-230"><a href="#cb8-230" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb8-231"><a href="#cb8-231" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-232"><a href="#cb8-232" aria-hidden="true" tabindex="-1"></a>Three structural differences are doing real work here, and it is worth naming them</span>
+<span id="cb8-233"><a href="#cb8-233" aria-hidden="true" tabindex="-1"></a>before the exponents:</span>
+<span id="cb8-234"><a href="#cb8-234" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-235"><a href="#cb8-235" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**The offset term.** Kaplan's form has no $E$. Without an irreducible floor, a</span>
+<span id="cb8-236"><a href="#cb8-236" aria-hidden="true" tabindex="-1"></a>    power-law fit has to bend the exponents to accommodate the flattening it sees</span>
+<span id="cb8-237"><a href="#cb8-237" aria-hidden="true" tabindex="-1"></a>    at scale.</span>
+<span id="cb8-238"><a href="#cb8-238" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**Embedding parameters.** Kaplan excludes them, Chinchilla includes them. At</span>
+<span id="cb8-239"><a href="#cb8-239" aria-hidden="true" tabindex="-1"></a>    768 non-embedding parameters with a 50,257-token vocabulary, the embedding</span>
+<span id="cb8-240"><a href="#cb8-240" aria-hidden="true" tabindex="-1"></a>    matrix *is* the model. This is not a rounding difference.</span>
+<span id="cb8-241"><a href="#cb8-241" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**What "compute" counts.** Both use $C \approx 6ND$, but Kaplan's $N$ excludes</span>
+<span id="cb8-242"><a href="#cb8-242" aria-hidden="true" tabindex="-1"></a>    the output layer, so the FLOPs of the final projection go uncounted — an</span>
+<span id="cb8-243"><a href="#cb8-243" aria-hidden="true" tabindex="-1"></a>    under-approximation that Porian et al. measure at "roughly 10% at larger</span>
+<span id="cb8-244"><a href="#cb8-244" aria-hidden="true" tabindex="-1"></a>    models to roughly 90% at smaller models."</span>
+<span id="cb8-245"><a href="#cb8-245" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-246"><a href="#cb8-246" aria-hidden="true" tabindex="-1"></a>Put the two allocation rules on the same axes and the practical consequence is</span>
+<span id="cb8-247"><a href="#cb8-247" aria-hidden="true" tabindex="-1"></a>immediate.</span>
+<span id="cb8-248"><a href="#cb8-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-251"><a href="#cb8-251" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-252"><a href="#cb8-252" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: laws</span></span>
+<span id="cb8-253"><a href="#cb8-253" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-fold: true</span></span>
+<span id="cb8-254"><a href="#cb8-254" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-summary: "The two allocation laws, as published"</span></span>
+<span id="cb8-255"><a href="#cb8-255" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-256"><a href="#cb8-256" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kaplan_N(C):</span>
+<span id="cb8-257"><a href="#cb8-257" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Kaplan's *adjusted* law, as quoted by Porian et al. (2024)."""</span></span>
+<span id="cb8-258"><a href="#cb8-258" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fl">1.3e9</span> <span class="op">*</span> (C <span class="op">/</span> <span class="fl">8.64e19</span>) <span class="op">**</span> <span class="fl">0.73</span></span>
+<span id="cb8-259"><a href="#cb8-259" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-260"><a href="#cb8-260" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> chinchilla_N(C):</span>
+<span id="cb8-261"><a href="#cb8-261" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Chinchilla Approach 1, anchored on Hoffmann et al. Table 3</span></span>
+<span id="cb8-262"><a href="#cb8-262" aria-hidden="true" tabindex="-1"></a><span class="co">    (67B parameters at the 5.76e23 FLOP Gopher budget)."""</span></span>
+<span id="cb8-263"><a href="#cb8-263" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fl">6.7e10</span> <span class="op">*</span> (C <span class="op">/</span> GOPHER_BUDGET) <span class="op">**</span> <span class="fl">0.50</span></span>
+<span id="cb8-264"><a href="#cb8-264" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-265"><a href="#cb8-265" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-268"><a href="#cb8-268" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-269"><a href="#cb8-269" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-frontier</span></span>
+<span id="cb8-270"><a href="#cb8-270" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: false</span></span>
+<span id="cb8-271"><a href="#cb8-271" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &gt;</span></span>
+<span id="cb8-272"><a href="#cb8-272" aria-hidden="true" tabindex="-1"></a><span class="co">#|   Compute-optimal model size under each law, extrapolated across the budgets</span></span>
+<span id="cb8-273"><a href="#cb8-273" aria-hidden="true" tabindex="-1"></a><span class="co">#|   labs actually spent. Model markers use each paper's published parameter and</span></span>
+<span id="cb8-274"><a href="#cb8-274" aria-hidden="true" tabindex="-1"></a><span class="co">#|   token counts; compute for GPT-3, Jurassic-1, LaMDA and MT-NLG is 6ND (our</span></span>
+<span id="cb8-275"><a href="#cb8-275" aria-hidden="true" tabindex="-1"></a><span class="co">#|   arithmetic), while Gopher and Chinchilla use the 5.76e23 FLOPs printed in</span></span>
+<span id="cb8-276"><a href="#cb8-276" aria-hidden="true" tabindex="-1"></a><span class="co">#|   Hoffmann et al. Fig. 2.</span></span>
+<span id="cb8-277"><a href="#cb8-277" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-278"><a href="#cb8-278" aria-hidden="true" tabindex="-1"></a>C <span class="op">=</span> np.logspace(<span class="dv">19</span>, <span class="dv">26</span>, <span class="dv">300</span>)</span>
+<span id="cb8-279"><a href="#cb8-279" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">5.2</span>))</span>
+<span id="cb8-280"><a href="#cb8-280" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-281"><a href="#cb8-281" aria-hidden="true" tabindex="-1"></a>ax.plot(C, kaplan_N(C), color<span class="op">=</span>PAL[<span class="st">"kaplan"</span>], lw<span class="op">=</span><span class="fl">2.2</span>, zorder<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb8-282"><a href="#cb8-282" aria-hidden="true" tabindex="-1"></a>ax.plot(C, chinchilla_N(C), color<span class="op">=</span>PAL[<span class="st">"chin"</span>], lw<span class="op">=</span><span class="fl">2.2</span>, zorder<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb8-283"><a href="#cb8-283" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-284"><a href="#cb8-284" aria-hidden="true" tabindex="-1"></a>ax.annotate(<span class="vs">r"Kaplan  </span><span class="dv">$</span><span class="vs">N </span><span class="er">\</span><span class="vs">propto C</span><span class="dv">^</span><span class="vs">{0</span><span class="dv">.</span><span class="vs">73}</span><span class="dv">$</span><span class="vs">"</span>, (<span class="fl">3e22</span>, kaplan_N(<span class="fl">3e22</span>)),</span>
+<span id="cb8-285"><a href="#cb8-285" aria-hidden="true" tabindex="-1"></a>            xytext<span class="op">=</span>(<span class="op">-</span><span class="dv">8</span>, <span class="dv">10</span>), textcoords<span class="op">=</span><span class="st">"offset points"</span>, ha<span class="op">=</span><span class="st">"right"</span>,</span>
+<span id="cb8-286"><a href="#cb8-286" aria-hidden="true" tabindex="-1"></a>            color<span class="op">=</span>PAL[<span class="st">"kaplan"</span>], fontsize<span class="op">=</span><span class="dv">11</span>, fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-287"><a href="#cb8-287" aria-hidden="true" tabindex="-1"></a>ax.annotate(<span class="vs">r"Chinchilla  </span><span class="dv">$</span><span class="vs">N </span><span class="er">\</span><span class="vs">propto C</span><span class="dv">^</span><span class="vs">{0</span><span class="dv">.</span><span class="vs">50}</span><span class="dv">$</span><span class="vs">"</span>, (<span class="fl">1.3e24</span>, chinchilla_N(<span class="fl">1.3e24</span>)),</span>
+<span id="cb8-288"><a href="#cb8-288" aria-hidden="true" tabindex="-1"></a>            xytext<span class="op">=</span>(<span class="dv">8</span>, <span class="op">-</span><span class="dv">20</span>), textcoords<span class="op">=</span><span class="st">"offset points"</span>, ha<span class="op">=</span><span class="st">"left"</span>,</span>
+<span id="cb8-289"><a href="#cb8-289" aria-hidden="true" tabindex="-1"></a>            color<span class="op">=</span>PAL[<span class="st">"chin"</span>], fontsize<span class="op">=</span><span class="dv">11</span>, fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-290"><a href="#cb8-290" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-291"><a href="#cb8-291" aria-hidden="true" tabindex="-1"></a><span class="co"># the divergence at the Gopher budget</span></span>
+<span id="cb8-292"><a href="#cb8-292" aria-hidden="true" tabindex="-1"></a>gk, gc <span class="op">=</span> kaplan_N(GOPHER_BUDGET), chinchilla_N(GOPHER_BUDGET)</span>
+<span id="cb8-293"><a href="#cb8-293" aria-hidden="true" tabindex="-1"></a>ax.plot([GOPHER_BUDGET] <span class="op">*</span> <span class="dv">2</span>, [gc, gk], color<span class="op">=</span>PAL[<span class="st">"ink2"</span>], lw<span class="op">=</span><span class="dv">1</span>, ls<span class="op">=</span>(<span class="dv">0</span>, (<span class="dv">2</span>, <span class="dv">2</span>)), zorder<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb8-294"><a href="#cb8-294" aria-hidden="true" tabindex="-1"></a>ax.annotate(<span class="ss">f"Kaplan would build </span><span class="sc">{</span>human(gk)<span class="sc">}</span><span class="ss"> here — </span><span class="sc">{</span>gk<span class="op">/</span>gc<span class="sc">:.0f}</span><span class="ss">× Chinchilla"</span>,</span>
+<span id="cb8-295"><a href="#cb8-295" aria-hidden="true" tabindex="-1"></a>            (GOPHER_BUDGET, gk), xytext<span class="op">=</span>(<span class="op">-</span><span class="dv">10</span>, <span class="dv">8</span>), textcoords<span class="op">=</span><span class="st">"offset points"</span>,</span>
+<span id="cb8-296"><a href="#cb8-296" aria-hidden="true" tabindex="-1"></a>            ha<span class="op">=</span><span class="st">"right"</span>, fontsize<span class="op">=</span><span class="fl">9.5</span>, color<span class="op">=</span>PAL[<span class="st">"ink2"</span>], fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-297"><a href="#cb8-297" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-298"><a href="#cb8-298" aria-hidden="true" tabindex="-1"></a>OFF <span class="op">=</span> {<span class="st">"MT-NLG 530B"</span>: (<span class="dv">11</span>, <span class="dv">0</span>, <span class="st">"left"</span>), <span class="st">"Gopher"</span>: (<span class="dv">11</span>, <span class="dv">0</span>, <span class="st">"left"</span>),</span>
+<span id="cb8-299"><a href="#cb8-299" aria-hidden="true" tabindex="-1"></a>       <span class="st">"Jurassic-1"</span>: (<span class="op">-</span><span class="dv">7</span>, <span class="dv">9</span>, <span class="st">"right"</span>), <span class="st">"GPT-3"</span>: (<span class="dv">0</span>, <span class="op">-</span><span class="dv">15</span>, <span class="st">"center"</span>),</span>
+<span id="cb8-300"><a href="#cb8-300" aria-hidden="true" tabindex="-1"></a>       <span class="st">"LaMDA"</span>: (<span class="op">-</span><span class="dv">11</span>, <span class="dv">0</span>, <span class="st">"right"</span>), <span class="st">"Chinchilla"</span>: (<span class="dv">0</span>, <span class="op">-</span><span class="dv">16</span>, <span class="st">"center"</span>)}</span>
+<span id="cb8-301"><a href="#cb8-301" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> r <span class="kw">in</span> MODELS.itertuples():</span>
+<span id="cb8-302"><a href="#cb8-302" aria-hidden="true" tabindex="-1"></a>    c <span class="op">=</span> PAL[<span class="st">"chin"</span>] <span class="cf">if</span> r.model <span class="op">==</span> <span class="st">"Chinchilla"</span> <span class="cf">else</span> PAL[<span class="st">"ink2"</span>]</span>
+<span id="cb8-303"><a href="#cb8-303" aria-hidden="true" tabindex="-1"></a>    ax.scatter(r.flops, r.params, s<span class="op">=</span><span class="dv">48</span>, color<span class="op">=</span>c, zorder<span class="op">=</span><span class="dv">6</span>,</span>
+<span id="cb8-304"><a href="#cb8-304" aria-hidden="true" tabindex="-1"></a>               edgecolor<span class="op">=</span>PAL[<span class="st">"surface"</span>], linewidth<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb8-305"><a href="#cb8-305" aria-hidden="true" tabindex="-1"></a>    dx, dy, ha <span class="op">=</span> OFF[r.model]</span>
+<span id="cb8-306"><a href="#cb8-306" aria-hidden="true" tabindex="-1"></a>    ax.annotate(r.model, (r.flops, r.params), xytext<span class="op">=</span>(dx, dy),</span>
+<span id="cb8-307"><a href="#cb8-307" aria-hidden="true" tabindex="-1"></a>                textcoords<span class="op">=</span><span class="st">"offset points"</span>, ha<span class="op">=</span>ha, va<span class="op">=</span><span class="st">"center"</span>,</span>
+<span id="cb8-308"><a href="#cb8-308" aria-hidden="true" tabindex="-1"></a>                fontsize<span class="op">=</span><span class="fl">9.5</span>, color<span class="op">=</span>c, fontweight<span class="op">=</span><span class="st">"semibold"</span>, zorder<span class="op">=</span><span class="dv">7</span>)</span>
+<span id="cb8-309"><a href="#cb8-309" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-310"><a href="#cb8-310" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(xscale<span class="op">=</span><span class="st">"log"</span>, yscale<span class="op">=</span><span class="st">"log"</span>, xlim<span class="op">=</span>(<span class="fl">1e19</span>, <span class="fl">1e26</span>), ylim<span class="op">=</span>(<span class="fl">1e8</span>, <span class="fl">3e12</span>))</span>
+<span id="cb8-311"><a href="#cb8-311" aria-hidden="true" tabindex="-1"></a>ax.yaxis.set_major_formatter(HUMAN)</span>
+<span id="cb8-312"><a href="#cb8-312" aria-hidden="true" tabindex="-1"></a>style(ax, xlabel<span class="op">=</span><span class="st">"TRAINING COMPUTE $C$ (FLOPs)"</span>,</span>
+<span id="cb8-313"><a href="#cb8-313" aria-hidden="true" tabindex="-1"></a>      ylabel<span class="op">=</span><span class="st">"COMPUTE-OPTIMAL PARAMETERS $N^*$"</span>)</span>
+<span id="cb8-314"><a href="#cb8-314" aria-hidden="true" tabindex="-1"></a>plt.show()</span>
+<span id="cb8-315"><a href="#cb8-315" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-316"><a href="#cb8-316" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-317"><a href="#cb8-317" aria-hidden="true" tabindex="-1"></a><span class="fu">## Three approaches, and one that doesn't agree</span></span>
+<span id="cb8-318"><a href="#cb8-318" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-319"><a href="#cb8-319" aria-hidden="true" tabindex="-1"></a>Chinchilla's credibility rests on measuring the same quantity three independent</span>
+<span id="cb8-320"><a href="#cb8-320" aria-hidden="true" tabindex="-1"></a>ways. Two agree tightly. The third — the one everybody quotes, because it is the</span>
+<span id="cb8-321"><a href="#cb8-321" aria-hidden="true" tabindex="-1"></a>one that gives you a closed-form equation — is the odd one out.</span>
+<span id="cb8-322"><a href="#cb8-322" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-323"><a href="#cb8-323" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Approach <span class="pp">|</span> $a$ ($N^* \propto C^a$) <span class="pp">|</span> interval <span class="pp">|</span> $b$ ($D^* \propto C^b$) <span class="pp">|</span> interval <span class="pp">|</span></span>
+<span id="cb8-324"><a href="#cb8-324" aria-hidden="true" tabindex="-1"></a><span class="pp">|:---|---:|:---:|---:|:---:|</span></span>
+<span id="cb8-325"><a href="#cb8-325" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> 1. Minimum over training curves <span class="pp">|</span> 0.50 <span class="pp">|</span> (0.488, 0.502) <span class="pp">|</span> 0.50 <span class="pp">|</span> (0.501, 0.512) <span class="pp">|</span></span>
+<span id="cb8-326"><a href="#cb8-326" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> 2. IsoFLOP profiles <span class="pp">|</span> 0.49 <span class="pp">|</span> (0.462, 0.534) <span class="pp">|</span> 0.51 <span class="pp">|</span> (0.483, 0.529) <span class="pp">|</span></span>
+<span id="cb8-327"><a href="#cb8-327" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> 3. Parametric loss modelling <span class="pp">|</span> 0.46 <span class="pp">|</span> (0.454, 0.455) <span class="pp">|</span> 0.54 <span class="pp">|</span> (0.542, 0.543) <span class="pp">|</span></span>
+<span id="cb8-328"><a href="#cb8-328" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Kaplan et al. (2020) <span class="pp">|</span> 0.73 <span class="pp">|</span> — <span class="pp">|</span> 0.27 <span class="pp">|</span> — <span class="pp">|</span></span>
+<span id="cb8-329"><a href="#cb8-329" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-330"><a href="#cb8-330" aria-hidden="true" tabindex="-1"></a>: Hoffmann et al. (2022), Table 2 — 10th/90th percentiles from bootstrap. {#tbl-approaches tbl-colwidths="<span class="co">[</span><span class="ot">40,12,18,12,18</span><span class="co">]</span>"}</span>
+<span id="cb8-331"><a href="#cb8-331" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-332"><a href="#cb8-332" aria-hidden="true" tabindex="-1"></a>**Approach 1** takes the minimum over training curves: train a fixed set of model</span>
+<span id="cb8-333"><a href="#cb8-333" aria-hidden="true" tabindex="-1"></a>sizes, vary the token count, and read off the envelope. **Approach 2** runs IsoFLOP</span>
+<span id="cb8-334"><a href="#cb8-334" aria-hidden="true" tabindex="-1"></a>profiles — nine fixed FLOP budgets from $6\times10^{18}$ to $3\times10^{21}$,</span>
+<span id="cb8-335"><a href="#cb8-335" aria-hidden="true" tabindex="-1"></a>sweeping model size within each and finding the parabola's minimum. **Approach 3**</span>
+<span id="cb8-336"><a href="#cb8-336" aria-hidden="true" tabindex="-1"></a>fits the parametric loss and derives the frontier analytically.</span>
+<span id="cb8-337"><a href="#cb8-337" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-338"><a href="#cb8-338" aria-hidden="true" tabindex="-1"></a>Approach 3's $a = 0.46$ looks close enough to 0.5 to ignore. It is not. Because</span>
+<span id="cb8-339"><a href="#cb8-339" aria-hidden="true" tabindex="-1"></a>the exponent compounds, a 0.04 difference becomes a large difference in the</span>
+<span id="cb8-340"><a href="#cb8-340" aria-hidden="true" tabindex="-1"></a>recommended tokens-per-parameter ratio as budgets grow — and you can check this</span>
+<span id="cb8-341"><a href="#cb8-341" aria-hidden="true" tabindex="-1"></a>yourself from the paper's own printed constants.</span>
+<span id="cb8-342"><a href="#cb8-342" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-345"><a href="#cb8-345" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-346"><a href="#cb8-346" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: repro-a3</span></span>
+<span id="cb8-347"><a href="#cb8-347" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-348"><a href="#cb8-348" aria-hidden="true" tabindex="-1"></a><span class="co"># Hoffmann et al. (2022), Eq. 10 constants. Printed as 0.34 / 0.28 in the body;</span></span>
+<span id="cb8-349"><a href="#cb8-349" aria-hidden="true" tabindex="-1"></a><span class="co"># the extra digits come from the arXiv TeX source, recovered by Besiroglu et al.</span></span>
+<span id="cb8-350"><a href="#cb8-350" aria-hidden="true" tabindex="-1"></a>HOFFMANN <span class="op">=</span> <span class="bu">dict</span>(E<span class="op">=</span><span class="fl">1.6934</span>, A<span class="op">=</span><span class="fl">406.4</span>,  B<span class="op">=</span><span class="fl">410.7</span>,   alpha<span class="op">=</span><span class="fl">0.3392</span>, beta<span class="op">=</span><span class="fl">0.2849</span>)</span>
+<span id="cb8-351"><a href="#cb8-351" aria-hidden="true" tabindex="-1"></a>EPOCH    <span class="op">=</span> <span class="bu">dict</span>(E<span class="op">=</span><span class="fl">1.8172</span>, A<span class="op">=</span><span class="fl">482.01</span>, B<span class="op">=</span><span class="fl">2085.43</span>, alpha<span class="op">=</span><span class="fl">0.3478</span>, beta<span class="op">=</span><span class="fl">0.3658</span>)</span>
+<span id="cb8-352"><a href="#cb8-352" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-353"><a href="#cb8-353" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> loss(N, D, E, A, B, alpha, beta):</span>
+<span id="cb8-354"><a href="#cb8-354" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Predicted cross-entropy for N parameters trained on D tokens."""</span></span>
+<span id="cb8-355"><a href="#cb8-355" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> E <span class="op">+</span> A <span class="op">/</span> N<span class="op">**</span>alpha <span class="op">+</span> B <span class="op">/</span> D<span class="op">**</span>beta</span>
+<span id="cb8-356"><a href="#cb8-356" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-357"><a href="#cb8-357" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> frontier(C, E, A, B, alpha, beta):</span>
+<span id="cb8-358"><a href="#cb8-358" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Closed-form compute-optimal (N*, D*) for budget C. Hoffmann Eq. 4."""</span></span>
+<span id="cb8-359"><a href="#cb8-359" aria-hidden="true" tabindex="-1"></a>    a <span class="op">=</span> beta <span class="op">/</span> (alpha <span class="op">+</span> beta)</span>
+<span id="cb8-360"><a href="#cb8-360" aria-hidden="true" tabindex="-1"></a>    b <span class="op">=</span> alpha <span class="op">/</span> (alpha <span class="op">+</span> beta)</span>
+<span id="cb8-361"><a href="#cb8-361" aria-hidden="true" tabindex="-1"></a>    G <span class="op">=</span> (alpha <span class="op">*</span> A <span class="op">/</span> (beta <span class="op">*</span> B)) <span class="op">**</span> (<span class="dv">1</span> <span class="op">/</span> (alpha <span class="op">+</span> beta))</span>
+<span id="cb8-362"><a href="#cb8-362" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> G <span class="op">*</span> (C <span class="op">/</span> <span class="dv">6</span>) <span class="op">**</span> a, (C <span class="op">/</span> <span class="dv">6</span>) <span class="op">**</span> b <span class="op">/</span> G</span>
+<span id="cb8-363"><a href="#cb8-363" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-364"><a href="#cb8-364" aria-hidden="true" tabindex="-1"></a>N_star, D_star <span class="op">=</span> frontier(GOPHER_BUDGET, <span class="op">**</span>HOFFMANN)</span>
+<span id="cb8-365"><a href="#cb8-365" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"N* = </span><span class="sc">{</span>N_star<span class="op">/</span><span class="fl">1e9</span><span class="sc">:.1f}</span><span class="ss">B   D* = </span><span class="sc">{</span>D_star<span class="op">/</span><span class="fl">1e12</span><span class="sc">:.2f}</span><span class="ss">T   D/N = </span><span class="sc">{</span>D_star<span class="op">/</span>N_star<span class="sc">:.0f}</span><span class="ss">"</span>)</span>
+<span id="cb8-366"><a href="#cb8-366" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-367"><a href="#cb8-367" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-368"><a href="#cb8-368" aria-hidden="true" tabindex="-1"></a>That 40.3B is a genuine check on the arithmetic: Hoffmann et al.'s Figure 4</span>
+<span id="cb8-369"><a href="#cb8-369" aria-hidden="true" tabindex="-1"></a>caption reads *"We project the optimal model size given the Gopher FLOP budget to</span>
+<span id="cb8-370"><a href="#cb8-370" aria-hidden="true" tabindex="-1"></a>be 40B parameters."* The constants reproduce the paper's own figure.</span>
+<span id="cb8-371"><a href="#cb8-371" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-372"><a href="#cb8-372" aria-hidden="true" tabindex="-1"></a>But look at the ratio the same code prints. Approach 3 says **59 tokens per</span>
+<span id="cb8-373"><a href="#cb8-373" aria-hidden="true" tabindex="-1"></a>parameter** at the Gopher budget — and the number keeps climbing with compute.</span>
+<span id="cb8-374"><a href="#cb8-374" aria-hidden="true" tabindex="-1"></a>Approach 1, on the same budget, says 67B parameters on 1.5T tokens: **22 tokens</span>
+<span id="cb8-375"><a href="#cb8-375" aria-hidden="true" tabindex="-1"></a>per parameter**. The paper trained Chinchilla at 20. Its own headline model does</span>
+<span id="cb8-376"><a href="#cb8-376" aria-hidden="true" tabindex="-1"></a>not follow its own headline equation.</span>
+<span id="cb8-377"><a href="#cb8-377" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-378"><a href="#cb8-378" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning icon=false}</span>
+<span id="cb8-379"><a href="#cb8-379" aria-hidden="true" tabindex="-1"></a><span class="fu">## The replication</span></span>
+<span id="cb8-380"><a href="#cb8-380" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-381"><a href="#cb8-381" aria-hidden="true" tabindex="-1"></a>Besiroglu et al. digitised 240 points out of Hoffmann's Figure 4 — by parsing the</span>
+<span id="cb8-382"><a href="#cb8-382" aria-hidden="true" tabindex="-1"></a>PDF's SVG scatter and mapping fill colours back to loss values — and refit the</span>
+<span id="cb8-383"><a href="#cb8-383" aria-hidden="true" tabindex="-1"></a>law. Their result is</span>
+<span id="cb8-384"><a href="#cb8-384" aria-hidden="true" tabindex="-1"></a>$L(N,D) = 1.8172 + 482.01\,N^{-0.3478} + 2085.43\,D^{-0.3658}$, giving</span>
+<span id="cb8-385"><a href="#cb8-385" aria-hidden="true" tabindex="-1"></a>$a = 0.5126$ (SE 0.02). That agrees with Approaches 1 and 2, and with how</span>
+<span id="cb8-386"><a href="#cb8-386" aria-hidden="true" tabindex="-1"></a>Chinchilla was actually trained. They also note the published intervals on $a$</span>
+<span id="cb8-387"><a href="#cb8-387" aria-hidden="true" tabindex="-1"></a>(0.454–0.455) are implausibly tight: *"intervals this narrow would require over</span>
+<span id="cb8-388"><a href="#cb8-388" aria-hidden="true" tabindex="-1"></a>600,000 experiments, while they likely only ran fewer than 500."* <span class="co">[</span><span class="ot">@besiroglu2024</span><span class="co">]</span></span>
+<span id="cb8-389"><a href="#cb8-389" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb8-390"><a href="#cb8-390" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-391"><a href="#cb8-391" aria-hidden="true" tabindex="-1"></a>Swap the Epoch constants into the same function and the ratio stabilises where</span>
+<span id="cb8-392"><a href="#cb8-392" aria-hidden="true" tabindex="-1"></a>practitioners expect it:</span>
+<span id="cb8-393"><a href="#cb8-393" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-396"><a href="#cb8-396" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-397"><a href="#cb8-397" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: tbl-compare</span></span>
+<span id="cb8-398"><a href="#cb8-398" aria-hidden="true" tabindex="-1"></a><span class="co">#| tbl-cap: "Compute-optimal allocation under Hoffmann's Approach 3 versus Epoch AI's refit."</span></span>
+<span id="cb8-399"><a href="#cb8-399" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-400"><a href="#cb8-400" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb8-401"><a href="#cb8-401" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> C_budget <span class="kw">in</span> [<span class="fl">1e22</span>, <span class="fl">1e23</span>, GOPHER_BUDGET, <span class="fl">1e25</span>]:</span>
+<span id="cb8-402"><a href="#cb8-402" aria-hidden="true" tabindex="-1"></a>    nh, dh <span class="op">=</span> frontier(C_budget, <span class="op">**</span>HOFFMANN)</span>
+<span id="cb8-403"><a href="#cb8-403" aria-hidden="true" tabindex="-1"></a>    ne, de <span class="op">=</span> frontier(C_budget, <span class="op">**</span>EPOCH)</span>
+<span id="cb8-404"><a href="#cb8-404" aria-hidden="true" tabindex="-1"></a>    rows.append({</span>
+<span id="cb8-405"><a href="#cb8-405" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Compute (FLOPs)"</span>:  <span class="ss">f"</span><span class="sc">{</span>C_budget<span class="sc">:.1e}</span><span class="ss">"</span>,</span>
+<span id="cb8-406"><a href="#cb8-406" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Hoffmann A3 — N*"</span>: human(nh), <span class="st">"tok/param "</span>:  <span class="ss">f"</span><span class="sc">{</span>dh<span class="op">/</span>nh<span class="sc">:.0f}</span><span class="ss">"</span>,</span>
+<span id="cb8-407"><a href="#cb8-407" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Epoch refit — N*"</span>: human(ne), <span class="st">"tok/param"</span>:   <span class="ss">f"</span><span class="sc">{</span>de<span class="op">/</span>ne<span class="sc">:.0f}</span><span class="ss">"</span>,</span>
+<span id="cb8-408"><a href="#cb8-408" aria-hidden="true" tabindex="-1"></a>    })</span>
+<span id="cb8-409"><a href="#cb8-409" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(rows)</span>
+<span id="cb8-410"><a href="#cb8-410" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-411"><a href="#cb8-411" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-412"><a href="#cb8-412" aria-hidden="true" tabindex="-1"></a>The Epoch refit is flat near 20 across four orders of magnitude. That flatness is</span>
+<span id="cb8-413"><a href="#cb8-413" aria-hidden="true" tabindex="-1"></a>what makes "20 tokens per parameter" a usable rule of thumb rather than a</span>
+<span id="cb8-414"><a href="#cb8-414" aria-hidden="true" tabindex="-1"></a>coincidence at one budget — and it is worth knowing that the rule comes from</span>
+<span id="cb8-415"><a href="#cb8-415" aria-hidden="true" tabindex="-1"></a>Approaches 1 and 2 and the replication, *not* from the equation most people copy.</span>
+<span id="cb8-416"><a href="#cb8-416" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-419"><a href="#cb8-419" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-420"><a href="#cb8-420" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-isoflop</span></span>
+<span id="cb8-421"><a href="#cb8-421" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: false</span></span>
+<span id="cb8-422"><a href="#cb8-422" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &gt;</span></span>
+<span id="cb8-423"><a href="#cb8-423" aria-hidden="true" tabindex="-1"></a><span class="co">#|   IsoFLOP curves drawn straight from Hoffmann et al.'s published loss function,</span></span>
+<span id="cb8-424"><a href="#cb8-424" aria-hidden="true" tabindex="-1"></a><span class="co">#|   with tokens set by D = C/6N. No refitting. At the Gopher budget the minimum</span></span>
+<span id="cb8-425"><a href="#cb8-425" aria-hidden="true" tabindex="-1"></a><span class="co">#|   lands at 39.8B, matching the paper's stated 40B projection. These are the</span></span>
+<span id="cb8-426"><a href="#cb8-426" aria-hidden="true" tabindex="-1"></a><span class="co">#|   model's predictions, not measured runs — the paper's *measured* IsoFLOP</span></span>
+<span id="cb8-427"><a href="#cb8-427" aria-hidden="true" tabindex="-1"></a><span class="co">#|   minima (Approach 2) sit closer to 63B at that budget.</span></span>
+<span id="cb8-428"><a href="#cb8-428" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-429"><a href="#cb8-429" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">4.8</span>))</span>
+<span id="cb8-430"><a href="#cb8-430" aria-hidden="true" tabindex="-1"></a>N <span class="op">=</span> np.logspace(<span class="fl">8.4</span>, <span class="dv">12</span>, <span class="dv">400</span>)</span>
+<span id="cb8-431"><a href="#cb8-431" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-432"><a href="#cb8-432" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> C_budget, col <span class="kw">in</span> [(<span class="fl">1e21</span>, PAL[<span class="st">"third"</span>]), (<span class="fl">1e23</span>, PAL[<span class="st">"kaplan"</span>]),</span>
+<span id="cb8-433"><a href="#cb8-433" aria-hidden="true" tabindex="-1"></a>                      (GOPHER_BUDGET, PAL[<span class="st">"chin"</span>])]:</span>
+<span id="cb8-434"><a href="#cb8-434" aria-hidden="true" tabindex="-1"></a>    D <span class="op">=</span> C_budget <span class="op">/</span> (<span class="dv">6</span> <span class="op">*</span> N)</span>
+<span id="cb8-435"><a href="#cb8-435" aria-hidden="true" tabindex="-1"></a>    L <span class="op">=</span> loss(N, D, <span class="op">**</span>HOFFMANN)</span>
+<span id="cb8-436"><a href="#cb8-436" aria-hidden="true" tabindex="-1"></a>    ax.plot(N, L, color<span class="op">=</span>col, lw<span class="op">=</span><span class="fl">2.2</span>, zorder<span class="op">=</span><span class="dv">4</span>,</span>
+<span id="cb8-437"><a href="#cb8-437" aria-hidden="true" tabindex="-1"></a>            label<span class="op">=</span><span class="ss">f"$C = $</span><span class="sc">{</span>C_budget<span class="sc">:.0e}</span><span class="ss"> FLOPs"</span>.replace(<span class="st">"e+"</span>, <span class="vs">r"</span><span class="ch">\t</span><span class="vs">imes 10</span><span class="dv">^</span><span class="vs">{"</span>) <span class="op">+</span> <span class="st">"}$"</span></span>
+<span id="cb8-438"><a href="#cb8-438" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="va">False</span> <span class="cf">else</span> <span class="ss">f"C = </span><span class="sc">{</span>C_budget<span class="sc">:.1e}</span><span class="ss"> FLOPs"</span>)</span>
+<span id="cb8-439"><a href="#cb8-439" aria-hidden="true" tabindex="-1"></a>    i <span class="op">=</span> <span class="bu">int</span>(np.argmin(L))</span>
+<span id="cb8-440"><a href="#cb8-440" aria-hidden="true" tabindex="-1"></a>    ax.scatter(N[i], L[i], s<span class="op">=</span><span class="dv">48</span>, color<span class="op">=</span>col, zorder<span class="op">=</span><span class="dv">6</span>,</span>
+<span id="cb8-441"><a href="#cb8-441" aria-hidden="true" tabindex="-1"></a>               edgecolor<span class="op">=</span>PAL[<span class="st">"surface"</span>], linewidth<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb8-442"><a href="#cb8-442" aria-hidden="true" tabindex="-1"></a>    ax.vlines(N[i], L[i], <span class="fl">1.85</span>, color<span class="op">=</span>col, lw<span class="op">=</span><span class="dv">1</span>, ls<span class="op">=</span>(<span class="dv">0</span>, (<span class="dv">2</span>, <span class="dv">2</span>)), alpha<span class="op">=</span><span class="fl">.55</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb8-443"><a href="#cb8-443" aria-hidden="true" tabindex="-1"></a>    ax.annotate(human(N[i]), (N[i], L[i]), xytext<span class="op">=</span>(<span class="dv">0</span>, <span class="dv">11</span>),</span>
+<span id="cb8-444"><a href="#cb8-444" aria-hidden="true" tabindex="-1"></a>                textcoords<span class="op">=</span><span class="st">"offset points"</span>, ha<span class="op">=</span><span class="st">"center"</span>,</span>
+<span id="cb8-445"><a href="#cb8-445" aria-hidden="true" tabindex="-1"></a>                fontsize<span class="op">=</span><span class="dv">10</span>, color<span class="op">=</span>col, fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-446"><a href="#cb8-446" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-447"><a href="#cb8-447" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(xscale<span class="op">=</span><span class="st">"log"</span>, xlim<span class="op">=</span>(<span class="fl">3e8</span>, <span class="fl">1e12</span>), ylim<span class="op">=</span>(<span class="fl">1.85</span>, <span class="fl">2.75</span>))</span>
+<span id="cb8-448"><a href="#cb8-448" aria-hidden="true" tabindex="-1"></a>ax.xaxis.set_major_formatter(HUMAN)</span>
+<span id="cb8-449"><a href="#cb8-449" aria-hidden="true" tabindex="-1"></a>ax.legend(loc<span class="op">=</span><span class="st">"upper right"</span>, fontsize<span class="op">=</span><span class="fl">9.5</span>, labelcolor<span class="op">=</span>PAL[<span class="st">"ink2"</span>])</span>
+<span id="cb8-450"><a href="#cb8-450" aria-hidden="true" tabindex="-1"></a>style(ax, xlabel<span class="op">=</span><span class="st">"MODEL PARAMETERS $N$"</span>, ylabel<span class="op">=</span><span class="st">"PREDICTED LOSS (NATS)"</span>)</span>
+<span id="cb8-451"><a href="#cb8-451" aria-hidden="true" tabindex="-1"></a>plt.show()</span>
+<span id="cb8-452"><a href="#cb8-452" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-453"><a href="#cb8-453" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-454"><a href="#cb8-454" aria-hidden="true" tabindex="-1"></a><span class="fu">## Where 0.73 actually came from</span></span>
+<span id="cb8-455"><a href="#cb8-455" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-456"><a href="#cb8-456" aria-hidden="true" tabindex="-1"></a>Chinchilla's own explanation for the discrepancy was the learning-rate schedule:</span>
+<span id="cb8-457"><a href="#cb8-457" aria-hidden="true" tabindex="-1"></a>Kaplan used one cosine decay sized for 130B tokens across all runs, so a model</span>
+<span id="cb8-458"><a href="#cb8-458" aria-hidden="true" tabindex="-1"></a>evaluated at an intermediate checkpoint looks worse than a model whose schedule</span>
+<span id="cb8-459"><a href="#cb8-459" aria-hidden="true" tabindex="-1"></a>was sized to stop there. That biases short runs downward and pushes the fit toward</span>
+<span id="cb8-460"><a href="#cb8-460" aria-hidden="true" tabindex="-1"></a>bigger models on less data.</span>
+<span id="cb8-461"><a href="#cb8-461" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-462"><a href="#cb8-462" aria-hidden="true" tabindex="-1"></a>It is a good hypothesis. It is also mostly wrong, and we know this because Porian</span>
+<span id="cb8-463"><a href="#cb8-463" aria-hidden="true" tabindex="-1"></a>et al. ran over 900 training runs — 16 model sizes from 5M to 901M parameters on</span>
+<span id="cb8-464"><a href="#cb8-464" aria-hidden="true" tabindex="-1"></a>OpenWebText2 and RefinedWeb — reproducing Kaplan's setup and then removing one</span>
+<span id="cb8-465"><a href="#cb8-465" aria-hidden="true" tabindex="-1"></a>confounder at a time.</span>
+<span id="cb8-466"><a href="#cb8-466" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-469"><a href="#cb8-469" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-470"><a href="#cb8-470" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-waterfall</span></span>
+<span id="cb8-471"><a href="#cb8-471" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: false</span></span>
+<span id="cb8-472"><a href="#cb8-472" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: &gt;</span></span>
+<span id="cb8-473"><a href="#cb8-473" aria-hidden="true" tabindex="-1"></a><span class="co">#|   Walking Kaplan's exponent to Chinchilla's, one fix at a time. Each point is a</span></span>
+<span id="cb8-474"><a href="#cb8-474" aria-hidden="true" tabindex="-1"></a><span class="co">#|   re-measurement of *a* after a single methodological correction, applied</span></span>
+<span id="cb8-475"><a href="#cb8-475" aria-hidden="true" tabindex="-1"></a><span class="co">#|   cumulatively. Source: Porian et al. (2024), Table 1, RefinedWeb column, with</span></span>
+<span id="cb8-476"><a href="#cb8-476" aria-hidden="true" tabindex="-1"></a><span class="co">#|   95% confidence intervals as printed. Their OpenWebText2 column follows the</span></span>
+<span id="cb8-477"><a href="#cb8-477" aria-hidden="true" tabindex="-1"></a><span class="co">#|   same path (0.835 → 0.699 → 0.603 → 0.574 → 0.518).</span></span>
+<span id="cb8-478"><a href="#cb8-478" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-479"><a href="#cb8-479" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">4.6</span>))</span>
+<span id="cb8-480"><a href="#cb8-480" aria-hidden="true" tabindex="-1"></a>ys <span class="op">=</span> np.arange(<span class="bu">len</span>(WATERFALL))[::<span class="op">-</span><span class="dv">1</span>]</span>
+<span id="cb8-481"><a href="#cb8-481" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-482"><a href="#cb8-482" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> y, r <span class="kw">in</span> <span class="bu">zip</span>(ys, WATERFALL.itertuples()):</span>
+<span id="cb8-483"><a href="#cb8-483" aria-hidden="true" tabindex="-1"></a>    col <span class="op">=</span> PAL[<span class="st">"chin"</span>] <span class="cf">if</span> r.Index <span class="op">==</span> <span class="bu">len</span>(WATERFALL) <span class="op">-</span> <span class="dv">1</span> <span class="cf">else</span> PAL[<span class="st">"kaplan"</span>]</span>
+<span id="cb8-484"><a href="#cb8-484" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> r.Index <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb8-485"><a href="#cb8-485" aria-hidden="true" tabindex="-1"></a>        prev <span class="op">=</span> WATERFALL.a[r.Index <span class="op">-</span> <span class="dv">1</span>]</span>
+<span id="cb8-486"><a href="#cb8-486" aria-hidden="true" tabindex="-1"></a>        ax.barh(y, prev <span class="op">-</span> r.a, left<span class="op">=</span>r.a, height<span class="op">=</span><span class="fl">0.20</span>, color<span class="op">=</span>col, alpha<span class="op">=</span><span class="fl">.22</span>, zorder<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb8-487"><a href="#cb8-487" aria-hidden="true" tabindex="-1"></a>        ax.plot([prev, prev], [y, y <span class="op">+</span> <span class="dv">1</span>], color<span class="op">=</span>PAL[<span class="st">"rule_strong"</span>],</span>
+<span id="cb8-488"><a href="#cb8-488" aria-hidden="true" tabindex="-1"></a>                lw<span class="op">=</span><span class="fl">0.9</span>, ls<span class="op">=</span>(<span class="dv">0</span>, (<span class="dv">2</span>, <span class="dv">3</span>)), zorder<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb8-489"><a href="#cb8-489" aria-hidden="true" tabindex="-1"></a>        ax.annotate(<span class="ss">f"</span><span class="sc">{</span>r<span class="sc">.</span>a <span class="op">-</span> prev<span class="sc">:+.3f}</span><span class="ss">"</span>, ((prev <span class="op">+</span> r.a) <span class="op">/</span> <span class="dv">2</span>, y <span class="op">+</span> <span class="fl">0.22</span>), ha<span class="op">=</span><span class="st">"center"</span>,</span>
+<span id="cb8-490"><a href="#cb8-490" aria-hidden="true" tabindex="-1"></a>                    fontsize<span class="op">=</span><span class="dv">9</span>, color<span class="op">=</span>col, fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-491"><a href="#cb8-491" aria-hidden="true" tabindex="-1"></a>    ax.hlines(y, r.lo, r.hi, color<span class="op">=</span>col, lw<span class="op">=</span><span class="dv">2</span>, zorder<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb8-492"><a href="#cb8-492" aria-hidden="true" tabindex="-1"></a>    ax.scatter(r.a, y, s<span class="op">=</span><span class="dv">54</span>, color<span class="op">=</span>col, zorder<span class="op">=</span><span class="dv">5</span>)</span>
+<span id="cb8-493"><a href="#cb8-493" aria-hidden="true" tabindex="-1"></a>    ax.annotate(<span class="ss">f"</span><span class="sc">{</span>r<span class="sc">.</span>a<span class="sc">:.3f}</span><span class="ss">"</span>, (<span class="fl">0.905</span>, y), ha<span class="op">=</span><span class="st">"left"</span>, va<span class="op">=</span><span class="st">"center"</span>,</span>
+<span id="cb8-494"><a href="#cb8-494" aria-hidden="true" tabindex="-1"></a>                fontsize<span class="op">=</span><span class="fl">10.5</span>, color<span class="op">=</span>PAL[<span class="st">"ink"</span>], fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-495"><a href="#cb8-495" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-496"><a href="#cb8-496" aria-hidden="true" tabindex="-1"></a>ax.axvline(<span class="fl">0.5</span>, color<span class="op">=</span>PAL[<span class="st">"chin"</span>], lw<span class="op">=</span><span class="fl">1.4</span>, ls<span class="op">=</span>(<span class="dv">0</span>, (<span class="dv">4</span>, <span class="dv">3</span>)), alpha<span class="op">=</span><span class="fl">.75</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb8-497"><a href="#cb8-497" aria-hidden="true" tabindex="-1"></a>ax.annotate(<span class="st">"Chinchilla 0.50"</span>, (<span class="fl">0.5</span>, <span class="bu">len</span>(WATERFALL) <span class="op">-</span> <span class="fl">0.45</span>), ha<span class="op">=</span><span class="st">"center"</span>,</span>
+<span id="cb8-498"><a href="#cb8-498" aria-hidden="true" tabindex="-1"></a>            va<span class="op">=</span><span class="st">"bottom"</span>, fontsize<span class="op">=</span><span class="fl">9.5</span>, color<span class="op">=</span>PAL[<span class="st">"chin"</span>], fontweight<span class="op">=</span><span class="st">"semibold"</span>)</span>
+<span id="cb8-499"><a href="#cb8-499" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-500"><a href="#cb8-500" aria-hidden="true" tabindex="-1"></a>ax.set_yticks(ys, [<span class="ss">f"</span><span class="sc">{</span>s<span class="sc">}</span><span class="ch">\n</span><span class="sc">{</span>w<span class="sc">}</span><span class="ss">"</span> <span class="cf">for</span> s, w <span class="kw">in</span> <span class="bu">zip</span>(WATERFALL.step, WATERFALL.what)])</span>
+<span id="cb8-501"><a href="#cb8-501" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(xlim<span class="op">=</span>(<span class="fl">0.4</span>, <span class="fl">0.93</span>), ylim<span class="op">=</span>(<span class="op">-</span><span class="fl">0.75</span>, <span class="bu">len</span>(WATERFALL) <span class="op">-</span> <span class="fl">0.15</span>))</span>
+<span id="cb8-502"><a href="#cb8-502" aria-hidden="true" tabindex="-1"></a>ax.tick_params(axis<span class="op">=</span><span class="st">"y"</span>, length<span class="op">=</span><span class="dv">0</span>, labelcolor<span class="op">=</span>PAL[<span class="st">"ink"</span>], labelsize<span class="op">=</span><span class="fl">9.5</span>)</span>
+<span id="cb8-503"><a href="#cb8-503" aria-hidden="true" tabindex="-1"></a>ax.grid(axis<span class="op">=</span><span class="st">"y"</span>, visible<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb8-504"><a href="#cb8-504" aria-hidden="true" tabindex="-1"></a>style(ax, xlabel<span class="op">=</span><span class="st">"FITTED EXPONENT $a$  IN  $N^* </span><span class="ch">\\</span><span class="st">propto C^</span><span class="sc">{a}</span><span class="st">$"</span>)</span>
+<span id="cb8-505"><a href="#cb8-505" aria-hidden="true" tabindex="-1"></a>plt.show()</span>
+<span id="cb8-506"><a href="#cb8-506" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-507"><a href="#cb8-507" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-508"><a href="#cb8-508" aria-hidden="true" tabindex="-1"></a><span class="fu">### 1. Count the output layer's FLOPs — −0.13</span></span>
+<span id="cb8-509"><a href="#cb8-509" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-510"><a href="#cb8-510" aria-hidden="true" tabindex="-1"></a>Kaplan excluded embeddings from $N$, and because the output head shared weights</span>
+<span id="cb8-511"><a href="#cb8-511" aria-hidden="true" tabindex="-1"></a>with the input embedding, its per-token FLOPs got discounted too. The resulting</span>
+<span id="cb8-512"><a href="#cb8-512" aria-hidden="true" tabindex="-1"></a>under-approximation of compute runs from "roughly 10% at larger models to roughly</span>
+<span id="cb8-513"><a href="#cb8-513" aria-hidden="true" tabindex="-1"></a>90% at smaller models" — a bias that scales with the very axis you are fitting</span>
+<span id="cb8-514"><a href="#cb8-514" aria-hidden="true" tabindex="-1"></a>against. Counting it correctly moves $a$ from 0.835 to 0.706.</span>
+<span id="cb8-515"><a href="#cb8-515" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-516"><a href="#cb8-516" aria-hidden="true" tabindex="-1"></a>Pearce &amp; Song attack the same issue analytically and reach a compatible</span>
+<span id="cb8-517"><a href="#cb8-517" aria-hidden="true" tabindex="-1"></a>conclusion: model total parameters as $N_T = N_E + \omega N_E^{1/3}$ (fitting</span>
+<span id="cb8-518"><a href="#cb8-518" aria-hidden="true" tabindex="-1"></a>$\omega = 47{,}491$ to Chinchilla's own configurations) and the non-embedding</span>
+<span id="cb8-519"><a href="#cb8-519" aria-hidden="true" tabindex="-1"></a>relationship stops being a power law at all. It has a small-scale regime and a</span>
+<span id="cb8-520"><a href="#cb8-520" aria-hidden="true" tabindex="-1"></a>large-scale regime, with the crossover where embeddings are half the model —</span>
+<span id="cb8-521"><a href="#cb8-521" aria-hidden="true" tabindex="-1"></a>around $10^7$ non-embedding parameters. Kaplan's entire sweep, 768 to 1.5B,</span>
+<span id="cb8-522"><a href="#cb8-522" aria-hidden="true" tabindex="-1"></a>straddles that. Simulating Kaplan-scale models from the Chinchilla loss surface</span>
+<span id="cb8-523"><a href="#cb8-523" aria-hidden="true" tabindex="-1"></a>and fitting the way Kaplan did, they recover</span>
+<span id="cb8-524"><a href="#cb8-524" aria-hidden="true" tabindex="-1"></a>$N^*_E \propto C_E^{0.74\text{–}0.78}$. The 0.73 falls out of the measurement</span>
+<span id="cb8-525"><a href="#cb8-525" aria-hidden="true" tabindex="-1"></a>convention. <span class="co">[</span><span class="ot">@pearce2024</span><span class="co">]</span></span>
+<span id="cb8-526"><a href="#cb8-526" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-527"><a href="#cb8-527" aria-hidden="true" tabindex="-1"></a><span class="fu">### 2. Stop warming up for 1.57B tokens — −0.10</span></span>
+<span id="cb8-528"><a href="#cb8-528" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-529"><a href="#cb8-529" aria-hidden="true" tabindex="-1"></a>This is the subtle one. Kaplan used a fixed 3,000-step warmup at a $2^{19}$-token</span>
+<span id="cb8-530"><a href="#cb8-530" aria-hidden="true" tabindex="-1"></a>batch — about **1.57 billion warmup tokens**, identical for every model. For a</span>
+<span id="cb8-531"><a href="#cb8-531" aria-hidden="true" tabindex="-1"></a>small model at a small budget, the compute-optimal token count is *at or below the</span>
+<span id="cb8-532"><a href="#cb8-532" aria-hidden="true" tabindex="-1"></a>warmup length*. Those runs never leave warmup, so they look terrible, so small</span>
+<span id="cb8-533"><a href="#cb8-533" aria-hidden="true" tabindex="-1"></a>models look worse than they are, so the fit tilts toward large models. Setting</span>
+<span id="cb8-534"><a href="#cb8-534" aria-hidden="true" tabindex="-1"></a>warmup tokens proportional to $N$ moves $a$ to 0.602.</span>
+<span id="cb8-535"><a href="#cb8-535" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-536"><a href="#cb8-536" aria-hidden="true" tabindex="-1"></a><span class="fu">### 3. Tune the optimizer per scale — −0.07</span></span>
+<span id="cb8-537"><a href="#cb8-537" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-538"><a href="#cb8-538" aria-hidden="true" tabindex="-1"></a>Sweeping learning rate, batch size and AdamW's $\beta_2$ per model size — they fit</span>
+<span id="cb8-539"><a href="#cb8-539" aria-hidden="true" tabindex="-1"></a>$\mathrm{BS} = 0.00037\,N^{0.703}$ and $\mathrm{LR} = 3.7\,N^{-0.36}$, and find</span>
+<span id="cb8-540"><a href="#cb8-540" aria-hidden="true" tabindex="-1"></a>$\beta_2 = 0.95$ is actively bad at small batch sizes — lands at</span>
+<span id="cb8-541"><a href="#cb8-541" aria-hidden="true" tabindex="-1"></a>**$a = 0.497$, 95% CI (0.49, 0.50)**. Their summary: the exponent matches 0.5 "to</span>
+<span id="cb8-542"><a href="#cb8-542" aria-hidden="true" tabindex="-1"></a>within 0.6%" and the predicted model size at Chinchilla compute lands "within 15%</span>
+<span id="cb8-543"><a href="#cb8-543" aria-hidden="true" tabindex="-1"></a>of Chinchilla's size."</span>
+<span id="cb8-544"><a href="#cb8-544" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-545"><a href="#cb8-545" aria-hidden="true" tabindex="-1"></a>::: {.callout-note icon=false}</span>
+<span id="cb8-546"><a href="#cb8-546" aria-hidden="true" tabindex="-1"></a><span class="fu">## And the cosine schedule?</span></span>
+<span id="cb8-547"><a href="#cb8-547" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-548"><a href="#cb8-548" aria-hidden="true" tabindex="-1"></a>Porian et al. tested it in isolation (§3.4) and it moves $a$ from 0.60 to 0.57 —</span>
+<span id="cb8-549"><a href="#cb8-549" aria-hidden="true" tabindex="-1"></a>"most of the gap remains." Their reasoning is sharp: with decay targeted at 131B</span>
+<span id="cb8-550"><a href="#cb8-550" aria-hidden="true" tabindex="-1"></a>tokens, Kaplan's compute-constrained runs "see virtually no learning rate decay,"</span>
+<span id="cb8-551"><a href="#cb8-551" aria-hidden="true" tabindex="-1"></a>under 1.5% of the cosine. Their final 0.497 is achieved with a *constant* learning</span>
+<span id="cb8-552"><a href="#cb8-552" aria-hidden="true" tabindex="-1"></a>rate. Pearce &amp; Song find the same thing independently: switching from Kaplan's</span>
+<span id="cb8-553"><a href="#cb8-553" aria-hidden="true" tabindex="-1"></a>schedule to Chinchilla's *raised* their coefficient from 0.46 to 0.49 rather than</span>
+<span id="cb8-554"><a href="#cb8-554" aria-hidden="true" tabindex="-1"></a>lowering it.</span>
+<span id="cb8-555"><a href="#cb8-555" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb8-556"><a href="#cb8-556" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-557"><a href="#cb8-557" aria-hidden="true" tabindex="-1"></a>So the field's canonical story — "Kaplan got it wrong because of the learning rate</span>
+<span id="cb8-558"><a href="#cb8-558" aria-hidden="true" tabindex="-1"></a>schedule" — is itself wrong. The dominant factors are an accounting error in the</span>
+<span id="cb8-559"><a href="#cb8-559" aria-hidden="true" tabindex="-1"></a>compute axis and a warmup length that poisoned the small-model end of the fit.</span>
+<span id="cb8-560"><a href="#cb8-560" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-561"><a href="#cb8-561" aria-hidden="true" tabindex="-1"></a><span class="fu">## What each law tells you to build</span></span>
+<span id="cb8-562"><a href="#cb8-562" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-563"><a href="#cb8-563" aria-hidden="true" tabindex="-1"></a>Four laws, one budget.</span>
+<span id="cb8-564"><a href="#cb8-564" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-567"><a href="#cb8-567" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-568"><a href="#cb8-568" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: tbl-planner</span></span>
+<span id="cb8-569"><a href="#cb8-569" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-fold: true</span></span>
+<span id="cb8-570"><a href="#cb8-570" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-summary: "Show the allocation code"</span></span>
+<span id="cb8-571"><a href="#cb8-571" aria-hidden="true" tabindex="-1"></a><span class="co">#| tbl-cap: "Each row applies one published law to the same training budget. Kaplan uses the adjusted law with D = C/6N; Chinchilla A1 uses the Table 3 anchor; A3 and the Epoch refit use the closed form. Extrapolating any of these far beyond its fitting range is exactly the move this whole story is a cautionary tale about."</span></span>
+<span id="cb8-572"><a href="#cb8-572" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-573"><a href="#cb8-573" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> allocate(C):</span>
+<span id="cb8-574"><a href="#cb8-574" aria-hidden="true" tabindex="-1"></a>    kN <span class="op">=</span> kaplan_N(C)<span class="op">;</span>     kD <span class="op">=</span> C <span class="op">/</span> (<span class="dv">6</span> <span class="op">*</span> kN)</span>
+<span id="cb8-575"><a href="#cb8-575" aria-hidden="true" tabindex="-1"></a>    cN <span class="op">=</span> chinchilla_N(C)<span class="op">;</span> cD <span class="op">=</span> C <span class="op">/</span> (<span class="dv">6</span> <span class="op">*</span> cN)</span>
+<span id="cb8-576"><a href="#cb8-576" aria-hidden="true" tabindex="-1"></a>    hN, hD <span class="op">=</span> frontier(C, <span class="op">**</span>HOFFMANN)</span>
+<span id="cb8-577"><a href="#cb8-577" aria-hidden="true" tabindex="-1"></a>    eN, eD <span class="op">=</span> frontier(C, <span class="op">**</span>EPOCH)</span>
+<span id="cb8-578"><a href="#cb8-578" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [(<span class="st">"Kaplan 2020 (adjusted)"</span>, kN, kD),</span>
+<span id="cb8-579"><a href="#cb8-579" aria-hidden="true" tabindex="-1"></a>            (<span class="st">"Chinchilla · Approach 1"</span>, cN, cD),</span>
+<span id="cb8-580"><a href="#cb8-580" aria-hidden="true" tabindex="-1"></a>            (<span class="st">"Chinchilla · Approach 3"</span>, hN, hD),</span>
+<span id="cb8-581"><a href="#cb8-581" aria-hidden="true" tabindex="-1"></a>            (<span class="st">"Epoch AI refit (2024)"</span>,   eN, eD)]</span>
+<span id="cb8-582"><a href="#cb8-582" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-583"><a href="#cb8-583" aria-hidden="true" tabindex="-1"></a>BUDGETS <span class="op">=</span> {<span class="st">"Chinchilla / Gopher"</span>: GOPHER_BUDGET, <span class="st">"1e24"</span>: <span class="fl">1e24</span>, <span class="st">"Llama 3 405B"</span>: <span class="fl">3.8e25</span>}</span>
+<span id="cb8-584"><a href="#cb8-584" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-585"><a href="#cb8-585" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ratio(r):</span>
+<span id="cb8-586"><a href="#cb8-586" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"</span><span class="sc">{</span>r<span class="sc">:.2f}</span><span class="ss">"</span> <span class="cf">if</span> r <span class="op">&lt;</span> <span class="dv">1</span> <span class="cf">else</span> (<span class="ss">f"</span><span class="sc">{</span>r<span class="sc">:.1f}</span><span class="ss">"</span> <span class="cf">if</span> r <span class="op">&lt;</span> <span class="dv">10</span> <span class="cf">else</span> <span class="ss">f"</span><span class="sc">{</span>r<span class="sc">:,.0f}</span><span class="ss">"</span>)</span>
+<span id="cb8-587"><a href="#cb8-587" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-588"><a href="#cb8-588" aria-hidden="true" tabindex="-1"></a>out <span class="op">=</span> []</span>
+<span id="cb8-589"><a href="#cb8-589" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name, C_budget <span class="kw">in</span> BUDGETS.items():</span>
+<span id="cb8-590"><a href="#cb8-590" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> law, n, d <span class="kw">in</span> allocate(C_budget):</span>
+<span id="cb8-591"><a href="#cb8-591" aria-hidden="true" tabindex="-1"></a>        out.append({<span class="st">"Budget"</span>: name, <span class="st">"Law"</span>: law, <span class="st">"N*"</span>: human(n),</span>
+<span id="cb8-592"><a href="#cb8-592" aria-hidden="true" tabindex="-1"></a>                    <span class="st">"D*"</span>: human(d), <span class="st">"tok/param"</span>: ratio(d <span class="op">/</span> n)})</span>
+<span id="cb8-593"><a href="#cb8-593" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(out).set_index([<span class="st">"Budget"</span>, <span class="st">"Law"</span>])</span>
+<span id="cb8-594"><a href="#cb8-594" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-595"><a href="#cb8-595" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-596"><a href="#cb8-596" aria-hidden="true" tabindex="-1"></a><span class="fu">## Chinchilla-optimal is not deployment-optimal</span></span>
+<span id="cb8-597"><a href="#cb8-597" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-598"><a href="#cb8-598" aria-hidden="true" tabindex="-1"></a>Here is the part that matters most for anyone shipping a model, and it is a</span>
+<span id="cb8-599"><a href="#cb8-599" aria-hidden="true" tabindex="-1"></a>limitation both papers share rather than a disagreement between them. Both</span>
+<span id="cb8-600"><a href="#cb8-600" aria-hidden="true" tabindex="-1"></a>optimise *loss given a training budget*. Neither includes a single inference FLOP.</span>
+<span id="cb8-601"><a href="#cb8-601" aria-hidden="true" tabindex="-1"></a>If you train once and serve billions of tokens, you are optimising the wrong</span>
+<span id="cb8-602"><a href="#cb8-602" aria-hidden="true" tabindex="-1"></a>objective.</span>
+<span id="cb8-603"><a href="#cb8-603" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-604"><a href="#cb8-604" aria-hidden="true" tabindex="-1"></a><span class="fu">### Add inference to the objective</span></span>
+<span id="cb8-605"><a href="#cb8-605" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-606"><a href="#cb8-606" aria-hidden="true" tabindex="-1"></a>Sardana et al. invert the problem: fix a quality target, minimise total compute.</span>
+<span id="cb8-607"><a href="#cb8-607" aria-hidden="true" tabindex="-1"></a>Training costs $6N$ per token, inference costs $2N$ per token, so the objective</span>
+<span id="cb8-608"><a href="#cb8-608" aria-hidden="true" tabindex="-1"></a>becomes <span class="co">[</span><span class="ot">@sardana2024</span><span class="co">]</span></span>
+<span id="cb8-609"><a href="#cb8-609" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-610"><a href="#cb8-610" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-611"><a href="#cb8-611" aria-hidden="true" tabindex="-1"></a>N^*,\, D^*_{\text{tr}} \;=\;</span>
+<span id="cb8-612"><a href="#cb8-612" aria-hidden="true" tabindex="-1"></a>\operatorname*{argmin}_{N,\, D_{\text{tr}} \;\mid\; L(N, D_{\text{tr}}) = \ell}</span>
+<span id="cb8-613"><a href="#cb8-613" aria-hidden="true" tabindex="-1"></a>\;\; 6N D_{\text{tr}} + 2N D_{\text{inf}}</span>
+<span id="cb8-614"><a href="#cb8-614" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-615"><a href="#cb8-615" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-616"><a href="#cb8-616" aria-hidden="true" tabindex="-1"></a>where $D_{\text{inf}}$ is total lifetime inference tokens, input plus output. With</span>
+<span id="cb8-617"><a href="#cb8-617" aria-hidden="true" tabindex="-1"></a>$D_{\text{inf}} &gt; 0$ there is no closed form; they solve it by root-finding. It is</span>
+<span id="cb8-618"><a href="#cb8-618" aria-hidden="true" tabindex="-1"></a>short enough to reproduce:</span>
+<span id="cb8-619"><a href="#cb8-619" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-622"><a href="#cb8-622" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb8-623"><a href="#cb8-623" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: inference-aware</span></span>
+<span id="cb8-624"><a href="#cb8-624" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-625"><a href="#cb8-625" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy.optimize <span class="im">import</span> brentq, minimize_scalar</span>
+<span id="cb8-626"><a href="#cb8-626" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-627"><a href="#cb8-627" aria-hidden="true" tabindex="-1"></a><span class="co"># Sardana et al. Appendix A: Chinchilla's A, B, E with alpha/beta de-rounded.</span></span>
+<span id="cb8-628"><a href="#cb8-628" aria-hidden="true" tabindex="-1"></a>SARDANA <span class="op">=</span> <span class="bu">dict</span>(E<span class="op">=</span><span class="fl">1.69</span>, A<span class="op">=</span><span class="fl">406.4</span>, B<span class="op">=</span><span class="fl">410.7</span>, alpha<span class="op">=</span><span class="fl">0.336</span>, beta<span class="op">=</span><span class="fl">0.283</span>)</span>
+<span id="cb8-629"><a href="#cb8-629" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-630"><a href="#cb8-630" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tokens_for_loss(N, target, E, A, B, alpha, beta):</span>
+<span id="cb8-631"><a href="#cb8-631" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Tokens needed for N parameters to reach a given loss."""</span></span>
+<span id="cb8-632"><a href="#cb8-632" aria-hidden="true" tabindex="-1"></a>    residual <span class="op">=</span> target <span class="op">-</span> E <span class="op">-</span> A <span class="op">/</span> N<span class="op">**</span>alpha</span>
+<span id="cb8-633"><a href="#cb8-633" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.inf <span class="cf">if</span> residual <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">else</span> (B <span class="op">/</span> residual) <span class="op">**</span> (<span class="dv">1</span> <span class="op">/</span> beta)</span>
+<span id="cb8-634"><a href="#cb8-634" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-635"><a href="#cb8-635" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> total_flops(N, target, D_inf, p):</span>
+<span id="cb8-636"><a href="#cb8-636" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">6</span> <span class="op">*</span> N <span class="op">*</span> tokens_for_loss(N, target, <span class="op">**</span>p) <span class="op">+</span> <span class="dv">2</span> <span class="op">*</span> N <span class="op">*</span> D_inf</span>
+<span id="cb8-637"><a href="#cb8-637" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-638"><a href="#cb8-638" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> inference_aware(N_chinchilla, D_inf, p<span class="op">=</span>SARDANA):</span>
+<span id="cb8-639"><a href="#cb8-639" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Cheapest (N, D) reaching the quality of a Chinchilla-optimal model</span></span>
+<span id="cb8-640"><a href="#cb8-640" aria-hidden="true" tabindex="-1"></a><span class="co">    of size N_chinchilla, once D_inf inference tokens are paid for."""</span></span>
+<span id="cb8-641"><a href="#cb8-641" aria-hidden="true" tabindex="-1"></a>    budget <span class="op">=</span> <span class="dv">10</span> <span class="op">**</span> brentq(<span class="kw">lambda</span> lc: frontier(<span class="dv">10</span><span class="op">**</span>lc, <span class="op">**</span>p)[<span class="dv">0</span>] <span class="op">-</span> N_chinchilla, <span class="dv">18</span>, <span class="dv">30</span>)</span>
+<span id="cb8-642"><a href="#cb8-642" aria-hidden="true" tabindex="-1"></a>    N0, D0 <span class="op">=</span> frontier(budget, <span class="op">**</span>p)</span>
+<span id="cb8-643"><a href="#cb8-643" aria-hidden="true" tabindex="-1"></a>    target <span class="op">=</span> loss(N0, D0, <span class="op">**</span>p)</span>
+<span id="cb8-644"><a href="#cb8-644" aria-hidden="true" tabindex="-1"></a>    floor <span class="op">=</span> (p[<span class="st">"A"</span>] <span class="op">/</span> (target <span class="op">-</span> p[<span class="st">"E"</span>])) <span class="op">**</span> (<span class="dv">1</span> <span class="op">/</span> p[<span class="st">"alpha"</span>])   <span class="co"># N below this can't reach it</span></span>
+<span id="cb8-645"><a href="#cb8-645" aria-hidden="true" tabindex="-1"></a>    best <span class="op">=</span> minimize_scalar(<span class="kw">lambda</span> x: total_flops(np.exp(x), target, D_inf, p),</span>
+<span id="cb8-646"><a href="#cb8-646" aria-hidden="true" tabindex="-1"></a>                           bounds<span class="op">=</span>(np.log(floor <span class="op">*</span> <span class="fl">1.001</span>), np.log(N_chinchilla)),</span>
+<span id="cb8-647"><a href="#cb8-647" aria-hidden="true" tabindex="-1"></a>                           method<span class="op">=</span><span class="st">"bounded"</span>)</span>
+<span id="cb8-648"><a href="#cb8-648" aria-hidden="true" tabindex="-1"></a>    N1 <span class="op">=</span> np.exp(best.x)</span>
+<span id="cb8-649"><a href="#cb8-649" aria-hidden="true" tabindex="-1"></a>    saved <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> total_flops(N1, target, D_inf, p) <span class="op">/</span> total_flops(N0, target, D_inf, p)</span>
+<span id="cb8-650"><a href="#cb8-650" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> N0, D0, N1, tokens_for_loss(N1, target, <span class="op">**</span>p), saved</span>
+<span id="cb8-651"><a href="#cb8-651" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-652"><a href="#cb8-652" aria-hidden="true" tabindex="-1"></a>N0, D0, N1, D1, saved <span class="op">=</span> inference_aware(<span class="fl">30e9</span>, D_inf<span class="op">=</span><span class="fl">1e13</span>)</span>
+<span id="cb8-653"><a href="#cb8-653" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Chinchilla-optimal : </span><span class="sc">{</span>N0<span class="op">/</span><span class="fl">1e9</span><span class="sc">:5.1f}</span><span class="ss">B on </span><span class="sc">{</span>D0<span class="op">/</span><span class="fl">1e12</span><span class="sc">:.2f}</span><span class="ss">T tokens"</span>)</span>
+<span id="cb8-654"><a href="#cb8-654" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Inference-aware    : </span><span class="sc">{</span>N1<span class="op">/</span><span class="fl">1e9</span><span class="sc">:5.1f}</span><span class="ss">B on </span><span class="sc">{</span>D1<span class="op">/</span><span class="fl">1e12</span><span class="sc">:.2f}</span><span class="ss">T tokens "</span></span>
+<span id="cb8-655"><a href="#cb8-655" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"(</span><span class="sc">{</span>D1<span class="op">/</span>D0<span class="sc">:.2f}</span><span class="ss">x the data)"</span>)</span>
+<span id="cb8-656"><a href="#cb8-656" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Total FLOPs saved  : </span><span class="sc">{</span>saved<span class="sc">:.0%}</span><span class="ss">"</span>)</span>
+<span id="cb8-657"><a href="#cb8-657" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb8-658"><a href="#cb8-658" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-659"><a href="#cb8-659" aria-hidden="true" tabindex="-1"></a>That reproduces the paper's stated result exactly: a developer expecting a</span>
+<span id="cb8-660"><a href="#cb8-660" aria-hidden="true" tabindex="-1"></a>30B-Chinchilla-quality model to see $10^{13}$ inference tokens "can reduce their</span>
+<span id="cb8-661"><a href="#cb8-661" aria-hidden="true" tabindex="-1"></a>total FLOPs by 28% by training a 13.6B model on 2.84× the data." In dollar terms,</span>
+<span id="cb8-662"><a href="#cb8-662" aria-hidden="true" tabindex="-1"></a>with realistic MFU asymmetry between training and autoregressive generation, the</span>
+<span id="cb8-663"><a href="#cb8-663" aria-hidden="true" tabindex="-1"></a>same quality target at 17.5B requests is reached ~58% cheaper by an 8.58B model</span>
+<span id="cb8-664"><a href="#cb8-664" aria-hidden="true" tabindex="-1"></a>trained on 12.1T tokens.</span>
+<span id="cb8-665"><a href="#cb8-665" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-666"><a href="#cb8-666" aria-hidden="true" tabindex="-1"></a>::: {.callout-caution icon=false}</span>
+<span id="cb8-667"><a href="#cb8-667" aria-hidden="true" tabindex="-1"></a><span class="fu">## The honest caveat, from the same paper</span></span>
+<span id="cb8-668"><a href="#cb8-668" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-669"><a href="#cb8-669" aria-hidden="true" tabindex="-1"></a>Fitting scaling-law coefficients only on typical token/parameter ratios</span>
+<span id="cb8-670"><a href="#cb8-670" aria-hidden="true" tabindex="-1"></a>"overestimates the impact of additional tokens at these extreme ranges."</span>
+<span id="cb8-671"><a href="#cb8-671" aria-hidden="true" tabindex="-1"></a>Refitting with their extreme-ratio data (47 models, 150M–6B, up to 10,000</span>
+<span id="cb8-672"><a href="#cb8-672" aria-hidden="true" tabindex="-1"></a>tokens/param) gives $\alpha = 0.18$, $\beta = 0.24$ against Chinchilla's</span>
+<span id="cb8-673"><a href="#cb8-673" aria-hidden="true" tabindex="-1"></a>0.34 / 0.28. Extrapolating Chinchilla's constants out to 1,000+ tokens/param</span>
+<span id="cb8-674"><a href="#cb8-674" aria-hidden="true" tabindex="-1"></a>will flatter your plan.</span>
+<span id="cb8-675"><a href="#cb8-675" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb8-676"><a href="#cb8-676" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-677"><a href="#cb8-677" aria-hidden="true" tabindex="-1"></a><span class="fu">### What if you run out of data?</span></span>
+<span id="cb8-678"><a href="#cb8-678" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-679"><a href="#cb8-679" aria-hidden="true" tabindex="-1"></a>Muennighoff et al. ran more than 400 models, 10M to 9B parameters, for up to 1,500</span>
+<span id="cb8-680"><a href="#cb8-680" aria-hidden="true" tabindex="-1"></a>epochs, and their finding is unusually actionable: **up to roughly 4 epochs of</span>
+<span id="cb8-681"><a href="#cb8-681" aria-hidden="true" tabindex="-1"></a>repeated data is nearly free** — their 8.7B model at four epochs on 44B unique</span>
+<span id="cb8-682"><a href="#cb8-682" aria-hidden="true" tabindex="-1"></a>tokens ended "with only 0.5% higher validation loss than the single-epoch model."</span>
+<span id="cb8-683"><a href="#cb8-683" aria-hidden="true" tabindex="-1"></a>Returns then decay fast, with the fitted half-life at $R_D^* \approx 15$</span>
+<span id="cb8-684"><a href="#cb8-684" aria-hidden="true" tabindex="-1"></a>repetitions, and runs at 44 epochs diverge outright. They model it by replacing</span>
+<span id="cb8-685"><a href="#cb8-685" aria-hidden="true" tabindex="-1"></a>$D$ with effective data <span class="co">[</span><span class="ot">@muennighoff2023</span><span class="co">]</span></span>
+<span id="cb8-686"><a href="#cb8-686" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-687"><a href="#cb8-687" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-688"><a href="#cb8-688" aria-hidden="true" tabindex="-1"></a>D' = U_D + U_D \, R_D^* \left(1 - e^{-R_D / R_D^*}\right)</span>
+<span id="cb8-689"><a href="#cb8-689" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb8-690"><a href="#cb8-690" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-691"><a href="#cb8-691" aria-hidden="true" tabindex="-1"></a>which collapses to Chinchilla exactly when there is no repetition. Under data</span>
+<span id="cb8-692"><a href="#cb8-692" aria-hidden="true" tabindex="-1"></a>constraint they also find you should scale epochs faster than parameters — the</span>
+<span id="cb8-693"><a href="#cb8-693" aria-hidden="true" tabindex="-1"></a>opposite tilt to Chinchilla's equal scaling.</span>
+<span id="cb8-694"><a href="#cb8-694" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-695"><a href="#cb8-695" aria-hidden="true" tabindex="-1"></a><span class="fu">### What frontier labs actually did</span></span>
+<span id="cb8-696"><a href="#cb8-696" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-697"><a href="#cb8-697" aria-hidden="true" tabindex="-1"></a>It is worth being precise here, because the folk version is wrong. Meta's Llama 3</span>
+<span id="cb8-698"><a href="#cb8-698" aria-hidden="true" tabindex="-1"></a>paper reports IsoFLOPs experiments from $6\times10^{18}$ to $10^{22}$ FLOPs,</span>
+<span id="cb8-699"><a href="#cb8-699" aria-hidden="true" tabindex="-1"></a>extrapolating to a $3.8\times10^{25}$ FLOP budget and suggesting "training a 402B</span>
+<span id="cb8-700"><a href="#cb8-700" aria-hidden="true" tabindex="-1"></a>parameter model on 16.55T tokens." They trained 405B on 15.6T — *approximately</span>
+<span id="cb8-701"><a href="#cb8-701" aria-hidden="true" tabindex="-1"></a>compute-optimal*, not over-trained. The over-training was deliberate and confined</span>
+<span id="cb8-702"><a href="#cb8-702" aria-hidden="true" tabindex="-1"></a>to the small models: "we also train our smaller models for much longer than is</span>
+<span id="cb8-703"><a href="#cb8-703" aria-hidden="true" tabindex="-1"></a>compute-optimal… The resulting models perform better than compute-optimal models</span>
+<span id="cb8-704"><a href="#cb8-704" aria-hidden="true" tabindex="-1"></a>at the same inference budget." <span class="co">[</span><span class="ot">@llama3</span><span class="co">]</span></span>
+<span id="cb8-705"><a href="#cb8-705" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-706"><a href="#cb8-706" aria-hidden="true" tabindex="-1"></a>That is the field's settled position. Chinchilla-optimal is the right target for</span>
+<span id="cb8-707"><a href="#cb8-707" aria-hidden="true" tabindex="-1"></a>the flagship, where training cost dominates; heavy over-training is the right</span>
+<span id="cb8-708"><a href="#cb8-708" aria-hidden="true" tabindex="-1"></a>target for the models you actually serve.</span>
+<span id="cb8-709"><a href="#cb8-709" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-710"><a href="#cb8-710" aria-hidden="true" tabindex="-1"></a><span class="fu">## The practitioner's checklist</span></span>
+<span id="cb8-711"><a href="#cb8-711" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-712"><a href="#cb8-712" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**Never use Kaplan's allocation exponents.** 0.73/0.27 is a measurement</span>
+<span id="cb8-713"><a href="#cb8-713" aria-hidden="true" tabindex="-1"></a>    artifact with a known, reproduced cause. The loss-vs-scale *phenomenology* —</span>
+<span id="cb8-714"><a href="#cb8-714" aria-hidden="true" tabindex="-1"></a>    smooth power laws, predictable returns — survives intact.</span>
+<span id="cb8-715"><a href="#cb8-715" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**Use ~20 tokens/parameter as the training-optimal anchor**, and know it comes</span>
+<span id="cb8-716"><a href="#cb8-716" aria-hidden="true" tabindex="-1"></a>    from Approaches 1 and 2 plus the Epoch refit, not from Chinchilla's published</span>
+<span id="cb8-717"><a href="#cb8-717" aria-hidden="true" tabindex="-1"></a>    Eq. 10, which drifts to 59+ at frontier budgets.</span>
+<span id="cb8-718"><a href="#cb8-718" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**If you will serve the model, over-train it.** Compute the inference-inclusive</span>
+<span id="cb8-719"><a href="#cb8-719" aria-hidden="true" tabindex="-1"></a>    objective before sizing. At $10^{12}$–$10^{13}$ lifetime tokens the optimum</span>
+<span id="cb8-720"><a href="#cb8-720" aria-hidden="true" tabindex="-1"></a>    moves substantially smaller-and-longer.</span>
+<span id="cb8-721"><a href="#cb8-721" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**Fit your own law on your own data and stack.** Every exponent here is</span>
+<span id="cb8-722"><a href="#cb8-722" aria-hidden="true" tabindex="-1"></a>    entangled with tokenizer, data mix, optimizer tuning and architecture.</span>
+<span id="cb8-723"><a href="#cb8-723" aria-hidden="true" tabindex="-1"></a>    Chinchilla's own three approaches disagreed on their own data.</span>
+<span id="cb8-724"><a href="#cb8-724" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**Sweep hyperparameters per scale, and warm up proportionally to model size.**</span>
+<span id="cb8-725"><a href="#cb8-725" aria-hidden="true" tabindex="-1"></a>    Both papers' discrepancies trace back to holding something fixed across scales</span>
+<span id="cb8-726"><a href="#cb8-726" aria-hidden="true" tabindex="-1"></a>    that should not have been.</span>
+<span id="cb8-727"><a href="#cb8-727" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>**Include the output layer in your FLOP accounting.** The single largest term</span>
+<span id="cb8-728"><a href="#cb8-728" aria-hidden="true" tabindex="-1"></a>    in the reconciliation was an accounting choice, not a scientific finding.</span>
+<span id="cb8-729"><a href="#cb8-729" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-730"><a href="#cb8-730" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip icon=false}</span>
+<span id="cb8-731"><a href="#cb8-731" aria-hidden="true" tabindex="-1"></a><span class="fu">## The meta-lesson</span></span>
+<span id="cb8-732"><a href="#cb8-732" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-733"><a href="#cb8-733" aria-hidden="true" tabindex="-1"></a>Kaplan's paper was careful, influential, and wrong about one thing — and the field</span>
+<span id="cb8-734"><a href="#cb8-734" aria-hidden="true" tabindex="-1"></a>spent two years and enormous compute acting on it. Chinchilla corrected it, and had</span>
+<span id="cb8-735"><a href="#cb8-735" aria-hidden="true" tabindex="-1"></a>a serious flaw of its own in the very equation everyone copied. Both were caught</span>
+<span id="cb8-736"><a href="#cb8-736" aria-hidden="true" tabindex="-1"></a>only when independent groups re-derived the numbers from scratch. Reproduction is</span>
+<span id="cb8-737"><a href="#cb8-737" aria-hidden="true" tabindex="-1"></a>not bookkeeping in this field; it is where the results come from.</span>
+<span id="cb8-738"><a href="#cb8-738" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb8-739"><a href="#cb8-739" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-740"><a href="#cb8-740" aria-hidden="true" tabindex="-1"></a><span class="fu">## Sources {.unnumbered}</span></span>
+<span id="cb8-741"><a href="#cb8-741" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-742"><a href="#cb8-742" aria-hidden="true" tabindex="-1"></a>Figures @fig-ratio, @fig-frontier and @fig-waterfall plot values printed in the</span>
+<span id="cb8-743"><a href="#cb8-743" aria-hidden="true" tabindex="-1"></a>cited papers. @fig-isoflop and every code output above are computed from published</span>
+<span id="cb8-744"><a href="#cb8-744" aria-hidden="true" tabindex="-1"></a>constants and are reproducible by rendering this document. Where a number is our</span>
+<span id="cb8-745"><a href="#cb8-745" aria-hidden="true" tabindex="-1"></a>arithmetic rather than a paper's, the caption says so.</span>
+<span id="cb8-746"><a href="#cb8-746" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-747"><a href="#cb8-747" aria-hidden="true" tabindex="-1"></a>::: {#refs}</span>
+<span id="cb8-748"><a href="#cb8-748" aria-hidden="true" tabindex="-1"></a>:::</span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
 </div> <!-- /content -->
 
 

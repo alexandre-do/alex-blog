@@ -10,7 +10,7 @@
 <atom:link href="https://alexdo.xyz/index.xml" rel="self" type="application/rss+xml"/>
 <description>Alexandre DO&#39;s personal blog and portfolio — machine learning, data science, and production ML systems.</description>
 <generator>quarto-1.9.28</generator>
-<lastBuildDate>Tue, 08 Sep 2026 07:00:00 GMT</lastBuildDate>
+<lastBuildDate>Tue, 08 Sep 2026 00:00:00 GMT</lastBuildDate>
 <item>
   <title>Building an MCP Server for Vancouver’s Open Data</title>
   <link>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</link>
@@ -709,7 +709,7 @@ font-style: inherit;">;</span></span></code></pre></div></div>
   <category>Open Data</category>
   <category>LLM</category>
   <guid>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</guid>
-  <pubDate>Tue, 08 Sep 2026 07:00:00 GMT</pubDate>
+  <pubDate>Tue, 08 Sep 2026 00:00:00 GMT</pubDate>
   <media:content url="https://alexdo.xyz/project/posts/images/mcp-vancouver-open-data.png" medium="image" type="image/png" height="96" width="144"/>
 </item>
 <item>
@@ -1040,7 +1040,7 @@ font-style: inherit;">'{"session_id": "test", "message": "What does this documen
   <category>Bedrock</category>
   <category>LlamaIndex</category>
   <guid>https://alexdo.xyz/project/posts/chat-retrieval-system.html</guid>
-  <pubDate>Sun, 07 Dec 2025 08:00:00 GMT</pubDate>
+  <pubDate>Sun, 07 Dec 2025 00:00:00 GMT</pubDate>
   <media:content url="https://alexdo.xyz/project/posts/images/chat-retrieval-system.gif" medium="image" type="image/gif"/>
 </item>
 <item>
@@ -1782,7 +1782,7 @@ font-style: inherit;"># API on :4000, dashboard on :5173</span></span></code></p
   <category>MongoDB</category>
   <category>Data Analysis</category>
   <guid>https://alexdo.xyz/project/posts/google-news-rss-radar.html</guid>
-  <pubDate>Fri, 01 Mar 2024 08:00:00 GMT</pubDate>
+  <pubDate>Fri, 01 Mar 2024 00:00:00 GMT</pubDate>
   <media:content url="https://alexdo.xyz/project/posts/images/google-news-rss-radar.gif" medium="image" type="image/gif"/>
 </item>
 </channel>
