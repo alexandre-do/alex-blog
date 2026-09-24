@@ -1,0 +1,197 @@
+---
+title: "Elasticsearch Under the Hood: Text Search, Filtering, and Running It in Production"
+date: "2022-02-10"
+description: "How Elasticsearch turns text into a searchable index, how BM25 scoring and bool filters combine natural language search with metadata filtering, and how to deploy, monitor, and tune a cluster for real production traffic."
+categories:
+    - Elasticsearch
+    - NLP
+    - Document Retrieval
+    - MLOps
+---
+
+# Elasticsearch Under the Hood: Text Search, Filtering, and Running It in Production
+
+Elasticsearch is a distributed search and analytics engine built on top of Apache Lucene. It stores JSON documents, exposes a REST API over HTTP, and shards + replicates data across a cluster so both indexing and search scale horizontally. The two use cases that dominate in practice are log/metrics analytics (the "ELK stack") and full-text document search, and this post is about the second one: how a query like "unpaid invoice normandy site" combined with a filter like `status: overdue` actually gets resolved, what knobs control relevance, and what it takes to run that in production without it falling over.
+
+## Elasticsearch vs. a Relational Database
+
+The vocabulary maps loosely onto SQL concepts, but the execution model underneath is completely different - there's no join, no transaction log in the traditional sense, and no fixed schema unless you enforce one.
+
+| Relational DB | Elasticsearch | Note |
+|---|---|---|
+| Table | Index | An index is really a logical name over N shards |
+| Row | Document | A JSON object, immutable once indexed (updates = reindex) |
+| Column | Field | Fields can be arrays, nested objects, or multi-fields |
+| Schema | Mapping | Can be dynamic (inferred) or explicit |
+| `WHERE x = y` | Filter context | Boolean, cacheable, no relevance score |
+| `LIKE` / full-text | Query context | Scored, ranked by relevance |
+| B-tree index | Inverted index | Per-field, built at index time |
+
+The important shift in mindset: a relational query returns *correct* rows, an Elasticsearch query returns *ranked* documents. Every full-text query is really asking "how relevant is this document to this text," and that relevance score is computed, not looked up.
+
+## Core Mechanism 1: Turning Text Into an Inverted Index
+
+Every `text` field gets run through an **analyzer** at index time, and the output of that analyzer is what actually gets stored and searched - not the raw string.
+
+```
+"The Quick Foxes ran"
+        │
+        ▼  tokenizer (standard)
+  [The] [Quick] [Foxes] [ran]
+        │
+        ▼  token filters (lowercase, stemmer)
+  [the] [quick] [fox] [ran]
+```
+
+An analyzer is three stages, all pluggable:
+
+1. **Character filters** - strip HTML, map characters, run before tokenization.
+2. **Tokenizer** - splits the stream into tokens (`standard` splits on word boundaries and Unicode text segmentation rules).
+3. **Token filters** - `lowercase`, `stop` (remove stopwords), `stemmer` (`running` → `run`), `asciifolding` (`réseau` → `reseau`), `synonym`.
+
+The result is an **inverted index**: a map from term to the list of documents (and positions) that contain it.
+
+```
+term        → postings
+"invoice"   → [doc_12 (pos 3), doc_44 (pos 0), doc_51 (pos 7)]
+"overdue"   → [doc_12 (pos 4), doc_88 (pos 1)]
+```
+
+Searching "overdue invoice" is then a matter of intersecting/unioning postings lists, not scanning documents - which is why full-text search on millions of documents stays fast: cost is driven by postings-list size, not corpus size.
+
+Field type matters a lot here, because not every field should be analyzed:
+
+| Type | Analyzed? | Use for |
+|---|---|---|
+| `text` | Yes | Free-text search (`title`, `body`) |
+| `keyword` | No, exact match | Filtering, aggregations, sorting (`status`, `doc_type`) |
+| `text` + `keyword` sub-field | Both | Search on `title`, aggregate/sort on `title.keyword` |
+
+Mapping a filterable field like `status` as `text` is a common mistake: it gets tokenized, lowercased, and stemmed, so `"Overdue"` and `"overdue"` become the same term - which sounds convenient until you need `status = "In Progress"` to match exactly and not partially match `"progress report"`.
+
+## Core Mechanism 2: Scoring With BM25
+
+Since Elasticsearch 5.0, the default relevance algorithm is **BM25** (Okapi BM25), replacing classic TF-IDF. For a query term $t$ and document $d$:
+
+$$
+\text{score}(t, d) = \text{IDF}(t) \cdot \frac{f(t, d) \cdot (k_1 + 1)}{f(t, d) + k_1 \cdot \left(1 - b + b \cdot \frac{|d|}{\text{avgdl}}\right)}
+$$
+
+Reading it left to right:
+
+- **$\text{IDF}(t)$** - inverse document frequency: rare terms score higher than common ones. A term in 3 documents out of a million is far more informative than one in 500,000.
+- **$f(t, d)$** - raw term frequency in the document.
+- **Saturation** - unlike raw TF-IDF, more occurrences of a term keep helping but with diminishing returns. The 10th occurrence of "invoice" barely moves the score past the 5th.
+- **Length normalization** - $|d| / \text{avgdl}$ penalizes documents longer than the field average, so a 10-word title matching once isn't outscored by a 5,000-word body matching once purely because it's longer.
+
+The two tunable constants:
+
+| Parameter | Default | Effect of raising it |
+|---|---|---|
+| `k1` | `1.2` | Higher = term frequency keeps mattering longer before saturating |
+| `b` | `0.75` | Higher = longer documents penalized more; `0` disables length normalization entirely |
+
+These are set per-field in the mapping's `similarity` setting, and in practice the defaults are good for prose; `b` is worth lowering toward `0` for fields like `sku` or `title` where length variation isn't meaningful signal. On top of BM25, per-field **boosts** (`"title^3"`) and query-time **function_score** (boost by recency, popularity, a business metric) let you reshape the ranking without touching the underlying algorithm.
+
+## Core Mechanism 3: Natural Language + Metadata Filters
+
+Real search UIs are rarely pure full-text - "unpaid invoices from the Normandy office" is a text query ("unpaid invoices") plus structural filters (`office = normandy`). Elasticsearch's `bool` query cleanly separates the two into different **contexts**:
+
+```json
+{
+  "query": {
+    "bool": {
+      "must": [
+        { "multi_match": {
+            "query": "unpaid invoice",
+            "fields": ["title^3", "body"],
+            "type": "best_fields",
+            "operator": "or",
+            "minimum_should_match": "75%"
+        }}
+      ],
+      "filter": [
+        { "term":  { "office": "normandy" } },
+        { "range": { "due_date": { "lt": "now" } } }
+      ]
+    }
+  }
+}
+```
+
+The distinction between `must`/`should` and `filter` is the single most consequential design decision in a query:
+
+| | Query context (`must`, `should`) | Filter context (`filter`, `must_not`) |
+|---|---|---|
+| Computes a score | Yes | No (binary yes/no) |
+| Cached | No | Yes, per-segment |
+| Use for | Free text, "how well does this match" | Exact/structural constraints |
+| Example | `multi_match`, `match` | `term`, `terms`, `range`, `exists` |
+
+Putting `office = normandy` in `filter` instead of `must` means it never affects the relevance score and Elasticsearch caches the resulting bitset, so the same filter on the next query is nearly free. This is the pattern behind almost every "search + facets" UI: text goes to a scored `multi_match`, every sidebar checkbox and date range goes to `filter`.
+
+Other tunables worth knowing on the text side:
+
+- **`operator`** (`or` vs `and`) - whether all query terms must appear or just one.
+- **`minimum_should_match`** - middle ground between the two, e.g. "3 of 4 terms must match."
+- **`fuzziness`** - Levenshtein-distance tolerance for typos (`AUTO` scales the allowed edit distance with term length).
+- **`tie_breaker`** on `multi_match` (`type: best_fields`) - blends in a fraction of the non-best matching fields' scores instead of discarding them entirely.
+
+## Deploying Elasticsearch in Production
+
+A cluster is made of nodes with different roles, and getting the topology wrong is the most common cause of production instability:
+
+- **Master-eligible nodes** - manage cluster state (index creation, shard allocation). 3 dedicated masters is the standard for anything beyond a toy cluster, to survive a single-node loss without split-brain.
+- **Data nodes** - hold shards, do the actual indexing/search work. CPU and disk I/O bound.
+- **Ingest nodes** - run pre-processing pipelines (`grok`, field enrichment) before indexing.
+- **Coordinating nodes** - stateless, fan out a query to data nodes and merge results; useful as a buffer in front of a heavy-query workload.
+
+**Shards** are the unit of scale - each shard is a self-contained Lucene index. Two rules of thumb that come from hard-won incidents across the ecosystem: keep individual shards under roughly 50GB, and don't over-shard (thousands of tiny shards waste heap on cluster state and per-shard overhead just as badly as under-sharding wastes parallelism). Shard count is fixed at index creation in versions before 7.x's split/shrink APIs, so size for expected data volume up front, not current volume.
+
+As of early 2022 the deployment landscape has an extra wrinkle worth planning around: Elastic relicensed Elasticsearch and Kibana to SSPL/Elastic License in January 2021, and in response AWS forked the last Apache-2.0 release into **OpenSearch**. If you're deploying on AWS via the managed Elasticsearch Service, you're now provisioning OpenSearch by default, not Elasticsearch - API-compatible for most core query DSL, but diverging on newer features (Elasticsearch 8.0, released this month, adds approximate kNN vector search and security-by-default, neither of which OpenSearch ships identically). Worth confirming which one a "managed Elasticsearch" offering actually gives you before committing to a feature.
+
+Practical deployment checklist:
+
+- **Dedicated master nodes** once you're past a handful of data nodes.
+- **Snapshot repository** (S3, GCS, or shared filesystem) with scheduled snapshots - this is the actual backup/restore mechanism, replicas protect against node loss, not data corruption or accidental deletes.
+- **Rolling upgrades**, one node at a time, with shard allocation disabled during the restart to avoid unnecessary rebalancing traffic.
+- **Dedicated coordinating-only nodes** in front of heavy aggregation or fan-out-heavy workloads, so query load doesn't compete with indexing for the same node's heap.
+
+## Monitoring
+
+Elasticsearch tells you when it's unhealthy well before it falls over, if you're watching the right signals.
+
+Cluster-level, the cheapest possible check is `GET _cluster/health`:
+
+| Status | Meaning |
+|---|---|
+| `green` | All primary and replica shards allocated |
+| `yellow` | All primaries allocated, some replicas aren't (often normal during a rolling restart) |
+| `red` | At least one primary shard is unallocated - active data loss risk |
+
+Beyond that binary signal, the metrics that actually predict trouble:
+
+| Metric | Where | Why it matters |
+|---|---|---|
+| Heap usage / old-gen GC frequency | `_nodes/stats` | Elasticsearch runs on the JVM; sustained heap >75% triggers aggressive GC and query latency spikes |
+| Circuit breaker trips | `_nodes/stats/breaker` | The parent/fielddata/request breakers exist specifically to reject work before an OOM - a rising trip count is an early warning, not just noise |
+| Thread pool rejections | `_cat/thread_pool` | `search` or `write` queue rejections mean the node can't keep up with request rate |
+| Indexing rate & merge time | `_nodes/stats/indices` | Segment merge pressure competes with search for disk I/O |
+| Query latency (p50/p95/p99) | Slow log + APM | p99 diverging from p50 usually points at a small number of expensive queries, not overall load |
+| Disk watermark | `_cluster/settings` | Default low/high watermarks (85%/90%) throttle and then block shard allocation |
+
+For visualization, **Kibana's Stack Monitoring** ships with the stack and is the fastest path to a working dashboard; a Prometheus exporter (`elasticsearch_exporter`) plus Grafana is the alternative when monitoring is already centralized outside the Elastic stack. Either way, alert on GC time and circuit breaker trips before heap percentage alone - by the time heap usage itself looks alarming, latency has usually already degraded.
+
+## Optimizing for Real Production Load
+
+**Indexing throughput.** The `_bulk` API is non-negotiable for any real ingestion volume - single-document indexing pays the network round-trip cost per document. During large backfills, temporarily setting `refresh_interval` to `-1` and `number_of_replicas` to `0` skips per-request segment refresh and replica-write overhead, then restore both once the load finishes (this is exactly the kind of setting that gets forgotten and quietly doubles indexing latency for the rest of the index's life if you don't restore it).
+
+**Mapping discipline.** Dynamic mapping is convenient in development and dangerous in production - an unbounded set of incoming field names (user-generated keys, nested JSON blobs) creates a "mapping explosion" that bloats cluster state and can eventually make the cluster unable to accept new mappings at all. Set `dynamic: false` or `strict` on indices with any untrusted document shape, and disable `_source` or `doc_values` on fields that are indexed but never need to be retrieved or aggregated.
+
+**Query-side.** Deep pagination (`from` + `size` past a few thousand results) forces every shard to sort and return `from + size` documents just to discard most of them - use `search_after` with a stable sort for any "load more" pattern instead of paging with `from`. Keep filters in filter context (see above) so repeat queries hit the cached bitset rather than re-evaluating. For aggregation-heavy dashboards, watch `fielddata` circuit breaker pressure specifically - aggregating on a `text` field forces fielddata into heap, which is exactly why aggregatable fields should be `keyword` in the first place.
+
+**Segment and lifecycle management.** Read-mostly or time-series indices (logs, an archived month of documents) benefit from a **force merge** down to one segment once writes stop, which speeds up search by reducing the number of segments a query has to hit. For anything with a natural time axis, **Index Lifecycle Management (ILM)** automates the hot → warm → cold → delete progression: hot nodes on fast SSDs handle current writes and queries, warm nodes on cheaper storage hold read-only older indices, and a delete phase enforces retention - without ILM this tends to become a manual cron job that someone eventually forgets to run.
+
+## Takeaways
+
+The inverted index and BM25 explain *why* Elasticsearch is fast and how it ranks; the `must`/`filter` split in the `bool` query is the actual design pattern behind every "search bar + facets" interface; and production stability comes down to a short list of unglamorous things - dedicated masters, sane shard sizes, `keyword` fields where you filter, and watching GC and circuit breakers rather than waiting for heap usage to look scary. None of it requires exotic tuning to get right; it requires treating the mapping and the query shape as first-class design decisions instead of an afterthought bolted on after the schema is already in production.
