@@ -1,7 +1,7 @@
 ---
 title: "Elasticsearch Under the Hood: Text Search, Filtering, and Running It in Production"
 date: "2022-02-10"
-description: "How Elasticsearch turns text into a searchable index, how BM25 scoring and bool filters combine natural language search with metadata filtering, and how to deploy, monitor, and tune a cluster for real production traffic."
+description: "How Elasticsearch turns text into a searchable index, how BM25 scoring, geo-spatial filters, and vector kNN combine with bool filters for natural language search, and how to deploy, monitor, and tune a cluster for real production traffic."
 categories:
     - Elasticsearch
     - NLP
@@ -137,6 +137,92 @@ Other tunables worth knowing on the text side:
 - **`fuzziness`** - Levenshtein-distance tolerance for typos (`AUTO` scales the allowed edit distance with term length).
 - **`tie_breaker`** on `multi_match` (`type: best_fields`) - blends in a fraction of the non-best matching fields' scores instead of discarding them entirely.
 
+## Core Mechanism 4: Geo-Location Search
+
+The same "text + metadata filter" pattern extends naturally to location: "restaurants within 2km" or "sites inside this delivery zone" are just another filter clause, but the underlying structure isn't an inverted index at all.
+
+Two field types cover essentially every geo use case:
+
+| Field type | Stores | Typical use |
+|---|---|---|
+| `geo_point` | A single `{lat, lon}` | A store, a user, a delivery address |
+| `geo_shape` | Arbitrary GeoJSON - polygon, multipolygon, linestring | A delivery zone, a country border, a service area |
+
+The common pairing the field type table implies - and the one worth calling out explicitly - is **indexed polygon, query point**: a `geo_shape` polygon is indexed once per delivery zone or site boundary, and each incoming query supplies a `geo_point` (a user's lat/long) to test containment against it:
+
+```json
+{
+  "query": {
+    "bool": {
+      "filter": [
+        { "geo_shape": {
+            "delivery_zone": {
+              "shape": { "type": "point", "coordinates": [-0.611, 49.187] },
+              "relation": "contains"
+            }
+        }}
+      ]
+    }
+  }
+}
+```
+
+`relation` controls the topological test: `intersects` (any overlap), `within` (the query shape is fully inside the indexed shape), `contains` (the indexed shape fully contains the query shape - what "is this point inside this zone" needs), or `disjoint`. The same query direction reverses just as easily - index `geo_point` locations (stores, addresses) and query with a `geo_shape` polygon (a hand-drawn map selection) using `intersects`.
+
+For the much more common "nearest N" case, `geo_point` plus a `geo_distance` filter is lighter weight than shapes entirely:
+
+```json
+{ "geo_distance": { "distance": "5km", "location": { "lat": 49.18, "lon": -0.37 } } }
+```
+
+with `geo_bounding_box` as the cheaper variant when the front end just needs "everything currently in the map viewport" rather than a true radius.
+
+**How it's actually indexed.** Since 6.6, both `geo_point` and `geo_shape` are indexed using Lucene's **BKD tree** (Block K-D tree) rather than the older geohash-prefix approach - the same multi-dimensional binary-tree structure Lucene uses for numeric `range` queries, recursively partitioning space into bounding boxes so a bounding-box or distance query only has to descend the branches that could possibly overlap, instead of scanning every point. This is why geo filters stay cheap even over hundreds of millions of points: cost scales with the size of the query region, not the size of the index.
+
+Tunables worth knowing:
+
+- **`distance_type`** (`arc` vs `plane`) - `arc` is geodesically accurate (accounts for Earth's curvature) and the default; `plane` is faster and fine at small distances (city-scale) where the error is negligible.
+- **`precision`** on a `geohash_grid` aggregation - controls the geohash cell size when bucketing points into a map cluster/heatmap view; higher precision means smaller cells and more buckets.
+- **`ignore_malformed`** - lets ingestion continue past bad coordinates instead of rejecting the whole document, worth enabling for any pipeline consuming external/scraped location data.
+
+## Core Mechanism 5: Semantic Vector Search
+
+BM25 matches on shared terms, so a query for "car won't start" and a document about "vehicle fails to ignite" score zero, despite the same meaning. **Semantic search** closes that gap by matching on embedding similarity instead of shared vocabulary - "vector search" and "semantic search" are the same mechanism, named after the technique and the goal respectively.
+
+The pipeline: run each document's text through a sentence-embedding model (SBERT-style Sentence-BERT is the standard choice - a BERT encoder fine-tuned with a contrastive objective specifically so that cosine similarity between sentence embeddings tracks semantic similarity, unlike raw BERT `[CLS]` vectors) to get a fixed-length vector, store it in a `dense_vector` field, and at query time embed the search text with the same model and find the nearest stored vectors:
+
+```json
+{
+  "mappings": {
+    "properties": {
+      "body_embedding": {
+        "type": "dense_vector",
+        "dims": 768,
+        "index": true,
+        "similarity": "cosine"
+      }
+    }
+  }
+}
+```
+
+`dims` must exactly match the model's output width (768 for BERT-base/SBERT-base, 384 for the smaller MiniLM variants), and `similarity` picks the distance function: `cosine` for direction-only similarity (the standard choice for SBERT-style embeddings), `dot_product` when vectors are pre-normalized (cheaper to compute, equivalent to cosine on unit vectors), or `l2_norm` for raw Euclidean distance.
+
+**Two very different search strategies sit behind the same field type, and which one you get depends on the version:**
+
+- **Exact (`script_score` + `cosineSimilarity`)** - available since 7.x, this scores *every* matching document by literally computing the vector distance in a script. It's brute-force, O(n) in the candidate set, and only viable when combined with a `bool` filter that narrows the candidate pool first (e.g. score by vector similarity only within `category: automotive`) - running it over an unfiltered multi-million-document index is not something you want to explain to on-call.
+- **Approximate kNN (`knn` search)** - new in Elasticsearch 8.0 (released this month), this indexes vectors into an **HNSW graph** (Hierarchical Navigable Small World) per segment: a layered graph structure where the top layer has long-range links for fast coarse navigation and each lower layer refines the search, so a query descends the layers like a skip list rather than scanning linearly. It's sub-linear and scales to the full index, at the cost of being approximate - it can miss the true nearest neighbor in exchange for speed.
+
+HNSW's own tunables trade index quality against build/query cost:
+
+| Parameter | When it applies | Effect |
+|---|---|---|
+| `m` | Index build | Max graph connections per node; higher = better recall, larger index, slower build |
+| `ef_construction` | Index build | Candidate list size while building the graph; higher = better graph quality, slower indexing |
+| `num_candidates` | Query time | Candidates explored per shard before returning top-k; higher = better recall, higher query latency |
+
+In practice, as of early 2022 the pragmatic production pattern is **hybrid, not pure vector**: keep BM25 plus the `bool` filter pattern from the section above as the primary path, and treat semantic vector matching as a narrowing or re-ranking step layered on top - either pre-filter with `bool`/`filter` before the `script_score` similarity pass, or blend a BM25 score and a vector score with a weighted combination. Native `knn` search is brand new, evaluation data on recall/latency tradeoffs at real production scale is still thin, and lexical + facet search already covers the bulk of real queries well - which is exactly the kind of decision that belongs in a pilot next to the existing search, not a wholesale replacement of it.
+
 ## Deploying Elasticsearch in Production
 
 A cluster is made of nodes with different roles, and getting the topology wrong is the most common cause of production instability:
@@ -192,6 +278,8 @@ For visualization, **Kibana's Stack Monitoring** ships with the stack and is the
 
 **Segment and lifecycle management.** Read-mostly or time-series indices (logs, an archived month of documents) benefit from a **force merge** down to one segment once writes stop, which speeds up search by reducing the number of segments a query has to hit. For anything with a natural time axis, **Index Lifecycle Management (ILM)** automates the hot → warm → cold → delete progression: hot nodes on fast SSDs handle current writes and queries, warm nodes on cheaper storage hold read-only older indices, and a delete phase enforces retention - without ILM this tends to become a manual cron job that someone eventually forgets to run.
 
+**Vector fields are heavier than they look.** An HNSW graph is held largely in memory for search speed, so `dense_vector` fields with `index: true` meaningfully raise a node's heap and off-heap memory footprint per document compared to a plain `keyword` or `text` field - size data node memory around embedding count and `dims`, not just document count, before committing to vector search at scale.
+
 ## Takeaways
 
-The inverted index and BM25 explain *why* Elasticsearch is fast and how it ranks; the `must`/`filter` split in the `bool` query is the actual design pattern behind every "search bar + facets" interface; and production stability comes down to a short list of unglamorous things - dedicated masters, sane shard sizes, `keyword` fields where you filter, and watching GC and circuit breakers rather than waiting for heap usage to look scary. None of it requires exotic tuning to get right; it requires treating the mapping and the query shape as first-class design decisions instead of an afterthought bolted on after the schema is already in production.
+The inverted index and BM25 explain *why* Elasticsearch is fast at lexical ranking, BKD trees explain why geo filters stay cheap at any scale, and HNSW is the same "don't scan everything" idea applied to embedding similarity for semantic search. The `must`/`filter` split in the `bool` query is the actual design pattern tying all of it together - text goes to a scored match, geo/metadata/vector-narrowing goes to a filter - and it's the pattern behind every real "search bar + facets + map" interface. Production stability, in turn, comes down to a short list of unglamorous things: dedicated masters, sane shard sizes, `keyword` fields where you filter, memory sized for whatever's memory-hungry (vectors included), and watching GC and circuit breakers rather than waiting for heap usage to look scary. None of it requires exotic tuning to get right; it requires treating the mapping and the query shape as first-class design decisions instead of an afterthought bolted on after the schema is already in production.
