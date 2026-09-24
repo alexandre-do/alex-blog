@@ -252,6 +252,22 @@ BERT (Bidirectional Encoder Representations from Transformers, 2018) is not a ne
 
 **What's kept from the Transformer.** The encoder block exactly as described above: multi-head self-attention, feed-forward layers, residual connections, layer norm, positional information added to the input. The decoder, masked self-attention, and cross-attention are dropped entirely - BERT never generates, so it never needed the half of the diagram built for autoregression.
 
+### "Bidirectional" is an architectural fact, not a training trick
+
+The B in BERT is doing real work in the name, and it's worth being precise about it, because two earlier ideas already used the word more loosely:
+
+- **Unidirectional (GPT-style decoder).** With the causal mask from the decoder block above, position $i$'s representation is built only from positions $\le i$. Information flows strictly left to right, at *every* layer - by layer 12, token $i$ still knows nothing about what comes after it.
+- **Shallow bidirectional (ELMo, pre-Transformer).** ELMo trains a separate left-to-right LSTM and a separate right-to-left LSTM end to end, then concatenates their final hidden states. Each direction is a fully independent model that never sees the other during its own computation - the "bidirectional" representation exists only as a single concatenation glued on top of two unidirectional passes.
+- **Deep bidirectional (BERT).** There is no mask in encoder self-attention at all (see the attention mechanism section above): at *every* layer, every token's query attends to every other token's key, left and right of it, in the same matrix multiply. Layer 2 builds on a layer-1 representation that already mixed both directions; layer 3 builds on *that*. Context accumulates jointly across directions with depth, instead of two separate directions being fused once at the very end.
+
+```
+Unidirectional (GPT):    token i sees          ←←←←[i]
+Shallow bidirectional:   →→→→[i]  ⊕ concat  [i]←←←←     (fused once, at the top)
+Deep bidirectional:      [i] attends ↔ every token, at every layer
+```
+
+This is exactly what forces the pretraining objective below to be masking rather than "predict the next token": with no causal mask, a left-to-right loss is trivial to cheat, because the answer at position $i$ is already sitting in the input, fully visible to position $i$ itself, at every layer. Hiding a fraction of tokens is what turns unrestricted bidirectional context from a leak into an actual learning signal.
+
 **What's added on top.**
 
 - **`[CLS]` and `[SEP]` tokens.** A special `[CLS]` token is prepended to every input; its final-layer representation is what gets pooled for classification. `[SEP]` separates sentence pairs, since several pretraining and downstream tasks (like the QA pairing seen earlier) need to encode two segments at once.
