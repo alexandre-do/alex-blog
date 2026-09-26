@@ -2,86 +2,106 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://alexdo.xyz/about.html</loc>
-    <lastmod>2026-09-22T02:46:31.059Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/aws-authentication-methods.html</loc>
-    <lastmod>2026-09-22T02:46:31.087Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/chat-retrieval-system.html</loc>
-    <lastmod>2026-09-22T02:46:31.087Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/google-news-rss-radar.html</loc>
-    <lastmod>2026-09-22T02:46:31.087Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</loc>
-    <lastmod>2026-09-22T02:46:31.087Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/watermarking-libraries.html</loc>
-    <lastmod>2026-09-22T02:46:31.101Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/agentic-stack-aws.html</loc>
-    <lastmod>2026-09-22T02:46:31.086Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/reading-notes.html</loc>
-    <lastmod>2026-09-22T02:46:31.101Z</lastmod>
+    <lastmod>2026-09-26T06:55:20.761Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/reading-notes/scaling-laws-llms.html</loc>
-    <lastmod>2026-09-22T02:46:31.103Z</lastmod>
+    <lastmod>2026-09-26T06:55:20.802Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/art.html</loc>
-    <lastmod>2026-09-22T02:46:31.070Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/index.html</loc>
-    <lastmod>2026-09-22T02:46:31.068Z</lastmod>
+    <loc>https://alexdo.xyz/project/reading-notes/clip-natural-language-supervision.html</loc>
+    <lastmod>2026-09-26T06:55:20.801Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/posts.html</loc>
-    <lastmod>2026-09-22T02:46:31.086Z</lastmod>
+    <lastmod>2026-09-26T06:55:20.786Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/reading-notes/turing-imitation-game.html</loc>
-    <lastmod>2026-09-22T02:46:31.103Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/agentic-stack-aws.html</loc>
+    <lastmod>2026-09-26T06:55:20.786Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/reading-notes/attention-is-all-you-need.html</loc>
-    <lastmod>2026-09-22T02:46:31.101Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/google-news-rss-radar.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
   </url>
   <url>
-    <loc>https://alexdo.xyz/project/posts/guardrail-stack-bedrock.html</loc>
-    <lastmod>2026-09-22T02:46:31.087Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/transformer-tensor-shapes.html</loc>
-    <lastmod>2026-09-22T02:46:31.101Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</loc>
-    <lastmod>2026-09-22T02:46:31.100Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/bedrock-agentcore-multi-agent-deployment.html</loc>
-    <lastmod>2026-09-22T02:46:31.087Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/fine-tuning-llms.html</loc>
-    <lastmod>2026-09-22T02:46:31.087Z</lastmod>
-  </url>
-  <url>
-    <loc>https://alexdo.xyz/project/posts/strands-vs-langchain.html</loc>
-    <lastmod>2026-09-22T02:46:31.100Z</lastmod>
+    <loc>https://alexdo.xyz/project/posts/elasticsearch-document-search.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
   </url>
   <url>
     <loc>https://alexdo.xyz/project/posts/rest-vs-graphql-vs-websocket.html</loc>
-    <lastmod>2026-09-22T02:46:31.100Z</lastmod>
+    <lastmod>2026-09-26T06:55:20.800Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/fine-tuning-llms.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/document-retrieval-ocr-yolo-camembert.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/mcp-vancouver-open-data.html</loc>
+    <lastmod>2026-09-26T06:55:20.800Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/chat-retrieval-system.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/art.html</loc>
+    <lastmod>2026-09-26T06:55:20.771Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/index.html</loc>
+    <lastmod>2026-09-26T06:55:20.770Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/watermarking-libraries.html</loc>
+    <lastmod>2026-09-26T06:55:20.801Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/transformer-tensor-shapes.html</loc>
+    <lastmod>2026-09-26T06:55:20.801Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/aws-authentication-methods.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/strands-vs-langchain.html</loc>
+    <lastmod>2026-09-26T06:55:20.800Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/guardrail-stack-bedrock.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/bedrock-agentcore-multi-agent-deployment.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/lora-finetuning-8b.html</loc>
+    <lastmod>2026-09-26T06:55:20.800Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/posts/deploy-ml-aws-cloudformation.html</loc>
+    <lastmod>2026-09-26T06:55:20.787Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/reading-notes.html</loc>
+    <lastmod>2026-09-26T06:55:20.801Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/reading-notes/turing-imitation-game.html</loc>
+    <lastmod>2026-09-26T06:55:20.802Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/reading-notes/attention-is-all-you-need.html</loc>
+    <lastmod>2026-09-26T06:55:20.801Z</lastmod>
+  </url>
+  <url>
+    <loc>https://alexdo.xyz/project/reading-notes/neural-text-degeneration.html</loc>
+    <lastmod>2026-09-26T06:55:20.801Z</lastmod>
   </url>
 </urlset>

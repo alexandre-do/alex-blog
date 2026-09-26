@@ -1,21 +1,5 @@
 [
   {
-    "listing": "/project/reading-notes.html",
-    "items": [
-      "/project/reading-notes/scaling-laws-llms.html",
-      "/project/reading-notes/attention-is-all-you-need.html",
-      "/project/reading-notes/turing-imitation-game.html"
-    ]
-  },
-  {
-    "listing": "/index.html",
-    "items": [
-      "/project/posts/mcp-vancouver-open-data.html",
-      "/project/posts/chat-retrieval-system.html",
-      "/project/posts/google-news-rss-radar.html"
-    ]
-  },
-  {
     "listing": "/project/posts.html",
     "items": [
       "/project/posts/strands-vs-langchain.html",
@@ -28,9 +12,30 @@
       "/project/posts/bedrock-agentcore-multi-agent-deployment.html",
       "/project/posts/rest-vs-graphql-vs-websocket.html",
       "/project/posts/watermarking-libraries.html",
+      "/project/posts/lora-finetuning-8b.html",
       "/project/posts/aws-authentication-methods.html",
       "/project/posts/google-news-rss-radar.html",
-      "/project/posts/transformer-tensor-shapes.html"
+      "/project/posts/transformer-tensor-shapes.html",
+      "/project/posts/document-retrieval-ocr-yolo-camembert.html",
+      "/project/posts/elasticsearch-document-search.html"
+    ]
+  },
+  {
+    "listing": "/index.html",
+    "items": [
+      "/project/posts/mcp-vancouver-open-data.html",
+      "/project/posts/chat-retrieval-system.html",
+      "/project/posts/google-news-rss-radar.html"
+    ]
+  },
+  {
+    "listing": "/project/reading-notes.html",
+    "items": [
+      "/project/reading-notes/scaling-laws-llms.html",
+      "/project/reading-notes/clip-natural-language-supervision.html",
+      "/project/reading-notes/neural-text-degeneration.html",
+      "/project/reading-notes/attention-is-all-you-need.html",
+      "/project/reading-notes/turing-imitation-game.html"
     ]
   }
 ]

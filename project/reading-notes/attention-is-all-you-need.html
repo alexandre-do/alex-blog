@@ -45,7 +45,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-23bcad56c5b0d6d82a139fb57210aa3e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-1a320065f4c972547aa9a974a670d984.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -509,6 +509,18 @@ Note
 <h2 class="anchored" data-anchor-id="bert-taking-half-the-transformer-and-pretraining-it">BERT: taking half the Transformer and pretraining it</h2>
 <p>BERT (Bidirectional Encoder Representations from Transformers, 2018) is not a new architecture. It is the <strong>encoder stack from this paper, and nothing else</strong>, pretrained at scale before being fine-tuned on downstream tasks. The contribution was the pretraining recipe, not a new building block.</p>
 <p><strong>What’s kept from the Transformer.</strong> The encoder block exactly as described above: multi-head self-attention, feed-forward layers, residual connections, layer norm, positional information added to the input. The decoder, masked self-attention, and cross-attention are dropped entirely - BERT never generates, so it never needed the half of the diagram built for autoregression.</p>
+<section id="bidirectional-is-an-architectural-fact-not-a-training-trick" class="level3">
+<h3 class="anchored" data-anchor-id="bidirectional-is-an-architectural-fact-not-a-training-trick">“Bidirectional” is an architectural fact, not a training trick</h3>
+<p>The B in BERT is doing real work in the name, and it’s worth being precise about it, because two earlier ideas already used the word more loosely:</p>
+<ul>
+<li><strong>Unidirectional (GPT-style decoder).</strong> With the causal mask from the decoder block above, position <span class="math inline">\(i\)</span>’s representation is built only from positions <span class="math inline">\(\le i\)</span>. Information flows strictly left to right, at <em>every</em> layer - by layer 12, token <span class="math inline">\(i\)</span> still knows nothing about what comes after it.</li>
+<li><strong>Shallow bidirectional (ELMo, pre-Transformer).</strong> ELMo trains a separate left-to-right LSTM and a separate right-to-left LSTM end to end, then concatenates their final hidden states. Each direction is a fully independent model that never sees the other during its own computation - the “bidirectional” representation exists only as a single concatenation glued on top of two unidirectional passes.</li>
+<li><strong>Deep bidirectional (BERT).</strong> There is no mask in encoder self-attention at all (see the attention mechanism section above): at <em>every</em> layer, every token’s query attends to every other token’s key, left and right of it, in the same matrix multiply. Layer 2 builds on a layer-1 representation that already mixed both directions; layer 3 builds on <em>that</em>. Context accumulates jointly across directions with depth, instead of two separate directions being fused once at the very end.</li>
+</ul>
+<pre><code>Unidirectional (GPT):    token i sees          ←←←←[i]
+Shallow bidirectional:   →→→→[i]  ⊕ concat  [i]←←←←     (fused once, at the top)
+Deep bidirectional:      [i] attends ↔ every token, at every layer</code></pre>
+<p>This is exactly what forces the pretraining objective below to be masking rather than “predict the next token”: with no causal mask, a left-to-right loss is trivial to cheat, because the answer at position <span class="math inline">\(i\)</span> is already sitting in the input, fully visible to position <span class="math inline">\(i\)</span> itself, at every layer. Hiding a fraction of tokens is what turns unrestricted bidirectional context from a leak into an actual learning signal.</p>
 <p><strong>What’s added on top.</strong></p>
 <ul>
 <li><strong><code>[CLS]</code> and <code>[SEP]</code> tokens.</strong> A special <code>[CLS]</code> token is prepended to every input; its final-layer representation is what gets pooled for classification. <code>[SEP]</code> separates sentence pairs, since several pretraining and downstream tasks (like the QA pairing seen earlier) need to encode two segments at once.</li>
@@ -520,6 +532,7 @@ Note
 <li><strong>Next Sentence Prediction (NSP).</strong> Given two segments, predict whether segment B genuinely follows segment A in the source text, or was swapped in at random. The <code>[CLS]</code> representation is used for this binary classification. The intent was to teach sentence-pair relationships useful for tasks like QA and entailment.</li>
 </ol>
 <p><strong>Fine-tuning.</strong> The pretrained encoder is reused as-is; only a small task-specific head is added on top (a softmax over labels for classification, two span heads for QA, and so on - exactly the task-specific heads described in the inference section above). Because the heavy representation learning already happened during pretraining, fine-tuning needs comparatively little labeled data and few epochs.</p>
+</section>
 </section>
 <section id="roberta-the-same-architecture-a-corrected-recipe" class="level2">
 <h2 class="anchored" data-anchor-id="roberta-the-same-architecture-a-corrected-recipe">RoBERTa: the same architecture, a corrected recipe</h2>

@@ -6,10 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2025-09-10">
-<meta name="description" content="A practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.">
+<meta name="dcterms.date" content="2019-04-22">
+<meta name="description" content="Notes on Holtzman et al.&nbsp;(ICLR 2020) - why maximization-based decoding (greedy, beam search) produces repetitive, generic text even from a good language model, and how nucleus (top-p) sampling fixes it by adapting the sampling cutoff to the shape of the model’s distribution.">
 
-<title>REST vs GraphQL vs WebSocket in Python – Alexandre DO</title>
+<title>The Curious Case of Neural Text Degeneration: Why Better Likelihood Means Worse Text – Alexandre DO</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -24,41 +24,6 @@ ul.task-list li input[type="checkbox"] {
   width: 0.8em;
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
-}
-/* CSS for syntax highlighting */
-html { -webkit-text-size-adjust: 100%; }
-pre > code.sourceCode { white-space: pre; position: relative; }
-pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
-pre > code.sourceCode > span:empty { height: 1.2em; }
-.sourceCode { overflow: visible; }
-code.sourceCode > span { color: inherit; text-decoration: inherit; }
-div.sourceCode { margin: 1em 0; }
-pre.sourceCode { margin: 0; }
-@media screen {
-div.sourceCode { overflow: auto; }
-}
-@media print {
-pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
-}
-pre.numberSource code
-  { counter-reset: source-line 0; }
-pre.numberSource code > span
-  { position: relative; left: -4em; counter-increment: source-line; }
-pre.numberSource code > span > a:first-child::before
-  { content: counter(source-line);
-    position: relative; left: -1em; text-align: right; vertical-align: baseline;
-    border: none; display: inline-block;
-    -webkit-touch-callout: none; -webkit-user-select: none;
-    -khtml-user-select: none; -moz-user-select: none;
-    -ms-user-select: none; user-select: none;
-    padding: 0 4px; width: 4em;
-  }
-pre.numberSource { margin-left: 3em;  padding-left: 4px; }
-div.sourceCode
-  {   }
-@media screen {
-pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
 }
 </style>
 
@@ -108,7 +73,45 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "search-label": "Search"
   }
 }</script>
+<style>
+/* Reading note: keep only two heading levels visible - the page
+   title (from the title block above) and the H2 sections below.
+   Quarto/Pandoc always emits a body-level H1 matching the title
+   when content starts at H2; hide that duplicate here. */
+main#quarto-document-content > section.level1 > h1:first-child {
+  display: none;
+}
+</style>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="../../styles.css">
 </head>
@@ -167,17 +170,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">REST vs GraphQL vs WebSocket in Python</h1>
+<h1 class="title">The Curious Case of Neural Text Degeneration: Why Better Likelihood Means Worse Text</h1>
   <div class="quarto-categories">
-    <div class="quarto-category">Python</div>
-    <div class="quarto-category">API</div>
-    <div class="quarto-category">FastAPI</div>
+    <div class="quarto-category">LLM</div>
+    <div class="quarto-category">Decoding</div>
+    <div class="quarto-category">NLP</div>
+    <div class="quarto-category">Research</div>
   </div>
   </div>
 
 <div>
   <div class="description">
-    A practical comparison of three ways to expose data from a Python backend, with FastAPI examples for each.
+    Notes on Holtzman et al.&nbsp;(ICLR 2020) - why maximization-based decoding (greedy, beam search) produces repetitive, generic text even from a good language model, and how nucleus (top-p) sampling fixes it by adapting the sampling cutoff to the shape of the model’s distribution.
   </div>
 </div>
 
@@ -188,7 +192,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 10, 2025</p>
+      <p class="date">April 22, 2019</p>
     </div>
   </div>
   
@@ -200,64 +204,128 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="rest-vs-graphql-vs-websocket-in-python" class="level1">
-<h1>REST vs GraphQL vs WebSocket in Python</h1>
-<p><img src="images/rest-graphql-websocket.png" class="post-banner img-fluid" alt="REST vs GraphQL vs WebSocket in Python"></p>
-<p>Most Python backends end up choosing between three communication styles: REST, GraphQL, and WebSocket. They solve different problems, and FastAPI happens to support all three cleanly, which makes it a good way to compare them side by side.</p>
-<section id="rest" class="level2">
-<h2 class="anchored" data-anchor-id="rest">REST</h2>
-<p>The default choice for CRUD-style resources. Simple, cacheable, and easy to reason about.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastapi <span class="im">import</span> FastAPI</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>app <span class="op">=</span> FastAPI()</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="at">@app.get</span>(<span class="st">"/users/</span><span class="sc">{user_id}</span><span class="st">"</span>)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_user(user_id: <span class="bu">int</span>):</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"id"</span>: user_id, <span class="st">"name"</span>: <span class="st">"Alexandre"</span>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p><strong>Source:</strong> <a href="https://arxiv.org/abs/1904.09751">The Curious Case of Neural Text Degeneration</a> - Holtzman, Buys, Du, Forbes, Choi - University of Washington / Allen Institute for AI, ICLR 2020</p>
+</blockquote>
+<section id="the-paradox-this-paper-is-built-on" class="level2">
+<h2 class="anchored" data-anchor-id="the-paradox-this-paper-is-built-on">The paradox this paper is built on</h2>
+<p>The intuitive assumption behind decoding is: a good language model assigns high probability to good text, so decoding should search for the <em>most probable</em> continuation. Greedy decoding takes the argmax at each step; beam search approximates the argmax over the whole sequence by tracking the <span class="math inline">\(k\)</span> most likely partial sequences. Both are, in spirit, trying to maximize likelihood as hard as the search budget allows.</p>
+<p>The paper’s central, counterintuitive finding: <strong>doing this better makes the text worse.</strong> Text generated by beam search is bland, repetitive, and generic - and it gets <em>more</em> repetitive, not less, as you widen the beam and search harder for the maximum. The problem isn’t a weak model or a bad search algorithm doing its job poorly; it’s that the argmax of a good language model’s distribution is not what human-like text looks like in the first place. Degeneration is a property of the decoding <em>objective</em>, not primarily of the model.</p>
 </section>
-<section id="graphql" class="level2">
-<h2 class="anchored" data-anchor-id="graphql">GraphQL</h2>
-<p>A single endpoint where the client specifies exactly what fields it needs, avoiding over- or under-fetching. Here with <a href="https://strawberry.rocks/">Strawberry</a>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> strawberry</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> strawberry.fastapi <span class="im">import</span> GraphQLRouter</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="at">@strawberry.type</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> User:</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">id</span>: <span class="bu">int</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    name: <span class="bu">str</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="at">@strawberry.type</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Query:</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">@strawberry.field</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> user(<span class="va">self</span>, user_id: <span class="bu">int</span>) <span class="op">-&gt;</span> User:</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> User(<span class="bu">id</span><span class="op">=</span>user_id, name<span class="op">=</span><span class="st">"Alexandre"</span>)</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>schema <span class="op">=</span> strawberry.Schema(query<span class="op">=</span>Query)</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>app.include_router(GraphQLRouter(schema), prefix<span class="op">=</span><span class="st">"/graphql"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-<section id="websocket" class="level2">
-<h2 class="anchored" data-anchor-id="websocket">WebSocket</h2>
-<p>A persistent, bidirectional connection - the right tool when the server needs to push data without the client asking first.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastapi <span class="im">import</span> WebSocket</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">@app.websocket</span>(<span class="st">"/ws"</span>)</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> websocket_endpoint(websocket: WebSocket):</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> websocket.accept()</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">while</span> <span class="va">True</span>:</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>        data <span class="op">=</span> <span class="cf">await</span> websocket.receive_text()</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> websocket.send_text(<span class="ss">f"Echo: </span><span class="sc">{</span>data<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</section>
-<section id="when-to-use-which" class="level2">
-<h2 class="anchored" data-anchor-id="when-to-use-which">When to Use Which</h2>
+<section id="the-beam-search-repetition-trap" class="level2">
+<h2 class="anchored" data-anchor-id="the-beam-search-repetition-trap">The beam search repetition trap</h2>
+<p>Beam search’s failure mode is specific and mechanical, not vague “repetitiveness.” Once a phrase has been generated, the model assigns it a <em>higher</em> probability the next time the same context recurs - repeated n-grams are, statistically, a safe bet, because plenty of ordinary text (lists, dialogue tags, formulaic phrases) really does repeat, and the model has learned that regularity. Beam search, hunting for high joint probability, walks straight into this: a partial sequence that repeats a phrase looks <em>more</em> attractive to the search than one that moves on, so once a loop starts, every likely continuation of it reinforces staying in the loop.</p>
+<pre><code>step:        1        2        3        4        5        6
+sequence:  "I love my dog. I love my dog. I love my dog. ..."
+P(next token
+ given loop):  0.31 →  0.44 →  0.58 →  0.67 →  0.74 →  0.81   (rising, self-reinforcing)</code></pre>
+<p>Two consequences the paper highlights, both counterintuitive if you think of beam width as a “quality” knob:</p>
 <ul>
-<li><strong>REST</strong> - public APIs, CRUD-heavy resources, anything that benefits from HTTP caching.</li>
-<li><strong>GraphQL</strong> - nested or variable data shapes, multiple client types (web/mobile) with different needs.</li>
-<li><strong>WebSocket</strong> - real-time features like chat, live dashboards, or notifications.</li>
+<li><strong>Wider beams make it worse.</strong> A larger beam searches harder for the joint-probability maximum, and the maximum is <em>more</em> degenerate than a narrower, less exhaustive search finds - the opposite of what widening the beam does for translation, where wider beams reliably help (up to the point of the well-documented “beam search curse”, where translation quality also eventually degrades with excessive beam width, for related reasons).</li>
+<li><strong>The true argmax is often nearly empty.</strong> The paper connects this to Stahlberg &amp; Byrne’s (2019) finding that for neural MT, the <em>exact</em> highest-probability sequence - found by exhaustive rather than beam search - is frequently the empty string or near-empty, because per-token stopping probability compounds favorably for short sequences. Maximization, taken to its logical conclusion, doesn’t even want to produce long text; every heuristic used to make beam search behave (length penalties, coverage penalties) is effectively patching around this.</li>
 </ul>
-<p>They’re not mutually exclusive - a single FastAPI app can serve a REST API, a GraphQL endpoint, and a WebSocket route at once, and it’s common to mix them depending on the feature.</p>
-
-
 </section>
+<section id="human-text-doesnt-maximize-probability-either" class="level2">
+<h2 class="anchored" data-anchor-id="human-text-doesnt-maximize-probability-either">Human text doesn’t maximize probability either</h2>
+<p>The diagnostic that motivates the fix: plot the per-token probability the model assigns to the token that actually comes next, at every position, for two kinds of continuations of the same prompt - one generated by beam search, one written by a human.</p>
+<p>Beam search’s per-token probability is high and gets <em>higher</em> over the sequence (it’s climbing toward the repetition trap above). Human-written continuations look completely different: probability fluctuates, frequently dropping well below the model’s top choice, because human writers routinely pick a word that is coherent but <em>not</em> the single most predictable one - that’s most of what makes text read as informative rather than formulaic. A language model that is well-calibrated will therefore put real, human-like text at a <em>lower</em> per-token probability than its own greedy or beam-searched output, on average - which is exactly why chasing maximum likelihood at decode time optimizes away from human-like text rather than toward it.</p>
+<p>This reframes the whole decoding problem: the goal isn’t to find the most probable sequence, it’s to <strong>sample from the model’s distribution in a way that avoids two different failure modes</strong> - the repetitive, low-entropy degeneration of pure maximization, and the incoherent garbage that comes from sampling too freely.</p>
+</section>
+<section id="the-unreliable-tail-and-why-temperature-doesnt-fix-it" class="level2">
+<h2 class="anchored" data-anchor-id="the-unreliable-tail-and-why-temperature-doesnt-fix-it">The unreliable tail, and why temperature doesn’t fix it</h2>
+<p>Sampling directly from the full softmax (<strong>ancestral / pure sampling</strong>) sounds like the natural alternative to maximization, and it does avoid repetition - but it introduces the opposite failure. A vocabulary has tens of thousands of tokens; even when the model is highly confident about the next word, the combined probability mass sitting in the long tail of implausible tokens can be substantial simply because there are so many of them. Sampling from the full distribution regularly draws from that tail, and a single wildly improbable token derails the entire continuation that follows it - the “unreliable tail” problem.</p>
+<p><strong>Temperature sampling</strong> (dividing logits by <span class="math inline">\(T\)</span> before the softmax) is often reached for here, but it doesn’t actually solve this: it reshapes the distribution - <span class="math inline">\(T &lt; 1\)</span> sharpens it toward the mode, <span class="math inline">\(T &gt; 1\)</span> flattens it - but it never assigns any token exactly zero probability. The tail shrinks in relative terms but is never removed, so the failure mode is only made less frequent, not eliminated.</p>
+<p><strong>Top-k sampling</strong> (Fan et al., 2018) truncates to a fixed number of highest-probability tokens and renormalizes over just those. This does remove the tail - but with a fixed <span class="math inline">\(k\)</span>, it can’t adapt to how the distribution’s shape changes from one decoding step to the next:</p>
+<pre><code>Peaked distribution (model is confident - e.g. finishing "New York ___")
+  top-k=40:  ████████████████████████████████████████│ … 39 more, mostly noise
+                                                        └ k is too large here: most of the
+                                                          included tokens are implausible
+
+Flat distribution (model is genuinely uncertain - e.g. starting a new sentence)
+  top-k=40:  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│ (cut off)
+                                                        └ k is too small here: several
+                                                          genuinely plausible words excluded</code></pre>
+<p>A fixed <span class="math inline">\(k\)</span> is simultaneously too large when the model is confident and too small when it’s uncertain, because “how many tokens are actually plausible” is a property of the distribution’s shape at that step, not a constant.</p>
+</section>
+<section id="nucleus-top-p-sampling-truncate-by-probability-mass-not-by-count" class="level2">
+<h2 class="anchored" data-anchor-id="nucleus-top-p-sampling-truncate-by-probability-mass-not-by-count">Nucleus (top-p) sampling: truncate by probability mass, not by count</h2>
+<p>The paper’s fix is to make the cutoff adaptive: instead of a fixed token count, take the smallest set of tokens whose <em>cumulative</em> probability exceeds a threshold <span class="math inline">\(p\)</span>.</p>
+<p>Formally, given the model’s distribution <span class="math inline">\(P(x \mid x_{1:i-1})\)</span> over the vocabulary at step <span class="math inline">\(i\)</span>, define the <strong>nucleus</strong> <span class="math inline">\(V^{(p)} \subset V\)</span> as the smallest set of tokens such that</p>
+<p><span class="math display">\[
+\sum_{x \in V^{(p)}} P(x \mid x_{1:i-1}) \ge p
+\]</span></p>
+<p>Then renormalize the probability mass over just that set - <span class="math inline">\(P'(x) = P(x) / p'\)</span> for <span class="math inline">\(x \in V^{(p)}\)</span>, where <span class="math inline">\(p' = \sum_{x \in V^{(p)}} P(x \mid x_{1:i-1})\)</span>, and zero elsewhere - and sample from <span class="math inline">\(P'\)</span>.</p>
+<p>This is exactly the fix top-k is missing: when the distribution is peaked, the nucleus is small almost automatically (a handful of tokens already cross <span class="math inline">\(p\)</span>), pruning the same implausible tail top-k over-includes; when the distribution is flat, the nucleus grows to include as many tokens as it genuinely takes to reach <span class="math inline">\(p\)</span>, keeping options top-k would have cut off. The cutoff tracks the <em>shape</em> of the distribution at every single step instead of using one number for the whole sequence.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Strategy</th>
+<th>Cutoff rule</th>
+<th>Adapts to distribution shape?</th>
+<th>Typical failure mode</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Greedy</td>
+<td>argmax</td>
+<td>-</td>
+<td>Extreme repetition</td>
+</tr>
+<tr class="even">
+<td>Beam search</td>
+<td>joint-probability argmax over <span class="math inline">\(k\)</span> sequences</td>
+<td>-</td>
+<td>Repetition, worse with wider beams</td>
+</tr>
+<tr class="odd">
+<td>Pure sampling</td>
+<td>none</td>
+<td>N/A</td>
+<td>Incoherent tail draws</td>
+</tr>
+<tr class="even">
+<td>Temperature</td>
+<td>rescale logits by <span class="math inline">\(T\)</span></td>
+<td>Reshapes, doesn’t truncate</td>
+<td>Tail still reachable</td>
+</tr>
+<tr class="odd">
+<td>Top-k</td>
+<td>fixed token count <span class="math inline">\(k\)</span></td>
+<td>No</td>
+<td>Wrong-sized nucleus on peaked/flat steps</td>
+</tr>
+<tr class="even">
+<td><strong>Nucleus (top-p)</strong></td>
+<td>smallest set with cumulative mass <span class="math inline">\(\ge p\)</span></td>
+<td><strong>Yes</strong></td>
+<td>Degrades gracefully as <span class="math inline">\(p \to 1\)</span></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="evaluating-human-like-not-just-high-scoring" class="level2">
+<h2 class="anchored" data-anchor-id="evaluating-human-like-not-just-high-scoring">Evaluating “human-like,” not just “high scoring”</h2>
+<p>Because the whole point is that likelihood is a misleading proxy, the paper doesn’t lean on perplexity alone to compare strategies - it checks whether generated text matches the <em>statistical fingerprint</em> of human text on several axes at once:</p>
+<ul>
+<li><strong>Self-BLEU</strong> - n-gram overlap of a generation with itself, as a repetition/diversity signal. Beam search scores very high (repetitive); nucleus sampling with a well-chosen <span class="math inline">\(p\)</span> tracks human self-BLEU closely.</li>
+<li><strong>Zipf coefficient</strong> - human language follows a roughly Zipfian word-frequency distribution (a small number of very common words, a long tail of rare ones used sparingly). Beam search text under-uses the tail - it leans on safe, frequent words - skewing its Zipf slope away from human text; nucleus sampling’s word-frequency profile matches human text much more closely.</li>
+<li><strong>Repetition %</strong> - direct measurement of how often generations fall into repeated n-gram loops.</li>
+<li><strong>HUSE</strong> (Hashimoto, Zhang &amp; Liang, 2019) - combines human quality judgments with a statistical diversity measure into one score, specifically to penalize both failure modes at once: text that’s generic/repetitive (high likelihood, low diversity) and text that’s incoherent (high diversity, low quality). Nucleus sampling with <span class="math inline">\(p\)</span> around 0.9-0.95 comes out on top of this combined score, beating both beam search and top-k across the settings tested.</li>
+</ul>
+</section>
+<section id="takeaway" class="level2">
+<h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
+<p>The paper’s real contribution isn’t “sample instead of search” - sampling was already known - it’s diagnosing <em>why</em> pure maximization degrades text (the argmax of a good model isn’t human-like text, and beam search’s repetition trap is a predictable consequence of chasing it harder) and then fixing the <em>right</em> part of the sampling pipeline: not the temperature, not a fixed token count, but an adaptive cutoff shaped by the distribution itself at each step. That’s also why nucleus sampling shows up as “the common default” for open-ended generation in every decoding-strategy summary since (including the <a href="../../project/reading-notes/attention-is-all-you-need.html">Attention Is All You Need notes</a> on this site) - it’s less a stylistic choice than a direct fix for a specific, measured failure mode of the alternative. The practical number worth remembering is <span class="math inline">\(p \approx 0.9\text{-}0.95\)</span> for open-ended generation, tightened toward more deterministic decoding for tasks (translation, factual QA) where there genuinely is closer to one right answer and beam search’s bias toward high likelihood is less of a liability.</p>
+
+
 </section>
 
 </main> <!-- /main -->

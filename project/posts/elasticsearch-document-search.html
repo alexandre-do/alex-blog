@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2022-02-10">
+<meta name="description" content="How Elasticsearch turns text into a searchable index, how BM25 scoring, geo-spatial filters, and vector kNN combine with bool filters for natural language search, and how to deploy, monitor, and tune a cluster for real production traffic.">
+
+<title>Elasticsearch Under the Hood: Text Search, Filtering, and Running It in Production – Alexandre DO</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../images/favicon_id.png" rel="icon" type="image/png">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-0ab631635316c69ec4e75e40ff60a239.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-1a320065f4c972547aa9a974a670d984.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../../styles.css">
+</head>
+
+<body class="nav-fixed fullcontent quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">Alexandre DO</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/posts.html"> 
+<span class="menu-text">Posts</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/art.html"> 
+<span class="menu-text">Artwork</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../project/reading-notes.html"> 
+<span class="menu-text">Reading Notes</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Elasticsearch Under the Hood: Text Search, Filtering, and Running It in Production</h1>
+  <div class="quarto-categories">
+    <div class="quarto-category">Elasticsearch</div>
+    <div class="quarto-category">NLP</div>
+    <div class="quarto-category">Document Retrieval</div>
+    <div class="quarto-category">MLOps</div>
+  </div>
+  </div>
+
+<div>
+  <div class="description">
+    How Elasticsearch turns text into a searchable index, how BM25 scoring, geo-spatial filters, and vector kNN combine with bool filters for natural language search, and how to deploy, monitor, and tune a cluster for real production traffic.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">February 10, 2022</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="elasticsearch-under-the-hood-text-search-filtering-and-running-it-in-production" class="level1">
+<h1>Elasticsearch Under the Hood: Text Search, Filtering, and Running It in Production</h1>
+<p>Elasticsearch is a distributed search and analytics engine built on top of Apache Lucene. It stores JSON documents, exposes a REST API over HTTP, and shards + replicates data across a cluster so both indexing and search scale horizontally. The two use cases that dominate in practice are log/metrics analytics (the “ELK stack”) and full-text document search, and this post is about the second one: how a query like “unpaid invoice normandy site” combined with a filter like <code>status: overdue</code> actually gets resolved, what knobs control relevance, and what it takes to run that in production without it falling over.</p>
+<section id="elasticsearch-vs.-a-relational-database" class="level2">
+<h2 class="anchored" data-anchor-id="elasticsearch-vs.-a-relational-database">Elasticsearch vs.&nbsp;a Relational Database</h2>
+<p>The vocabulary maps loosely onto SQL concepts, but the execution model underneath is completely different - there’s no join, no transaction log in the traditional sense, and no fixed schema unless you enforce one.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Relational DB</th>
+<th>Elasticsearch</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Table</td>
+<td>Index</td>
+<td>An index is really a logical name over N shards</td>
+</tr>
+<tr class="even">
+<td>Row</td>
+<td>Document</td>
+<td>A JSON object, immutable once indexed (updates = reindex)</td>
+</tr>
+<tr class="odd">
+<td>Column</td>
+<td>Field</td>
+<td>Fields can be arrays, nested objects, or multi-fields</td>
+</tr>
+<tr class="even">
+<td>Schema</td>
+<td>Mapping</td>
+<td>Can be dynamic (inferred) or explicit</td>
+</tr>
+<tr class="odd">
+<td><code>WHERE x = y</code></td>
+<td>Filter context</td>
+<td>Boolean, cacheable, no relevance score</td>
+</tr>
+<tr class="even">
+<td><code>LIKE</code> / full-text</td>
+<td>Query context</td>
+<td>Scored, ranked by relevance</td>
+</tr>
+<tr class="odd">
+<td>B-tree index</td>
+<td>Inverted index</td>
+<td>Per-field, built at index time</td>
+</tr>
+</tbody>
+</table>
+<p>The important shift in mindset: a relational query returns <em>correct</em> rows, an Elasticsearch query returns <em>ranked</em> documents. Every full-text query is really asking “how relevant is this document to this text,” and that relevance score is computed, not looked up.</p>
+</section>
+<section id="core-mechanism-1-turning-text-into-an-inverted-index" class="level2">
+<h2 class="anchored" data-anchor-id="core-mechanism-1-turning-text-into-an-inverted-index">Core Mechanism 1: Turning Text Into an Inverted Index</h2>
+<p>Every <code>text</code> field gets run through an <strong>analyzer</strong> at index time, and the output of that analyzer is what actually gets stored and searched - not the raw string.</p>
+<pre><code>"The Quick Foxes ran"
+        │
+        ▼  tokenizer (standard)
+  [The] [Quick] [Foxes] [ran]
+        │
+        ▼  token filters (lowercase, stemmer)
+  [the] [quick] [fox] [ran]</code></pre>
+<p>An analyzer is three stages, all pluggable:</p>
+<ol type="1">
+<li><strong>Character filters</strong> - strip HTML, map characters, run before tokenization.</li>
+<li><strong>Tokenizer</strong> - splits the stream into tokens (<code>standard</code> splits on word boundaries and Unicode text segmentation rules).</li>
+<li><strong>Token filters</strong> - <code>lowercase</code>, <code>stop</code> (remove stopwords), <code>stemmer</code> (<code>running</code> → <code>run</code>), <code>asciifolding</code> (<code>réseau</code> → <code>reseau</code>), <code>synonym</code>.</li>
+</ol>
+<p>The result is an <strong>inverted index</strong>: a map from term to the list of documents (and positions) that contain it.</p>
+<pre><code>term        → postings
+"invoice"   → [doc_12 (pos 3), doc_44 (pos 0), doc_51 (pos 7)]
+"overdue"   → [doc_12 (pos 4), doc_88 (pos 1)]</code></pre>
+<p>Searching “overdue invoice” is then a matter of intersecting/unioning postings lists, not scanning documents - which is why full-text search on millions of documents stays fast: cost is driven by postings-list size, not corpus size.</p>
+<p>Field type matters a lot here, because not every field should be analyzed:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Analyzed?</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>text</code></td>
+<td>Yes</td>
+<td>Free-text search (<code>title</code>, <code>body</code>)</td>
+</tr>
+<tr class="even">
+<td><code>keyword</code></td>
+<td>No, exact match</td>
+<td>Filtering, aggregations, sorting (<code>status</code>, <code>doc_type</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>text</code> + <code>keyword</code> sub-field</td>
+<td>Both</td>
+<td>Search on <code>title</code>, aggregate/sort on <code>title.keyword</code></td>
+</tr>
+</tbody>
+</table>
+<p>Mapping a filterable field like <code>status</code> as <code>text</code> is a common mistake: it gets tokenized, lowercased, and stemmed, so <code>"Overdue"</code> and <code>"overdue"</code> become the same term - which sounds convenient until you need <code>status = "In Progress"</code> to match exactly and not partially match <code>"progress report"</code>.</p>
+</section>
+<section id="core-mechanism-2-scoring-with-bm25" class="level2">
+<h2 class="anchored" data-anchor-id="core-mechanism-2-scoring-with-bm25">Core Mechanism 2: Scoring With BM25</h2>
+<p>Since Elasticsearch 5.0, the default relevance algorithm is <strong>BM25</strong> (Okapi BM25), replacing classic TF-IDF. For a query term <span class="math inline">\(t\)</span> and document <span class="math inline">\(d\)</span>:</p>
+<p><span class="math display">\[
+\text{score}(t, d) = \text{IDF}(t) \cdot \frac{f(t, d) \cdot (k_1 + 1)}{f(t, d) + k_1 \cdot \left(1 - b + b \cdot \frac{|d|}{\text{avgdl}}\right)}
+\]</span></p>
+<p>Reading it left to right:</p>
+<ul>
+<li><strong><span class="math inline">\(\text{IDF}(t)\)</span></strong> - inverse document frequency: rare terms score higher than common ones. A term in 3 documents out of a million is far more informative than one in 500,000.</li>
+<li><strong><span class="math inline">\(f(t, d)\)</span></strong> - raw term frequency in the document.</li>
+<li><strong>Saturation</strong> - unlike raw TF-IDF, more occurrences of a term keep helping but with diminishing returns. The 10th occurrence of “invoice” barely moves the score past the 5th.</li>
+<li><strong>Length normalization</strong> - <span class="math inline">\(|d| / \text{avgdl}\)</span> penalizes documents longer than the field average, so a 10-word title matching once isn’t outscored by a 5,000-word body matching once purely because it’s longer.</li>
+</ul>
+<p>The two tunable constants:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Default</th>
+<th>Effect of raising it</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>k1</code></td>
+<td><code>1.2</code></td>
+<td>Higher = term frequency keeps mattering longer before saturating</td>
+</tr>
+<tr class="even">
+<td><code>b</code></td>
+<td><code>0.75</code></td>
+<td>Higher = longer documents penalized more; <code>0</code> disables length normalization entirely</td>
+</tr>
+</tbody>
+</table>
+<p>These are set per-field in the mapping’s <code>similarity</code> setting, and in practice the defaults are good for prose; <code>b</code> is worth lowering toward <code>0</code> for fields like <code>sku</code> or <code>title</code> where length variation isn’t meaningful signal. On top of BM25, per-field <strong>boosts</strong> (<code>"title^3"</code>) and query-time <strong>function_score</strong> (boost by recency, popularity, a business metric) let you reshape the ranking without touching the underlying algorithm.</p>
+</section>
+<section id="core-mechanism-3-natural-language-metadata-filters" class="level2">
+<h2 class="anchored" data-anchor-id="core-mechanism-3-natural-language-metadata-filters">Core Mechanism 3: Natural Language + Metadata Filters</h2>
+<p>Real search UIs are rarely pure full-text - “unpaid invoices from the Normandy office” is a text query (“unpaid invoices”) plus structural filters (<code>office = normandy</code>). Elasticsearch’s <code>bool</code> query cleanly separates the two into different <strong>contexts</strong>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"query"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"bool"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"must"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"multi_match"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>            <span class="dt">"query"</span><span class="fu">:</span> <span class="st">"unpaid invoice"</span><span class="fu">,</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>            <span class="dt">"fields"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"title^3"</span><span class="ot">,</span> <span class="st">"body"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>            <span class="dt">"type"</span><span class="fu">:</span> <span class="st">"best_fields"</span><span class="fu">,</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>            <span class="dt">"operator"</span><span class="fu">:</span> <span class="st">"or"</span><span class="fu">,</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>            <span class="dt">"minimum_should_match"</span><span class="fu">:</span> <span class="st">"75%"</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>        <span class="fu">}}</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>      <span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"filter"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"term"</span><span class="fu">:</span>  <span class="fu">{</span> <span class="dt">"office"</span><span class="fu">:</span> <span class="st">"normandy"</span> <span class="fu">}</span> <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"range"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"due_date"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"lt"</span><span class="fu">:</span> <span class="st">"now"</span> <span class="fu">}</span> <span class="fu">}</span> <span class="fu">}</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>      <span class="ot">]</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The distinction between <code>must</code>/<code>should</code> and <code>filter</code> is the single most consequential design decision in a query:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>Query context (<code>must</code>, <code>should</code>)</th>
+<th>Filter context (<code>filter</code>, <code>must_not</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Computes a score</td>
+<td>Yes</td>
+<td>No (binary yes/no)</td>
+</tr>
+<tr class="even">
+<td>Cached</td>
+<td>No</td>
+<td>Yes, per-segment</td>
+</tr>
+<tr class="odd">
+<td>Use for</td>
+<td>Free text, “how well does this match”</td>
+<td>Exact/structural constraints</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><code>multi_match</code>, <code>match</code></td>
+<td><code>term</code>, <code>terms</code>, <code>range</code>, <code>exists</code></td>
+</tr>
+</tbody>
+</table>
+<p>Putting <code>office = normandy</code> in <code>filter</code> instead of <code>must</code> means it never affects the relevance score and Elasticsearch caches the resulting bitset, so the same filter on the next query is nearly free. This is the pattern behind almost every “search + facets” UI: text goes to a scored <code>multi_match</code>, every sidebar checkbox and date range goes to <code>filter</code>.</p>
+<p>Other tunables worth knowing on the text side:</p>
+<ul>
+<li><strong><code>operator</code></strong> (<code>or</code> vs <code>and</code>) - whether all query terms must appear or just one.</li>
+<li><strong><code>minimum_should_match</code></strong> - middle ground between the two, e.g.&nbsp;“3 of 4 terms must match.”</li>
+<li><strong><code>fuzziness</code></strong> - Levenshtein-distance tolerance for typos (<code>AUTO</code> scales the allowed edit distance with term length).</li>
+<li><strong><code>tie_breaker</code></strong> on <code>multi_match</code> (<code>type: best_fields</code>) - blends in a fraction of the non-best matching fields’ scores instead of discarding them entirely.</li>
+</ul>
+</section>
+<section id="core-mechanism-4-geo-location-search" class="level2">
+<h2 class="anchored" data-anchor-id="core-mechanism-4-geo-location-search">Core Mechanism 4: Geo-Location Search</h2>
+<p>The same “text + metadata filter” pattern extends naturally to location: “restaurants within 2km” or “sites inside this delivery zone” are just another filter clause, but the underlying structure isn’t an inverted index at all.</p>
+<p>Two field types cover essentially every geo use case:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field type</th>
+<th>Stores</th>
+<th>Typical use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>geo_point</code></td>
+<td>A single <code>{lat, lon}</code></td>
+<td>A store, a user, a delivery address</td>
+</tr>
+<tr class="even">
+<td><code>geo_shape</code></td>
+<td>Arbitrary GeoJSON - polygon, multipolygon, linestring</td>
+<td>A delivery zone, a country border, a service area</td>
+</tr>
+</tbody>
+</table>
+<p>The common pairing the field type table implies - and the one worth calling out explicitly - is <strong>indexed polygon, query point</strong>: a <code>geo_shape</code> polygon is indexed once per delivery zone or site boundary, and each incoming query supplies a <code>geo_point</code> (a user’s lat/long) to test containment against it:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"query"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"bool"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"filter"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"geo_shape"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>            <span class="dt">"delivery_zone"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>              <span class="dt">"shape"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"type"</span><span class="fu">:</span> <span class="st">"point"</span><span class="fu">,</span> <span class="dt">"coordinates"</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">-0.611</span><span class="ot">,</span> <span class="fl">49.187</span><span class="ot">]</span> <span class="fu">},</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>              <span class="dt">"relation"</span><span class="fu">:</span> <span class="st">"contains"</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>            <span class="fu">}</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>        <span class="fu">}}</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>      <span class="ot">]</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>relation</code> controls the topological test: <code>intersects</code> (any overlap), <code>within</code> (the query shape is fully inside the indexed shape), <code>contains</code> (the indexed shape fully contains the query shape - what “is this point inside this zone” needs), or <code>disjoint</code>. The same query direction reverses just as easily - index <code>geo_point</code> locations (stores, addresses) and query with a <code>geo_shape</code> polygon (a hand-drawn map selection) using <code>intersects</code>.</p>
+<p>For the much more common “nearest N” case, <code>geo_point</code> plus a <code>geo_distance</code> filter is lighter weight than shapes entirely:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span> <span class="dt">"geo_distance"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"distance"</span><span class="fu">:</span> <span class="st">"5km"</span><span class="fu">,</span> <span class="dt">"location"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"lat"</span><span class="fu">:</span> <span class="fl">49.18</span><span class="fu">,</span> <span class="dt">"lon"</span><span class="fu">:</span> <span class="fl">-0.37</span> <span class="fu">}</span> <span class="fu">}</span> <span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>with <code>geo_bounding_box</code> as the cheaper variant when the front end just needs “everything currently in the map viewport” rather than a true radius.</p>
+<p><strong>How it’s actually indexed.</strong> Since 6.6, both <code>geo_point</code> and <code>geo_shape</code> are indexed using Lucene’s <strong>BKD tree</strong> (Block K-D tree) rather than the older geohash-prefix approach - the same multi-dimensional binary-tree structure Lucene uses for numeric <code>range</code> queries, recursively partitioning space into bounding boxes so a bounding-box or distance query only has to descend the branches that could possibly overlap, instead of scanning every point. This is why geo filters stay cheap even over hundreds of millions of points: cost scales with the size of the query region, not the size of the index.</p>
+<p>Tunables worth knowing:</p>
+<ul>
+<li><strong><code>distance_type</code></strong> (<code>arc</code> vs <code>plane</code>) - <code>arc</code> is geodesically accurate (accounts for Earth’s curvature) and the default; <code>plane</code> is faster and fine at small distances (city-scale) where the error is negligible.</li>
+<li><strong><code>precision</code></strong> on a <code>geohash_grid</code> aggregation - controls the geohash cell size when bucketing points into a map cluster/heatmap view; higher precision means smaller cells and more buckets.</li>
+<li><strong><code>ignore_malformed</code></strong> - lets ingestion continue past bad coordinates instead of rejecting the whole document, worth enabling for any pipeline consuming external/scraped location data.</li>
+</ul>
+</section>
+<section id="core-mechanism-5-semantic-vector-search" class="level2">
+<h2 class="anchored" data-anchor-id="core-mechanism-5-semantic-vector-search">Core Mechanism 5: Semantic Vector Search</h2>
+<p>BM25 matches on shared terms, so a query for “car won’t start” and a document about “vehicle fails to ignite” score zero, despite the same meaning. <strong>Semantic search</strong> closes that gap by matching on embedding similarity instead of shared vocabulary - “vector search” and “semantic search” are the same mechanism, named after the technique and the goal respectively.</p>
+<p>The pipeline: run each document’s text through a sentence-embedding model (SBERT-style Sentence-BERT is the standard choice - a BERT encoder fine-tuned with a contrastive objective specifically so that cosine similarity between sentence embeddings tracks semantic similarity, unlike raw BERT <code>[CLS]</code> vectors) to get a fixed-length vector, store it in a <code>dense_vector</code> field, and at query time embed the search text with the same model and find the nearest stored vectors:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"mappings"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"properties"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"body_embedding"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"type"</span><span class="fu">:</span> <span class="st">"dense_vector"</span><span class="fu">,</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"dims"</span><span class="fu">:</span> <span class="dv">768</span><span class="fu">,</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"index"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"similarity"</span><span class="fu">:</span> <span class="st">"cosine"</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>dims</code> must exactly match the model’s output width (768 for BERT-base/SBERT-base, 384 for the smaller MiniLM variants), and <code>similarity</code> picks the distance function: <code>cosine</code> for direction-only similarity (the standard choice for SBERT-style embeddings), <code>dot_product</code> when vectors are pre-normalized (cheaper to compute, equivalent to cosine on unit vectors), or <code>l2_norm</code> for raw Euclidean distance.</p>
+<p><strong>Two very different search strategies sit behind the same field type, and which one you get depends on the version:</strong></p>
+<ul>
+<li><strong>Exact (<code>script_score</code> + <code>cosineSimilarity</code>)</strong> - available since 7.x, this scores <em>every</em> matching document by literally computing the vector distance in a script. It’s brute-force, O(n) in the candidate set, and only viable when combined with a <code>bool</code> filter that narrows the candidate pool first (e.g.&nbsp;score by vector similarity only within <code>category: automotive</code>) - running it over an unfiltered multi-million-document index is not something you want to explain to on-call.</li>
+<li><strong>Approximate kNN (<code>knn</code> search)</strong> - new in Elasticsearch 8.0 (released this month), this indexes vectors into an <strong>HNSW graph</strong> (Hierarchical Navigable Small World) per segment: a layered graph structure where the top layer has long-range links for fast coarse navigation and each lower layer refines the search, so a query descends the layers like a skip list rather than scanning linearly. It’s sub-linear and scales to the full index, at the cost of being approximate - it can miss the true nearest neighbor in exchange for speed.</li>
+</ul>
+<p>HNSW’s own tunables trade index quality against build/query cost:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>When it applies</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>m</code></td>
+<td>Index build</td>
+<td>Max graph connections per node; higher = better recall, larger index, slower build</td>
+</tr>
+<tr class="even">
+<td><code>ef_construction</code></td>
+<td>Index build</td>
+<td>Candidate list size while building the graph; higher = better graph quality, slower indexing</td>
+</tr>
+<tr class="odd">
+<td><code>num_candidates</code></td>
+<td>Query time</td>
+<td>Candidates explored per shard before returning top-k; higher = better recall, higher query latency</td>
+</tr>
+</tbody>
+</table>
+<p>In practice, as of early 2022 the pragmatic production pattern is <strong>hybrid, not pure vector</strong>: keep BM25 plus the <code>bool</code> filter pattern from the section above as the primary path, and treat semantic vector matching as a narrowing or re-ranking step layered on top - either pre-filter with <code>bool</code>/<code>filter</code> before the <code>script_score</code> similarity pass, or blend a BM25 score and a vector score with a weighted combination. Native <code>knn</code> search is brand new, evaluation data on recall/latency tradeoffs at real production scale is still thin, and lexical + facet search already covers the bulk of real queries well - which is exactly the kind of decision that belongs in a pilot next to the existing search, not a wholesale replacement of it.</p>
+</section>
+<section id="deploying-elasticsearch-in-production" class="level2">
+<h2 class="anchored" data-anchor-id="deploying-elasticsearch-in-production">Deploying Elasticsearch in Production</h2>
+<p>A cluster is made of nodes with different roles, and getting the topology wrong is the most common cause of production instability:</p>
+<ul>
+<li><strong>Master-eligible nodes</strong> - manage cluster state (index creation, shard allocation). 3 dedicated masters is the standard for anything beyond a toy cluster, to survive a single-node loss without split-brain.</li>
+<li><strong>Data nodes</strong> - hold shards, do the actual indexing/search work. CPU and disk I/O bound.</li>
+<li><strong>Ingest nodes</strong> - run pre-processing pipelines (<code>grok</code>, field enrichment) before indexing.</li>
+<li><strong>Coordinating nodes</strong> - stateless, fan out a query to data nodes and merge results; useful as a buffer in front of a heavy-query workload.</li>
+</ul>
+<p><strong>Shards</strong> are the unit of scale - each shard is a self-contained Lucene index. Two rules of thumb that come from hard-won incidents across the ecosystem: keep individual shards under roughly 50GB, and don’t over-shard (thousands of tiny shards waste heap on cluster state and per-shard overhead just as badly as under-sharding wastes parallelism). Shard count is fixed at index creation in versions before 7.x’s split/shrink APIs, so size for expected data volume up front, not current volume.</p>
+<p>As of early 2022 the deployment landscape has an extra wrinkle worth planning around: Elastic relicensed Elasticsearch and Kibana to SSPL/Elastic License in January 2021, and in response AWS forked the last Apache-2.0 release into <strong>OpenSearch</strong>. If you’re deploying on AWS via the managed Elasticsearch Service, you’re now provisioning OpenSearch by default, not Elasticsearch - API-compatible for most core query DSL, but diverging on newer features (Elasticsearch 8.0, released this month, adds approximate kNN vector search and security-by-default, neither of which OpenSearch ships identically). Worth confirming which one a “managed Elasticsearch” offering actually gives you before committing to a feature.</p>
+<p>Practical deployment checklist:</p>
+<ul>
+<li><strong>Dedicated master nodes</strong> once you’re past a handful of data nodes.</li>
+<li><strong>Snapshot repository</strong> (S3, GCS, or shared filesystem) with scheduled snapshots - this is the actual backup/restore mechanism, replicas protect against node loss, not data corruption or accidental deletes.</li>
+<li><strong>Rolling upgrades</strong>, one node at a time, with shard allocation disabled during the restart to avoid unnecessary rebalancing traffic.</li>
+<li><strong>Dedicated coordinating-only nodes</strong> in front of heavy aggregation or fan-out-heavy workloads, so query load doesn’t compete with indexing for the same node’s heap.</li>
+</ul>
+</section>
+<section id="monitoring" class="level2">
+<h2 class="anchored" data-anchor-id="monitoring">Monitoring</h2>
+<p>Elasticsearch tells you when it’s unhealthy well before it falls over, if you’re watching the right signals.</p>
+<p>Cluster-level, the cheapest possible check is <code>GET _cluster/health</code>:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>green</code></td>
+<td>All primary and replica shards allocated</td>
+</tr>
+<tr class="even">
+<td><code>yellow</code></td>
+<td>All primaries allocated, some replicas aren’t (often normal during a rolling restart)</td>
+</tr>
+<tr class="odd">
+<td><code>red</code></td>
+<td>At least one primary shard is unallocated - active data loss risk</td>
+</tr>
+</tbody>
+</table>
+<p>Beyond that binary signal, the metrics that actually predict trouble:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Metric</th>
+<th>Where</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Heap usage / old-gen GC frequency</td>
+<td><code>_nodes/stats</code></td>
+<td>Elasticsearch runs on the JVM; sustained heap &gt;75% triggers aggressive GC and query latency spikes</td>
+</tr>
+<tr class="even">
+<td>Circuit breaker trips</td>
+<td><code>_nodes/stats/breaker</code></td>
+<td>The parent/fielddata/request breakers exist specifically to reject work before an OOM - a rising trip count is an early warning, not just noise</td>
+</tr>
+<tr class="odd">
+<td>Thread pool rejections</td>
+<td><code>_cat/thread_pool</code></td>
+<td><code>search</code> or <code>write</code> queue rejections mean the node can’t keep up with request rate</td>
+</tr>
+<tr class="even">
+<td>Indexing rate &amp; merge time</td>
+<td><code>_nodes/stats/indices</code></td>
+<td>Segment merge pressure competes with search for disk I/O</td>
+</tr>
+<tr class="odd">
+<td>Query latency (p50/p95/p99)</td>
+<td>Slow log + APM</td>
+<td>p99 diverging from p50 usually points at a small number of expensive queries, not overall load</td>
+</tr>
+<tr class="even">
+<td>Disk watermark</td>
+<td><code>_cluster/settings</code></td>
+<td>Default low/high watermarks (85%/90%) throttle and then block shard allocation</td>
+</tr>
+</tbody>
+</table>
+<p>For visualization, <strong>Kibana’s Stack Monitoring</strong> ships with the stack and is the fastest path to a working dashboard; a Prometheus exporter (<code>elasticsearch_exporter</code>) plus Grafana is the alternative when monitoring is already centralized outside the Elastic stack. Either way, alert on GC time and circuit breaker trips before heap percentage alone - by the time heap usage itself looks alarming, latency has usually already degraded.</p>
+</section>
+<section id="optimizing-for-real-production-load" class="level2">
+<h2 class="anchored" data-anchor-id="optimizing-for-real-production-load">Optimizing for Real Production Load</h2>
+<p><strong>Indexing throughput.</strong> The <code>_bulk</code> API is non-negotiable for any real ingestion volume - single-document indexing pays the network round-trip cost per document. During large backfills, temporarily setting <code>refresh_interval</code> to <code>-1</code> and <code>number_of_replicas</code> to <code>0</code> skips per-request segment refresh and replica-write overhead, then restore both once the load finishes (this is exactly the kind of setting that gets forgotten and quietly doubles indexing latency for the rest of the index’s life if you don’t restore it).</p>
+<p><strong>Mapping discipline.</strong> Dynamic mapping is convenient in development and dangerous in production - an unbounded set of incoming field names (user-generated keys, nested JSON blobs) creates a “mapping explosion” that bloats cluster state and can eventually make the cluster unable to accept new mappings at all. Set <code>dynamic: false</code> or <code>strict</code> on indices with any untrusted document shape, and disable <code>_source</code> or <code>doc_values</code> on fields that are indexed but never need to be retrieved or aggregated.</p>
+<p><strong>Query-side.</strong> Deep pagination (<code>from</code> + <code>size</code> past a few thousand results) forces every shard to sort and return <code>from + size</code> documents just to discard most of them - use <code>search_after</code> with a stable sort for any “load more” pattern instead of paging with <code>from</code>. Keep filters in filter context (see above) so repeat queries hit the cached bitset rather than re-evaluating. For aggregation-heavy dashboards, watch <code>fielddata</code> circuit breaker pressure specifically - aggregating on a <code>text</code> field forces fielddata into heap, which is exactly why aggregatable fields should be <code>keyword</code> in the first place.</p>
+<p><strong>Segment and lifecycle management.</strong> Read-mostly or time-series indices (logs, an archived month of documents) benefit from a <strong>force merge</strong> down to one segment once writes stop, which speeds up search by reducing the number of segments a query has to hit. For anything with a natural time axis, <strong>Index Lifecycle Management (ILM)</strong> automates the hot → warm → cold → delete progression: hot nodes on fast SSDs handle current writes and queries, warm nodes on cheaper storage hold read-only older indices, and a delete phase enforces retention - without ILM this tends to become a manual cron job that someone eventually forgets to run.</p>
+<p><strong>Vector fields are heavier than they look.</strong> An HNSW graph is held largely in memory for search speed, so <code>dense_vector</code> fields with <code>index: true</code> meaningfully raise a node’s heap and off-heap memory footprint per document compared to a plain <code>keyword</code> or <code>text</code> field - size data node memory around embedding count and <code>dims</code>, not just document count, before committing to vector search at scale.</p>
+</section>
+<section id="takeaways" class="level2">
+<h2 class="anchored" data-anchor-id="takeaways">Takeaways</h2>
+<p>The inverted index and BM25 explain <em>why</em> Elasticsearch is fast at lexical ranking, BKD trees explain why geo filters stay cheap at any scale, and HNSW is the same “don’t scan everything” idea applied to embedding similarity for semantic search. The <code>must</code>/<code>filter</code> split in the <code>bool</code> query is the actual design pattern tying all of it together - text goes to a scored match, geo/metadata/vector-narrowing goes to a filter - and it’s the pattern behind every real “search bar + facets + map” interface. Production stability, in turn, comes down to a short list of unglamorous things: dedicated masters, sane shard sizes, <code>keyword</code> fields where you filter, memory sized for whatever’s memory-hungry (vectors included), and watching GC and circuit breakers rather than waiting for heap usage to look scary. None of it requires exotic tuning to get right; it requires treating the mapping and the query shape as first-class design decisions instead of an afterthought bolted on after the schema is already in production.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/alexdo\.xyz\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
