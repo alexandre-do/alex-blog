@@ -1,0 +1,216 @@
+---
+title: "Document Retrieval at Scale: OCR, YOLO, and French BERT for a Technical Archive"
+date: "2022-06-15"
+description: "Building an end-to-end AI document search system for a national grid operator's technical archive: format-aware parsing, YOLO-based layout detection, CamemBERT classification and NER, and Elasticsearch tuned for French text."
+categories:
+    - Document Retrieval
+    - NLP
+    - Computer Vision
+    - Elasticsearch
+---
+
+# Document Retrieval at Scale: OCR, YOLO, and French BERT for a Technical Archive
+
+France's electricity grid is operated by a network of regional agencies, each sitting on decades of technical documentation - maintenance reports, incident reports, equipment specifications, regulatory correspondence, single-line diagrams. Across more than ten agencies, that archive had grown to roughly 20,000 documents, scattered over shared drives and paper scans, searchable only by folder structure and institutional memory. Finding the right document meant knowing who to ask.
+
+This post covers the system built to fix that: a search engine that parses every document format in the archive, reads the ones that are scanned images rather than text, tags each one with its type and the entities it mentions, and indexes all of it in Elasticsearch behind a single search box. Every technique below was mature and production-proven as of 2022 - no large language models, no dense-vector retrieval beyond what Elasticsearch shipped that year. The constraint wasn't a limitation so much as the reality of the toolbox at the time, and it's worth documenting as it was.
+
+## Pipeline Overview
+
+```
+document  -->  format-aware parser  -->  YOLO layout/text detection + OCR  -->  classification + NER (CamemBERT)  -->  Elasticsearch index  -->  search UI
+```
+
+1. **Parsing** - route each document to the right extraction path depending on its format and whether it's native text or a scanned image.
+2. **Layout detection and OCR** - for image-based content, a YOLO model finds the regions worth reading (paragraphs, tables, title blocks, stamps) before OCR runs on each crop.
+3. **Classification and NER** - a CamemBERT model tags each document's type and extracts domain entities (equipment references, site names, standards).
+4. **Indexing** - text and entities land in Elasticsearch with a mapping tuned for French and for faceted filtering.
+5. **Deployment** - batch ingestion for the legacy backlog, incremental ingestion for new documents, all on-premises.
+
+## Step 1: Format-Aware Parsing
+
+The archive wasn't one format - it was PDFs (some native, many scanned), Word and Excel files, and TIFF scans of older paper records. A single parser can't handle all of that well, so the first decision point routes each document by format and content:
+
+| Document type | Route |
+|---|---|
+| Native-text PDF | Direct text + layout extraction |
+| Office (`.docx`, `.xlsx`, `.pptx`) | Format-specific extraction |
+| Scanned PDF / TIFF image | YOLO layout detection + OCR |
+
+For PDFs, "native" versus "scanned" isn't known upfront - a scanned page inside an otherwise-native PDF is common in these archives (a cover letter typed, then a stamped approval page scanned in). The practical heuristic is to attempt native extraction first and fall back to the image pipeline per page, based on how much text comes back:
+
+```python
+import fitz  # PyMuPDF
+
+def route_page(page: fitz.Page, min_chars: int = 20) -> str:
+    text = page.get_text().strip()
+    return "native" if len(text) >= min_chars else "scanned"
+
+doc = fitz.open("incident_report_2021_04.pdf")
+for page in doc:
+    route = route_page(page)
+    # native pages: extract directly with page.get_text("dict") for layout
+    # scanned pages: render to image and send to the YOLO + OCR path
+```
+
+Office formats have their own well-structured extraction path and don't need OCR at all: `python-docx` for Word, `openpyxl` for Excel, `python-pptx` for the occasional presentation. The only nuance worth handling there is embedded images (a diagram pasted into a Word report) - those get pulled out and routed through the same YOLO + OCR path as scanned pages, so a figure's caption or embedded labels aren't lost.
+
+## Step 2: YOLO for Layout and Text Region Detection
+
+Running OCR directly on a full scanned page works reasonably for a typed letter. It works badly for a single-line diagram with a title block, a stamp, a legend table, and scattered equipment labels at arbitrary rotations - Tesseract fed the whole page tends to interleave text from unrelated regions and garbles anything not roughly horizontal.
+
+The fix is to detect *where* the readable regions are before reading them. A YOLOv5 model, fine-tuned on a few thousand pages sampled from the archive and annotated with bounding boxes for `paragraph`, `table`, `title_block`, `stamp`, and `figure_label`, does that layout detection:
+
+```python
+import torch
+
+layout_model = torch.hub.load("ultralytics/yolov5", "custom", path="layout_yolov5.pt")
+
+def detect_regions(image_path: str, conf_threshold: float = 0.4):
+    results = layout_model(image_path)
+    boxes = results.pandas().xyxy[0]
+    return boxes[boxes["confidence"] >= conf_threshold]
+```
+
+Each detected region is cropped and OCR'd separately, with a Tesseract configuration matched to the region type - `--psm 6` (uniform block of text) for paragraphs, `--psm 11` (sparse text) for scattered figure labels, and a rotation-correction pass (via the image's estimated skew angle) for stamps and title blocks that are rarely perfectly horizontal:
+
+```python
+import pytesseract
+from PIL import Image
+
+def ocr_region(image: Image.Image, region_type: str) -> str:
+    psm = {"paragraph": 6, "table": 6, "figure_label": 11, "stamp": 11}.get(region_type, 3)
+    return pytesseract.image_to_string(image, lang="fra", config=f"--psm {psm}")
+```
+
+Annotating the training set for the layout model was the actual bottleneck here, not the model itself - a few thousand boxes drawn with a tool like LabelImg or CVAT, sampled to cover the full range of document ages and scan qualities in the archive, was enough for a YOLOv5s model fine-tuned from COCO weights to generalize across the corpus.
+
+## Step 3: Classification and NER with CamemBERT
+
+General-purpose or English-centric BERT models underperform on this kind of French technical text - the vocabulary is full of domain acronyms, equipment nomenclature, and regulatory references that don't show up in general corpora. **CamemBERT**, pretrained on a large French web corpus (OSCAR), is the better base here specifically because its subword tokenizer was built on French text and handles French morphology (accents, elision, compounding) far better than a multilingual model would.
+
+Two fine-tuned heads run on every parsed document:
+
+**Document type classification** - a sequence classification head over categories like maintenance report, incident report, technical specification, regulatory correspondence, and schematic metadata:
+
+```python
+from transformers import CamembertTokenizer, CamembertForSequenceClassification, Trainer, TrainingArguments
+
+tokenizer = CamembertTokenizer.from_pretrained("camembert-base")
+model = CamembertForSequenceClassification.from_pretrained("camembert-base", num_labels=8)
+
+def tokenize(batch):
+    return tokenizer(batch["text"], truncation=True, padding="max_length", max_length=512)
+
+train_dataset = train_dataset.map(tokenize, batched=True)
+
+trainer = Trainer(
+    model=model,
+    args=TrainingArguments(
+        output_dir="./camembert-doctype",
+        num_train_epochs=4,
+        per_device_train_batch_size=16,
+        learning_rate=2e-5,
+        evaluation_strategy="epoch",
+    ),
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
+)
+trainer.train()
+```
+
+**Named entity recognition** - a token classification head tagging equipment references, site/substation names, internal reference codes, standards references (NF, IEC), and dates. Labeled NER data specific to this vocabulary didn't exist going in, so the initial training set was bootstrapped with weak supervision - regex patterns for structured references and a gazetteer of known site names - then corrected by subject-matter reviewers rather than annotated from scratch:
+
+```python
+from transformers import CamembertForTokenClassification, DataCollatorForTokenClassification
+
+ner_model = CamembertForTokenClassification.from_pretrained("camembert-base", num_labels=len(label_list))
+data_collator = DataCollatorForTokenClassification(tokenizer)
+```
+
+That bootstrap-then-correct loop cut the manual annotation volume substantially compared to labeling every entity from a blank slate, at the cost of an extra review pass on the seed labels before training.
+
+## Step 4: Indexing and Search Optimization with Elasticsearch
+
+The index mapping keeps raw text, a French-analyzed field, and normalized entities as separate sub-fields, so the same content can be full-text searched and also filtered as facets:
+
+```json
+{
+  "settings": {
+    "analysis": {
+      "filter": {
+        "french_elision": { "type": "elision", "articles_case": true, "articles": ["l", "d", "qu", "n", "m", "t", "s", "j"] },
+        "french_stop": { "type": "stop", "stopwords": "_french_" },
+        "french_stemmer": { "type": "stemmer", "language": "light_french" }
+      },
+      "analyzer": {
+        "french_technical": {
+          "tokenizer": "standard",
+          "filter": ["french_elision", "lowercase", "french_stop", "asciifolding", "french_stemmer"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "body":       { "type": "text", "analyzer": "french_technical" },
+      "title":      { "type": "text", "analyzer": "french_technical", "boost": 3 },
+      "doc_type":   { "type": "keyword" },
+      "agency":     { "type": "keyword" },
+      "entities":   { "type": "keyword" },
+      "date":       { "type": "date" }
+    }
+  }
+}
+```
+
+`asciifolding` matters more than it looks - users searching for "reseau" expect to match "réseau", and technical acronyms get typed inconsistently with and without accents. On top of the analyzer, a synonym filter maps common domain abbreviations to their expanded forms, since exact acronym matching alone missed a meaningful share of real queries.
+
+Query-time, a `multi_match` across `title` and `body` combines with a `function_score` boosting recency and exact `doc_type`/`entities` matches, and a `terms` filter on `agency` enforces access scoping:
+
+```json
+{
+  "query": {
+    "function_score": {
+      "query": {
+        "bool": {
+          "must": { "multi_match": { "query": "transformateur poste normandie", "fields": ["title^3", "body"] } },
+          "filter": [{ "terms": { "agency": ["<user_agency_ids>"] } }]
+        }
+      },
+      "functions": [{ "gauss": { "date": { "origin": "now", "scale": "365d", "decay": 0.5 } } }]
+    }
+  }
+}
+```
+
+Elasticsearch 8.0 (released February 2022) introduced approximate kNN search over dense vectors, and a semantic re-ranking layer using French sentence embeddings was evaluated as a pilot. It was kept out of the initial launch: BM25 plus entity-based boosting already covered the bulk of real queries well, faceted filtering mattered more to users than semantic recall, and a newly shipped ANN feature wasn't where the first production release needed to take its risk. It's a reasonable next iteration once there's click data to justify tuning it against.
+
+## Step 5: Deployment
+
+The archive contains critical-infrastructure operational data, which ruled out sending anything to external services - the entire pipeline runs on-premises.
+
+- **Batch ingestion for the backlog** - an Airflow DAG chains parsing, YOLO/OCR, classification/NER, and indexing for the initial 20,000-document reprocessing run, scheduled in off-hours batches against a shared GPU node for the YOLO and CamemBERT inference steps.
+- **Incremental ingestion** - new documents land in a watched directory per agency and trigger the same DAG for a single file, so the index stays current without a full reprocessing pass.
+- **Access control** - Elasticsearch's document- and field-level security ties each agency's role to an `agency` filter enforced server-side, mapped to the existing corporate directory (LDAP/AD) rather than reimplementing permissions in the application layer.
+- **Search UI** - a lightweight internal web app (a REST API in front of Elasticsearch, with a simple faceted search frontend) rather than a shared drive, with query logging feeding into Kibana dashboards for usage analytics and a "was this helpful" signal on results to build up relevance judgments over time.
+
+## Evaluation
+
+Each stage is measured on its own terms, then the pipeline is measured end to end:
+
+- **OCR** - character and word error rate (CER/WER) against a manually transcribed sample, tracked separately by scan quality bucket since old, faded scans behave very differently from recent ones.
+- **Layout detection** - mAP@0.5 on a held-out, human-annotated set of pages, reviewed per region class since `stamp` and `figure_label` boxes are harder to localize than full paragraphs.
+- **Classification** - macro F1 across document types, with a confusion matrix reviewed alongside subject-matter experts to catch systematically confusable categories (incident reports vs. maintenance reports were the recurring one).
+- **NER** - entity-level precision/recall/F1, broken down per entity type, since equipment references and site names had very different error profiles than dates or standards references.
+- **Retrieval quality** - with no existing search logs to bootstrap from, a benchmark of roughly 150 queries with expert-graded relevance judgments was built by hand across agencies, and scored with Precision@5, Precision@10, and MRR.
+- **The business metric** - the headline number, roughly halved manual search time, came from timed task studies: the same retrieval tasks run by staff on the old shared-drive system and again on the new search tool, across multiple agencies, rather than from any single pipeline metric.
+
+## Challenges
+
+- **Format and scan quality heterogeneity.** Decades-old scans have skew, faded ink, and handwritten annotations that no single OCR configuration handles well. Documents falling below an OCR confidence threshold were routed to a manual review queue rather than indexed with silently bad text.
+- **Scarce, domain-specific labels.** Neither the classifier nor the NER model had off-the-shelf training data - the weak-supervision bootstrap (regex and gazetteers, corrected by reviewers) was what made annotation cost tractable at this scale.
+- **Multi-agency access control.** Ten-plus agencies with different confidentiality expectations meant permissions had to be modeled at ingest time (tagging each document with its owning agency) and enforced again at query time, not assumed from folder structure the way the old system implicitly did.
+- **Precision/recall trade-off for safety-relevant documents.** Under-retrieving a critical technical document is worse than a few irrelevant results, so tuning leaned toward recall, with highlighted snippets in results letting users quickly discard false positives themselves.
+- **Cold-start evaluation.** Launching without prior search logs meant the initial relevance benchmark had to be hand-built with domain experts rather than mined from usage data - useful, but a poor substitute for real query patterns until enough production traffic accumulated to revisit it.
+- **On-premises compute constraints.** No cloud elasticity meant the YOLO and CamemBERT inference steps ran as scheduled batch jobs against a fixed GPU budget, which shaped the ingestion pipeline as much as any modeling decision - reprocessing the full 20,000-document archive after a model update was a planned, off-hours operation, not something to trigger casually.
