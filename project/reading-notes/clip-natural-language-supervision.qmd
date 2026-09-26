@@ -1,0 +1,194 @@
+---
+title: "CLIP: Learning Transferable Visual Models From Natural Language Supervision"
+date: "2021-02-26"
+description: "Notes on Radford et al. (OpenAI, ICML 2021) - how CLIP pairs an off-the-shelf image encoder with a text encoder under a contrastive objective to learn vision from raw (image, caption) pairs instead of fixed label sets, why that makes zero-shot classification and today's vision-language systems possible, and how CLIP is actually fine-tuned in practice."
+categories:
+    - Computer Vision
+    - Multimodal
+    - Architecture
+    - Research
+source-title: "Learning Transferable Visual Models From Natural Language Supervision"
+source-url: "https://arxiv.org/abs/2103.00020"
+source-author: "Radford, Kim, Hallacy, Ramesh, Goh, Agarwal, Sastry, Askell, Mishkin, Clark, Krueger, Sutskever - OpenAI, ICML 2021"
+include-in-header:
+  text: |
+    <style>
+    /* Reading note: keep only two heading levels visible - the page
+       title (from the title block above) and the H2 sections below.
+       Quarto/Pandoc always emits a body-level H1 matching the title
+       when content starts at H2; hide that duplicate here. */
+    main#quarto-document-content > section.level1 > h1:first-child {
+      display: none;
+    }
+    </style>
+---
+
+> **Source:** [{{< meta source-title >}}]({{< meta source-url >}}) - {{< meta source-author >}}
+
+## The problem: vision models are trained on fixed label sets
+
+Every mainstream image classifier up to this point - AlexNet (2012), VGG, ResNet - is trained to predict one of a fixed, pre-enumerated set of classes: 1,000 ImageNet categories, decided in advance by whoever built the dataset. That has two consequences the paper takes aim at directly:
+
+- **The model can only ever say what it was told to say.** Add a new category and you need new labeled data and a retrain; the classifier has no notion of "dog" beyond an index into a 1,000-way softmax.
+- **Labeling is the bottleneck.** ImageNet's 1.28M images took enormous human annotation effort. Crowd-labeled datasets are, by construction, small relative to how much raw image+text data already exists on the internet.
+
+CLIP's premise: alt-text, captions, and other text that already comes paired with images on the web is a supervisory signal at least as rich as a label - and there is vastly more of it. If a model learns to connect images to the *free-form text* describing them instead of to a class index, the set of things it can recognize is no longer fixed at training time; it's whatever you can describe in words. That reframing is the paper's actual contribution - not a new encoder architecture (it uses existing ones), but a training objective and data scale that make natural language a viable substitute for hand-labeled supervision.
+
+## Two towers into one shared space
+
+CLIP is a **dual encoder**: one network turns an image into a vector, a separate network turns a text string into a vector, and both vectors are mapped into the same embedding space so they can be compared directly.
+
+```
+        image                                   text
+          │                                       │
+          ▼                                       ▼
+  ┌───────────────┐                     ┌───────────────────┐
+  │  image encoder │                     │   text encoder     │
+  │ (ResNet or ViT) │                     │ (GPT-2-style       │
+  │                 │                     │  Transformer)      │
+  └───────┬─────────┘                     └─────────┬──────────┘
+          │ linear projection                        │ linear projection
+          ▼                                          ▼
+     image embedding  ◄──── cosine similarity ────►  text embedding
+          (shared d-dimensional space, both L2-normalized)
+```
+
+Neither encoder is new. That is deliberate - CLIP is not proposing a better way to encode an image or a sentence, it's proposing a better *objective* to train existing encoders with, at a scale no one had tried before.
+
+### Image encoder: ResNet or ViT, with one shared change
+
+The paper trains and compares two families of image encoder, five ResNets and three Vision Transformers, eight models total:
+
+| Family | Variants | Notes |
+|---|---|---|
+| ResNet | RN50, RN101, then RN50x4, RN50x16, RN50x64 | The x4/x16/x64 models scale width, depth, *and* input resolution together, EfficientNet-style, to roughly 4x/16x/64x the compute of RN50 |
+| ViT | ViT-B/32, ViT-B/16, ViT-L/14 (+ a 336px fine-tune of ViT-L/14) | Patches-as-tokens, as in the original ViT |
+
+Both families get one shared change from their original papers: **global average pooling is replaced by attention pooling.** Instead of collapsing the final spatial feature map to a single vector by averaging, a single layer of transformer-style multi-head QKV attention is used, where the query is the mean-pooled image representation and the keys/values are the individual spatial locations. In other words, instead of *every* spatial location contributing equally to the final vector, the model learns which regions of the image matter for producing a good embedding - a learned pooling step instead of a fixed one. The ResNets also carry the [ResNet-D](https://arxiv.org/abs/1812.01187) stem/downsampling tweaks and anti-aliased blur pooling. ViT gets only a minor change: an extra layer norm on the combined patch + position embeddings before the first transformer block.
+
+The headline numbers reported throughout the paper (76.2% zero-shot ImageNet top-1) are for the largest model, **ViT-L/14@336px** - the base ViT-L/14 pretrained normally, then fine-tuned for one more epoch at a higher 336px resolution, the same [FixRes](https://arxiv.org/abs/1906.06423) trick used elsewhere to squeeze out extra accuracy cheaply near the end of training.
+
+### Text encoder: a GPT-2-shaped Transformer, used only as an encoder
+
+The text side is a standard decoder-style Transformer - literally the architecture from [Attention Is All You Need](attention-is-all-you-need.qmd), with the GPT-2 modifications. The base model is small relative to the image towers: 12 layers, 512-wide, 8 attention heads, 63M parameters. Text is lower-cased byte-pair-encoded with a 49,152-token vocabulary and capped at 76 tokens.
+
+Two details are worth being precise about:
+
+- **Pooling.** The input is bracketed with `[SOS]`/`[EOS]` tokens; the final-layer activation *at the `[EOS]` position* is taken as the text's representation, then layer-normalized and linearly projected into the shared embedding space. This is the same "pool one summary token" pattern BERT uses with `[CLS]` - just taken from the *last* position of a causal model instead of the first position of a bidirectional one, because the `[EOS]` position is the only one in a causally-masked model that has already attended to the entire sequence.
+- **It keeps the causal mask**, even though nothing here is being generated. The paper's stated reason is to leave the door open to initializing from a pretrained language model or adding a language-modeling auxiliary loss later - optionality, not necessity. It also means, unlike BERT, this text tower does *not* get to use bidirectional context; each token still only sees what came before it.
+- **It's deliberately under-scaled relative to the image tower.** When scaling up the RN50x4/x16/x64 series, only the text encoder's *width* is scaled to match, never its depth - the paper reports CLIP's performance is much less sensitive to text-encoder capacity than to image-encoder capacity, so the compute is spent where it pays off.
+
+::: {.callout-note}
+The projection heads are plain **linear** layers, not the small MLP projection heads popularized by SimCLR for self-supervised contrastive image learning. The paper tried the nonlinear version and found no benefit for the multi-modal case - a linear map from each encoder's native representation into the shared space is enough.
+:::
+
+## Relation to the encoders it borrows
+
+CLIP sits downstream of two separate lineages in computer vision, and it's worth being explicit about what it does and doesn't inherit from each:
+
+| Model | Contribution | What CLIP reuses |
+|---|---|---|
+| AlexNet (2012) | First deep CNN to win ImageNet decisively; established learned conv features beat hand-designed ones | Nothing directly - included here only as the reference point every later CNN, including ResNet, is measured against |
+| ResNet (2015) | Residual connections let CNNs train reliably at much greater depth | Used as-is (with ResNet-D + blur-pool tweaks) as one of two encoder options |
+| ViT (2020) | Treats an image as a sequence of patch embeddings and applies a standard Transformer encoder, no convolution at all | Used as-is, with one added layer norm, as the second encoder option |
+| Transformer / GPT-2 | Self-attention sequence model ([notes](attention-is-all-you-need.qmd)) | Used as-is as the text tower, causal-masked, pooled at `[EOS]` |
+
+The pattern is the same one BERT follows one layer up: BERT didn't invent a new architecture, it took the Transformer's existing encoder stack and found a training recipe (masked-token prediction at scale) that made it valuable. CLIP does this again, one level higher - it takes *existing, already-published* image and text encoders and finds a training recipe (contrastive image-text matching at 400M-pair scale) that makes the pairing valuable. In both cases the architectural contribution is nearly zero and the real contribution is the objective plus the data scale it's trained on.
+
+## The training objective: contrastive matching, not generation
+
+Given a batch of $N$ (image, text) pairs, CLIP does not try to generate a caption from an image, or an image from a caption - generation is comparatively slow and, the paper found in early experiments, less sample-efficient for this. Instead it solves a matching problem: of the $N \times N$ possible (image, text) pairings in the batch, only $N$ are real; the other $N^2 - N$ are mismatched. The model is trained to pull the $N$ real pairs' embeddings together and push the rest apart.
+
+Concretely: embed every image and every text in the batch, L2-normalize both sets, compute the full $N \times N$ cosine-similarity matrix, scale it by a learned temperature, and treat each row and each column as a softmax classification problem (row $i$: "which of the $N$ texts matches image $i$?"; column $j$: "which of the $N$ images matches text $j$?"). The loss is the symmetric cross-entropy over both directions:
+
+$$
+\mathcal{L} = \frac{1}{2N}\sum_{i=1}^{N}\Big[-\log\frac{\exp(\text{sim}(I_i, T_i)/\tau)}{\sum_{j=1}^{N}\exp(\text{sim}(I_i, T_j)/\tau)} \;-\; \log\frac{\exp(\text{sim}(I_i, T_i)/\tau)}{\sum_{j=1}^{N}\exp(\text{sim}(I_j, T_i)/\tau)}\Big]
+$$
+
+where $\text{sim}(\cdot,\cdot)$ is cosine similarity and $\tau$ is the temperature. $\tau$ is not a fixed hyperparameter - it's a learned, log-parameterized scalar (initialized at 0.07, clipped to avoid destabilizing training), so the model itself controls how sharply the softmax separates the real pair from the batch's negatives.
+
+This is the same InfoNCE-style contrastive loss used for self-supervised image representation learning (SimCLR, MoCo), except the two "views" being contrasted aren't two augmentations of the same image - they're an image and its paired text. The paper traces the lineage explicitly: the batch-construction trick originates as the multi-class N-pair loss in metric learning, was popularized as InfoNCE for contrastive representation learning, and was first adapted to (image, text) pairs by [ConVIRT](https://arxiv.org/abs/2010.00747) in medical imaging. **CLIP describes itself as "a simplified version of ConVIRT trained from scratch"** - the novelty over ConVIRT and earlier natural-language-supervision attempts ([VirTex](https://arxiv.org/abs/2006.06666), ICMLM) is almost entirely scale: those trained on one to two hundred thousand images; CLIP trains on 400 million pairs with a batch size of 32,768, so every single training step is itself a 32,768-way contrastive classification problem.
+
+::: {.callout-important}
+## No labels, and no generation - the whole batch is the supervision
+
+Nobody wrote "this is a golden retriever" as a label. The (image, text) pairs are naturally-occurring captions scraped from the web; the *matching structure of the batch itself* is the only supervisory signal, exactly the same trick masked and causal language modeling use on raw text - the data supervises itself; no separate labeling process is needed.
+:::
+
+### The data: WIT, 400M pairs, built to be broad rather than deep
+
+The paper constructs its own dataset, **WIT (WebImageText)**: 400 million (image, text) pairs, gathered by searching for images whose associated text contains one of 500,000 queries - every word occurring 100+ times in English Wikipedia, augmented with high-mutual-information bigrams, popular Wikipedia article titles, and WordNet synsets. Results are capped at 20,000 pairs per query to keep the class distribution roughly balanced. For scale context: MS-COCO and Visual Genome, the standard captioned datasets at the time, have on the order of 100,000 images each; WIT is roughly 4,000x larger, comparable in total word count to the WebText corpus GPT-2 was trained on.
+
+Training cost matched the data: the largest ResNet (RN50x64) trained for 18 days on 592 V100 GPUs; the largest ViT trained for 12 days on 256 V100s, using mixed precision, gradient checkpointing, and half-precision optimizer state to fit it. Neither encoder is initialized from ImageNet or a pretrained language model - everything, including the encoders, is trained from scratch, jointly, on this objective alone.
+
+## Zero-shot classification: the text encoder as a classifier generator
+
+This is the payoff the architecture and objective are built for. Once trained, CLIP can classify images into categories it never saw a single labeled example of, by turning the *text encoder* into a way of generating a linear classifier on demand.
+
+1. Take the class names for a new task (e.g. `["cat", "dog", "airplane", ...]`).
+2. Embed each one with the text encoder - typically wrapped in a template such as `"a photo of a {label}."`, not the bare word.
+3. Embed the image with the image encoder.
+4. Compute cosine similarity between the image embedding and every class-text embedding, scale by $\tau$, softmax - the class with highest similarity is the prediction.
+
+```
+["cat", "dog", "airplane", ...] ──text encoder──► class embeddings  (computed once, cached)
+                                                          │
+        new image ──image encoder──► image embedding ────┼──► cosine sim + softmax ──► prediction
+                                                          │
+                                               (no gradient update, no labels seen)
+```
+
+The paper's own framing: the text encoder acts as a **hypernetwork** - a network that generates the *weights* of another network (here, a linear classifier) from a different kind of input (a text description) rather than learning those weights directly from labeled examples. Every zero-shot task is, mechanically, "generate a classifier from its class names, then run it once."
+
+### Why the wording of the prompt matters
+
+Two problems show up as soon as you try feeding bare class names to the text encoder, both stemming from the fact that training data was full sentences and captions, not isolated words:
+
+- **Polysemy.** A bare word gives the text encoder no disambiguating context. ImageNet's "crane" is both the bird and the construction machine; Oxford-IIIT Pets' "boxer" is both a dog breed and an athlete. A template like `"a photo of a {label}, a type of pet."` resolves the ambiguity the word alone can't.
+- **Distribution gap.** Pretraining text is almost always a full sentence describing an image, rarely a single word in isolation. Wrapping the label in `"a photo of a {label}."` alone - the paper's default template - closes that gap enough to buy **+1.3% accuracy on ImageNet** for free.
+
+On top of the template, the paper **ensembles** multiple prompt variants (up to 80 for ImageNet, phrasing the same class differently) by averaging their text embeddings *before* the cosine-similarity step, not averaging separate predictions - so the extra cost is paid once, at classifier-construction time, and inference is exactly as cheap as using a single prompt. Ensembling adds another **+3.5%**; prompt engineering and ensembling together add close to **+5% on ImageNet**, and a comparable amount on average across the paper's 36-dataset eval suite - which the paper notes is roughly the gain you'd otherwise need 4x more pretraining compute to get, but here it's free.
+
+## How good is it, and where does it fail
+
+The headline result: zero-shot CLIP reaches **76.2% top-1 / 95% top-5 on ImageNet**, matching the original *supervised* ResNet-50 - without using any of ImageNet's 1.28M labeled training images. Against the only prior zero-shot attempt at this scale, Visual N-Grams, CLIP goes from 11.5% to 76.2% on ImageNet and from 72.4% to 98.4% on aYahoo (with the caveat, which the authors state themselves, that CLIP also used roughly 1000x more training compute). Across 30+ datasets, zero-shot CLIP is reported to match or beat a fully-supervised linear classifier trained on frozen ResNet-50 features on around half of them - a fixed-label-free model beating a model trained specifically on those labels.
+
+**Robustness is the more interesting number.** On a suite of natural distribution shifts of ImageNet (ImageNetV2, ImageNet-R, ImageNet-Sketch, ImageNet-A, ObjectNet), supervised ImageNet models typically lose a large share of their in-distribution accuracy - the paper reports drops as steep as 40% on some of these shifts for standard supervised models - while zero-shot CLIP closes as much as 75% of that gap. The paper's explanation is not that CLIP is a fundamentally more robust architecture; it's that a model *fit to ImageNet's specific training distribution* inevitably overfits to that distribution's idiosyncrasies, whereas a model that never trained on ImageNet at all has no such distribution to overfit to. Confirming this: fine-tuning CLIP on ImageNet itself raises in-distribution accuracy but gives little to no improvement on the shifted test sets - the robustness comes specifically from not having trained on labelled, task-specific data in the first place, and standard fine-tuning starts eroding it immediately.
+
+Where it breaks down, by the paper's own account:
+
+- **Fine-grained and abstract tasks.** Differentiating car models, flower species, or aircraft variants - categories that need visual detail finer than what a caption typically bothers to describe - and tasks like counting objects in an image, which natural captions rarely encode explicitly.
+- **Truly out-of-distribution imagery.** Handwritten-digit classification (MNIST) is a well-known embarrassing case: CLIP underperforms a simple logistic regression fit directly on raw pixels, because MNIST-style scanned digits look nothing like anything in web-scraped WIT.
+- **Compute and data efficiency remain unsolved.** Zero-shot CLIP doesn't reach the accuracy of the best supervised-pretrained models at the time on every benchmark, and getting there was estimated to need roughly another 1000x compute at the same scaling trend - so this is compute-hungry supervision-avoidance, not a free lunch.
+- **Measurable social bias.** A FairFace-based probe found meaningfully uneven misclassification into demographic-sensitive categories - crime- and non-human-related labels attached disproportionately to certain races, genders, and, particularly, younger age ranges - and the paper reports that simply adding an explicit "child" category to the label set substantially reduced the worst of the age-related mislabeling, which is itself a data point about how sensitive zero-shot behavior is to what's in the class list.
+
+## From CLIP to today: what it actually gets used for
+
+CLIP's real legacy isn't "a slightly better ImageNet classifier" - it's that the shared image-text embedding space it produces became a reusable component that other systems plug into, largely without retraining it:
+
+- **Guiding generative models.** [VQGAN-CLIP](https://arxiv.org/abs/2204.08583) optimizes an image (via a frozen VQGAN's latent codes) by gradient ascent on its CLIP-embedding similarity to a text prompt - CLIP supplies the "does this image match the text" signal, with no CLIP training involved at inference time. DALL-E 2 uses CLIP's *image* embedding space as the target for a diffusion prior conditioned on the *text* embedding, so text-to-image generation happens by predicting a plausible CLIP image embedding, then decoding it. Stable Diffusion conditions its denoising U-Net directly on CLIP's frozen text-encoder output.
+- **Vision backbones for multimodal LLMs.** LLaVA-style models bolt a small trainable projector onto a *frozen* CLIP ViT (typically ViT-L/14@336px) and feed the projected patch embeddings into a language model's input sequence - CLIP supplies the visual representation, the LLM never sees raw pixels.
+- **Retrieval and search**, unmodified: embed a corpus of images (or a corpus of anything with a caption) once, embed a text query at search time, and rank by cosine similarity. No classifier, no fine-tuning, no fixed label set - the same zero-shot mechanism from the paper, repurposed as a search index.
+- **Open reproduction and scale-up.** [OpenCLIP](https://github.com/mlfoundations/open_clip), trained by LAION on their own 2-billion-pair LAION-2B dataset, reproduced and then exceeded the original: a ViT-G/14 OpenCLIP model reached **80.1% zero-shot ImageNet top-1**, ahead of anything in the original paper, entirely with public data and public code.
+- **SigLIP (2023)** replaces the softmax-over-the-batch loss with an independent **sigmoid loss per pair** - each (image, text) pair is scored on its own as a binary "match / no match" problem instead of needing a global normalization across the whole batch. This decouples loss quality from batch size: SigLIP matches CLIP's original contrastive loss using an 32k batch where the softmax version needed roughly 98k to reach comparable performance, and it keeps working well at much smaller batch sizes too - a locked-image-tuning variant (SigLiT) reached 84.5% zero-shot ImageNet accuracy training on just 4 TPU chips in two days, which the original CLIP recipe's huge-batch requirement made impractical.
+
+## Fine-tuning CLIP today
+
+Because CLIP's zero-shot behavior is often the whole point, "fine-tuning" here means something more deliberate than the usual "just keep training" - naive full fine-tuning tends to buy in-distribution accuracy at the direct cost of the distribution-shift robustness the zero-shot model started with. In roughly increasing order of how much of the model is touched:
+
+| Approach | What's trained | Trade-off |
+|---|---|---|
+| **Zero-shot** | Nothing | No labeled data needed at all; accuracy capped by pretraining, and fine-grained/abstract tasks suffer |
+| **Linear probe** | A single linear layer on frozen embeddings | Cheap, hard to overfit on small data, keeps the backbone's robustness intact; the paper itself uses this as its main non-zero-shot evaluation |
+| **Prompt tuning (CoOp / CoCoOp)** | A handful of learnable continuous context vectors prepended to the text input; encoders stay frozen | Needs only a few labeled examples per class; CoOp's learned prompts can overfit to the training classes, CoCoOp fixes this by conditioning the prompt on each image so it generalizes better to unseen classes |
+| **Adapters (CLIP-Adapter / Tip-Adapter)** | A small residual MLP bolted onto frozen features | Similar cost profile to linear probing, slightly more capacity; Tip-Adapter needs no gradient training at all, just a cached key-value lookup over the few-shot examples |
+| **LoRA** | Low-rank update matrices injected into the attention projections of the image and/or text encoder, rest frozen | Adapts the encoders themselves (not just a head on top) at a fraction of full fine-tuning's memory and compute cost - typical setups use rank 8 adapters on the vision tower and keep the text tower fully frozen |
+| **Full fine-tuning** | Every weight | Highest achievable in-distribution accuracy, but measurably erodes out-of-distribution robustness unless corrected |
+
+For full fine-tuning specifically, [WiSE-FT](https://arxiv.org/abs/2109.01903) (Wortsman et al., 2021) is the standard fix for the robustness loss: fine-tune normally, then **linearly interpolate the fine-tuned weights back toward the original zero-shot weights** (weight-space ensembling, not prediction averaging). This recovers most of the out-of-distribution robustness the zero-shot model had while keeping most of the in-distribution accuracy gain from fine-tuning - a cheap, training-free correction applied after the fact.
+
+Which one to reach for is mostly a data-size and stakes question: zero-shot or a linear probe when you have little or no labeled data and want to keep the model's broad robustness; prompt tuning or adapters for small labeled sets where you can't afford to risk the pretrained representation; LoRA when you need to shift the visual representation itself toward a specific domain (satellite imagery, medical scans) on a moderate compute budget; full fine-tuning plus WiSE-FT only when you have enough in-domain data to justify the robustness trade-off and are willing to correct for it explicitly.
+
+## Takeaway
+
+CLIP's architecture is almost a non-event on purpose - a ResNet or a ViT, a GPT-2-shaped text Transformer, both borrowed wholesale, connected by two linear projections into a shared space. Exactly like BERT taking the Transformer's encoder stack and finding a pretraining recipe that made it valuable ([notes](attention-is-all-you-need.qmd)), CLIP's actual contribution is a training objective - large-batch contrastive matching between images and their naturally occurring captions - run at a scale (400M pairs, batch size 32,768) that turns "text describing an image" into supervision rich enough to replace hand-labeled class sets entirely. That's what makes zero-shot classification, and everything downstream of it (guiding diffusion models, serving as the frozen vision backbone for multimodal LLMs, powering embedding-based image search), possible without a task-specific dataset in sight. The field's response since has mostly been about making that recipe more accessible - OpenCLIP proving the recipe reproduces and scales further on open data, SigLIP removing the requirement for an enormous batch - and about fine-tuning it *carefully*: because so much of CLIP's value is in the robustness that comes from never having overfit to a specific label set, the dominant fine-tuning strategies (linear probes, prompt tuning, adapters, LoRA, WiSE-FT) are all, in one way or another, specifically designed to add task-specific accuracy without spending down that robustness.
