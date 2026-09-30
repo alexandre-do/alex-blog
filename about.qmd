@@ -24,4 +24,4 @@ I'm a **Data Science and Machine Learning Engineer** with 8+ years of experience
 
 I hold two Master's degrees in **Applied Mathematics** and **Data Science**, and I'm a graduate of **École polytechnique** and **ENSAE ParisTech** in France.
 
-I'm also **AWS certified**, with certifications in **Data Engineering** and **Generative AI Development – Professional**.
+I'm also **AWS certified**, with certifications in **Data Engineering** and **Generative AI Development Professional**.
