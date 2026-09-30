@@ -59,10 +59,10 @@ listing:
 <img src="images/certification_1.png" alt="Certification" style="height: 189px;">
 </a>
 <div style="display: flex; flex-direction: column; align-items: center;">
-<img src="images/certification_2.png" alt="Certification" style="height: 189px;">
-<small>In progress</small>
+<div data-iframe-width="150" data-iframe-height="270" data-share-badge-id="bd2fd655-645e-4a20-a80d-1903a22342ba" data-share-badge-host="https://www.credly.com"></div>
 </div>
 </div>
+<script type="text/javascript" async src="//cdn.credly.com/assets/utilities/embed.js"></script>
 ```
 
 ## Pinned Posts
