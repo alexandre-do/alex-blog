@@ -1,0 +1,356 @@
+---
+title: "vLLM in Practice: Why and How to Self-Host LLM Inference"
+date: "2026-01-15"
+description: "Why vLLM became the default open-source engine for serving LLMs, and a hands-on guide to running it in production as of January 2026 (v0.13): install, offline batching, the OpenAI-compatible server, structured outputs, tool calling, LoRA adapters, quantization, multi-GPU, Docker, and tuning."
+categories:
+    - LLM
+    - Inference
+    - vLLM
+---
+
+# vLLM in Practice: Why and How to Self-Host LLM Inference
+
+At some point every team running LLMs asks the same question: *we have a GPU (or ten), an open-weight model, and an API to expose. What do we actually run?*
+
+The naive answer is `model.generate()` from Hugging Face Transformers behind a FastAPI endpoint. It works for a demo and falls over the moment two users show up. The answer most teams land on in early 2026 is **vLLM**: an open-source inference and serving engine that started at UC Berkeley's Sky Computing Lab and is now a PyTorch Foundation project with hundreds of contributors per release.
+
+This post covers two things:
+
+1. **Why vLLM**: what problem it solves and why it is fast.
+2. **How to use it**: a practical guide based on the state of the project as of January 2026 (**vLLM v0.13.0**, released December 19, 2025).
+
+## Part 1: Why vLLM?
+
+### The real bottleneck is memory, not FLOPs
+
+LLM generation has two phases:
+
+- **Prefill**: process the whole prompt in one forward pass. This is compute-bound and GPUs are good at it.
+- **Decode**: generate one token at a time. Each step reads all model weights plus the cached keys and values (the **KV cache**) for every previous token, to produce one token per sequence. This is memory-bandwidth-bound.
+
+The only way to make decode efficient is to **batch many sequences together**, so one read of the weights serves many tokens. And the thing that limits batch size is how much KV cache you can fit in GPU memory.
+
+The KV cache is not small. For Llama 3.1 8B (32 layers, 8 KV heads, head dim 128, bf16):
+
+$$
+\text{KV bytes per token} = 2 \times 32 \times 8 \times 128 \times 2 = 131{,}072 \text{ B} \approx 128 \text{ KiB}
+$$
+
+So one 8K-token conversation holds about **1 GiB** of KV cache. On an 80 GB H100, after 16 GB of weights, you have room for roughly 60 such sequences, if you manage the memory well.
+
+### What naive serving gets wrong
+
+A simple server pre-allocates a contiguous KV buffer per request sized for the *maximum* possible length. Most requests are much shorter, so most of that memory is wasted (the original vLLM paper measured 60-80% waste in existing systems). It also batches statically: a batch starts together and finishes when the longest sequence finishes, so short requests sit idle while the GPU waits.
+
+### What vLLM does instead
+
+**PagedAttention.** vLLM splits the KV cache into fixed-size blocks (16 tokens by default) and maps each sequence's logical blocks to physical blocks through a block table, exactly like virtual memory pages in an OS. Memory is allocated on demand, fragmentation drops to near zero, and blocks can be shared between sequences.
+
+**Continuous batching.** The scheduler works at the iteration level. Every decode step, finished sequences leave the batch and new ones join. The GPU never waits on the slowest request.
+
+**Automatic prefix caching.** Because blocks are content-addressed, requests that share a prefix (the same system prompt, the same RAG documents, multi-turn chat history) reuse cached blocks instead of recomputing them. For agentic workloads with long, stable system prompts this is a large win on time-to-first-token.
+
+**Chunked prefill.** Long prompts are split into chunks and interleaved with decode steps, so a 30K-token prompt does not freeze token streaming for every other user.
+
+**The V1 engine.** In 2025 vLLM rewrote its core. V1 became the default in v0.8 and the old V0 engine was removed entirely in v0.11 (October 2025). V1 separates the API server and the engine core into different processes, runs the scheduler in a tight loop with prefix caching and chunked prefill always on, and uses `torch.compile` plus CUDA graphs by default. If you read a blog post from 2024 with flags like `--enable-chunked-prefill`, most of that tuning is now the default.
+
+### Why it became the default choice
+
+Raw speed is only part of it. The practical reasons teams pick vLLM:
+
+- **OpenAI-compatible API out of the box.** `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, and the newer `/v1/responses`. Any app written against the OpenAI SDK switches to your self-hosted model by changing `base_url`.
+- **Model coverage.** New open-weight architectures (Llama, Qwen3, Mistral, DeepSeek, gpt-oss, Gemma, multimodal models) usually land in vLLM on release day, often contributed by the model labs themselves.
+- **Hardware coverage.** NVIDIA (through Blackwell and GB300 as of v0.13), AMD ROCm, Intel XPU, Google TPU, AWS Neuron, and CPU backends.
+- **Production features.** Structured outputs, tool calling, multi-LoRA serving, quantization (FP8, AWQ, GPTQ, and more), tensor/pipeline/data/expert parallelism, speculative decoding, Prometheus metrics.
+- **Ecosystem.** It is the inference backend behind many managed services and RL training frameworks, so skills and configs transfer.
+
+### When *not* to use vLLM
+
+- **Laptop or single-user local use.** Ollama or llama.cpp are simpler and run well on Apple Silicon and CPUs with GGUF quantization. vLLM is built for throughput on server GPUs.
+- **You do not want to run GPUs.** A managed API (Bedrock, OpenAI, Anthropic) will be cheaper than an idle GPU. Self-hosting pays off with steady traffic, data residency constraints, or fine-tuned models.
+- **You need the last 10-20% on NVIDIA and can afford the build complexity.** TensorRT-LLM can edge ahead for a fixed model on fixed hardware, at the cost of engine compilation and less flexibility.
+- **Heavy structured or multi-call programs with shared prefixes.** SGLang is a strong alternative with very similar architecture. Benchmark both on your workload; neither wins everywhere.
+
+## Part 2: A Practical Guide (January 2026)
+
+Everything below targets **vLLM v0.13.0** on Linux with NVIDIA GPUs. That release ships with PyTorch 2.9 and CUDA 12.9 wheels. The API surface moves fast, so pin your version.
+
+### 1. Install
+
+vLLM recommends `uv`. The `--torch-backend=auto` flag picks the PyTorch build matching your installed CUDA driver:
+
+```bash
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install "vllm==0.13.0" --torch-backend=auto
+```
+
+Sanity check:
+
+```bash
+python -c "import vllm, torch; print(vllm.__version__, torch.__version__, torch.cuda.is_available())"
+```
+
+For gated models (Llama, Gemma), log in first with `hf auth login` or export `HF_TOKEN`.
+
+### 2. Offline batch inference
+
+If you have a dataset to process (evaluation, synthetic data, bulk summarization), you do not need a server. The `LLM` class takes a list of prompts and schedules them with the same continuous batching engine:
+
+```python
+from vllm import LLM, SamplingParams
+
+llm = LLM(
+    model="Qwen/Qwen3-8B",
+    max_model_len=16384,
+    gpu_memory_utilization=0.90,
+)
+
+params = SamplingParams(temperature=0.7, top_p=0.8, max_tokens=512)
+
+conversations = [
+    [{"role": "user", "content": f"Summarize this ticket in one sentence:\n{ticket}"}]
+    for ticket in tickets
+]
+
+outputs = llm.chat(conversations, params)
+
+for out in outputs:
+    print(out.outputs[0].text)
+```
+
+Pass the whole list in one call. Looping and calling `llm.chat` one prompt at a time throws away the batching that makes vLLM fast.
+
+### 3. The OpenAI-compatible server
+
+This is how most people run vLLM in production:
+
+```bash
+vllm serve Qwen/Qwen3-8B \
+  --served-model-name qwen3-8b \
+  --max-model-len 32768 \
+  --gpu-memory-utilization 0.90 \
+  --api-key "$VLLM_API_KEY" \
+  --port 8000
+```
+
+Then use any OpenAI client:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="<VLLM_API_KEY>")
+
+stream = client.chat.completions.create(
+    model="qwen3-8b",
+    messages=[{"role": "user", "content": "Explain PagedAttention in two sentences."}],
+    temperature=0.7,
+    stream=True,
+)
+
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="", flush=True)
+```
+
+The flags that matter most:
+
+| Flag | What it does | Guidance |
+|---|---|---|
+| `--max-model-len` | Max tokens (prompt + output) per sequence | Set it to what you actually need. The model's native 128K context reserves capacity you may never use. |
+| `--gpu-memory-utilization` | Fraction of GPU memory vLLM may use (weights + KV cache) | 0.90 is the default. Lower it if other processes share the GPU. |
+| `--max-num-seqs` | Max concurrent sequences per step | Raise for throughput, lower for per-request latency. |
+| `--max-num-batched-tokens` | Token budget per scheduler step | Higher favors prefill throughput, lower favors smooth decode latency. |
+| `--tensor-parallel-size` | Shard the model across N GPUs | Use when the model does not fit on one GPU. |
+| `--quantization` | Weight quantization method | Usually auto-detected from the checkpoint. |
+| `--kv-cache-dtype fp8` | Store KV cache in FP8 | Roughly doubles KV capacity on Hopper and Blackwell, small quality cost. |
+
+At startup, vLLM logs the number of KV cache blocks and the **maximum concurrency** for your `max-model-len`. Read that line. It tells you directly how many full-length requests fit in memory.
+
+### 4. Structured outputs
+
+For extraction and pipelines, you want JSON that always parses. vLLM supports the standard OpenAI `response_format` with a JSON schema, enforced at decode time by a grammar backend (xgrammar by default):
+
+```python
+from pydantic import BaseModel
+
+class Ticket(BaseModel):
+    category: str
+    priority: int
+    summary: str
+
+resp = client.chat.completions.create(
+    model="qwen3-8b",
+    messages=[{"role": "user", "content": f"Classify this ticket:\n{ticket_text}"}],
+    response_format={
+        "type": "json_schema",
+        "json_schema": {"name": "ticket", "schema": Ticket.model_json_schema()},
+    },
+)
+
+ticket = Ticket.model_validate_json(resp.choices[0].message.content)
+```
+
+If you have older code using `extra_body={"guided_json": ...}`, migrate it. The `guided_*` parameters were deprecated in favor of `structured_outputs` and are scheduled for removal.
+
+### 5. Tool calling
+
+Tool calling needs two things: the model must be trained for it, and vLLM must know how to parse its output format. For Qwen3, which uses the Hermes format:
+
+```bash
+vllm serve Qwen/Qwen3-8B \
+  --served-model-name qwen3-8b \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
+  --reasoning-parser qwen3
+```
+
+`--reasoning-parser` splits the model's `<think>` block into a separate `reasoning_content` field, so your app gets clean final answers. Other models use other parsers (`llama3_json`, `mistral`, `openai` for gpt-oss, and so on). Check the tool calling page of the docs for your model.
+
+```python
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a city",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+        },
+    },
+}]
+
+resp = client.chat.completions.create(
+    model="qwen3-8b",
+    messages=[{"role": "user", "content": "Do I need an umbrella in Vancouver today?"}],
+    tools=tools,
+)
+print(resp.choices[0].message.tool_calls)
+```
+
+This is what makes vLLM usable as the model backend for agent frameworks such as LangGraph or Strands, which only expect an OpenAI-compatible endpoint.
+
+### 6. Serving LoRA adapters
+
+If you fine-tuned adapters (as in my [LoRA fine-tuning post](lora-finetuning-8b.qmd)), you do not need one deployment per adapter. vLLM keeps the base model in memory and applies adapters per request:
+
+```bash
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+  --enable-lora \
+  --max-loras 4 \
+  --max-lora-rank 32 \
+  --lora-modules legal-style=./adapters/legal-style support-tone=./adapters/support-tone
+```
+
+Each adapter becomes its own model name:
+
+```python
+client.chat.completions.create(model="legal-style", messages=[...])
+client.chat.completions.create(model="meta-llama/Llama-3.1-8B-Instruct", messages=[...])
+```
+
+Requests for different adapters run in the same batch. `--max-loras` caps how many adapters are active on the GPU at once, and `--max-lora-rank` must be at least the largest rank you trained.
+
+### 7. Quantization: fit bigger models on smaller GPUs
+
+The simplest path is to serve a checkpoint that is already quantized. vLLM detects the format from the model config:
+
+```bash
+# AWQ 4-bit: a 32B model on a single 24-48 GB GPU
+vllm serve Qwen/Qwen3-32B-AWQ --max-model-len 16384
+
+# FP8 weights on Hopper/Blackwell: near-lossless, ~2x less weight memory
+vllm serve Qwen/Qwen3-32B-FP8
+```
+
+You can also quantize on the fly with `--quantization fp8` on an unquantized checkpoint. For producing your own quantized checkpoints, the vLLM project maintains `llm-compressor`.
+
+Rule of thumb: FP8 on modern GPUs is the default choice when it fits. Use 4-bit (AWQ, GPTQ) when memory is the hard constraint and validate quality on your own eval set.
+
+### 8. Multi-GPU
+
+When the model does not fit on one GPU, shard it with tensor parallelism:
+
+```bash
+# 70B in bf16 across 4 GPUs on one node
+vllm serve meta-llama/Llama-3.3-70B-Instruct --tensor-parallel-size 4
+```
+
+When the model does fit but you need more throughput, run replicas with data parallelism instead of sharding:
+
+```bash
+vllm serve Qwen/Qwen3-8B --data-parallel-size 4
+```
+
+Tensor parallelism adds communication on every layer, so it is the right tool for *capacity*, not for *throughput* on models that already fit. For large MoE models (DeepSeek, Qwen3 MoE, gpt-oss), add `--enable-expert-parallel`.
+
+### 9. Run it in Docker
+
+In production, use the official image and pin the tag:
+
+```bash
+docker run --gpus all \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  -e HF_TOKEN \
+  -p 8000:8000 \
+  --ipc=host \
+  vllm/vllm-openai:v0.13.0 \
+  --model Qwen/Qwen3-8B \
+  --max-model-len 32768
+```
+
+`--ipc=host` (or a large `--shm-size`) is required for tensor parallelism, which uses shared memory between workers. Mount the Hugging Face cache so restarts do not re-download weights.
+
+For Kubernetes, the project maintains a Helm chart and the `vllm-project/production-stack`, which adds a router with prefix-aware routing across replicas. Add a readiness probe on `GET /health` and allow a generous startup time: loading weights and capturing CUDA graphs takes from tens of seconds to several minutes on large models.
+
+### 10. Observe and benchmark
+
+The server exposes Prometheus metrics at `/metrics`. The ones worth a dashboard:
+
+- `vllm:num_requests_running` and `vllm:num_requests_waiting`: if waiting grows, you are at capacity.
+- `vllm:kv_cache_usage_perc`: close to 100% means requests get preempted.
+- `vllm:time_to_first_token_seconds` and `vllm:inter_token_latency_seconds`: the two latencies users feel.
+- `vllm:prefix_cache_hits` vs `vllm:prefix_cache_queries`: tells you whether your prompt layout benefits from caching.
+
+Before picking flags, benchmark against a running server with the built-in tool:
+
+```bash
+vllm bench serve \
+  --model Qwen/Qwen3-8B \
+  --dataset-name random \
+  --random-input-len 2048 \
+  --random-output-len 256 \
+  --num-prompts 500 \
+  --request-rate 10
+```
+
+It reports throughput plus TTFT and inter-token latency percentiles. Change one flag at a time and re-run.
+
+## A tuning checklist
+
+1. **Right-size `--max-model-len`.** It is the single biggest lever on concurrency.
+2. **Put stable content first in prompts.** System prompt, tool definitions, and shared documents at the start, user-specific content at the end. That is what makes prefix caching hit.
+3. **Try `--kv-cache-dtype fp8`** if KV usage is your bottleneck.
+4. **Prefer data parallelism over tensor parallelism** when the model fits on one GPU.
+5. **Quantize weights to FP8** on Hopper or Blackwell before buying more GPUs.
+6. **Measure P50 and P99 TTFT under realistic load**, not single-request latency.
+
+## Common pitfalls
+
+- **CUDA out of memory at startup.** `--max-model-len` is too large for the remaining memory, or another process holds GPU memory. Lower one of `--max-model-len` or `--gpu-memory-utilization`.
+- **Slow first requests.** Expected: `torch.compile` and CUDA graph capture happen at startup and are cached under `~/.cache/vllm`. Persist that directory between container restarts. Use `--enforce-eager` only for debugging, it disables CUDA graphs and costs throughput.
+- **Different outputs from Transformers.** vLLM uses the model's `generation_config.json` defaults (temperature, top_p) unless you override them. Set sampling parameters explicitly when comparing.
+- **Upgrading breaks flags.** Releases come roughly every two to three weeks and deprecated options do get removed (for example, v0.13 replaced the `VLLM_ATTENTION_BACKEND` environment variable with `--attention-backend`). Pin the version, read the release notes, and re-run your benchmark on upgrade.
+
+## Takeaway
+
+vLLM's core idea is simple: decode is memory-bound, so manage KV cache memory like an operating system manages RAM and keep the GPU batch full every step. Everything else (prefix caching, chunked prefill, the V1 engine) builds on that. What made it the default is the packaging around that idea: one command gives you an OpenAI-compatible server for almost any open-weight model, with structured outputs, tool calling, LoRA, and quantization included.
+
+If you are self-hosting LLMs in 2026, start with `vllm serve`, set `--max-model-len` deliberately, watch the KV cache metrics, and benchmark before you tune.
+
+## References
+
+- Kwon et al., [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180), SOSP 2023
+- [vLLM documentation](https://docs.vllm.ai/)
+- [vLLM v0.13.0 release notes](https://github.com/vllm-project/vllm/releases/tag/v0.13.0)
+- [vLLM V1 engine announcement](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html)
