@@ -11,7 +11,7 @@ categories:
 
 # LoRA Fine-Tuning Llama 3 8B for Legislative-Style Summaries
 
-In the legal and legislative domain, a general-purpose LLM already summarizes correctly - it gets the facts, the arguments, the decisions. What it doesn't do out of the box is write like a rapporteur: the specific register, formulas, and structure of an official report (for example, the way a French Senate committee writes a *compte rendu* from the verbatim of a hearing). That's a style gap, not a knowledge gap, which makes it a good fit for a lightweight LoRA adapter rather than a full fine-tune.
+In the legal and legislative domain, a general-purpose LLM already summarizes correctly: it gets the facts, the arguments, the decisions. What it doesn't do out of the box is write like a rapporteur, with the specific register, formulas, and structure of an official report (for example, the way a French Senate committee writes a *compte rendu* from the verbatim of a hearing). That's a style gap, not a knowledge gap, which makes it a good fit for a lightweight LoRA adapter rather than a full fine-tune.
 
 ## How LoRA Works
 
@@ -29,9 +29,9 @@ This structure explains why LoRA is a good match for *style* transfer specifical
 audio verbatim  -->  ASR transcript  -->  LoRA-adapted Llama 3 8B  -->  legislative-style summary
 ```
 
-1. **Speech-to-text** - transcribe the hearing/debate audio with Whisper.
-2. **Instruction fine-tuning** - adapt Llama 3 8B with LoRA on pairs of (raw transcript -> official-style summary) so it reproduces the target register.
-3. **Inference** - feed new verbatims through ASR then the adapted model to draft a summary in that same style.
+1. **Speech-to-text:** transcribe the hearing/debate audio with Whisper.
+2. **Instruction fine-tuning:** adapt Llama 3 8B with LoRA on pairs of (raw transcript -> official-style summary) so it reproduces the target register.
+3. **Inference:** feed new verbatims through ASR then the adapted model to draft a summary in that same style.
 
 ## Step 1: Transcribing the Audio
 
@@ -58,7 +58,7 @@ Forcing the language avoids Whisper misdetecting short or noisy segments. Keep t
 
 ## Step 2: Building the Instruction Dataset
 
-The base model already knows the legal vocabulary; what it needs are examples of *verbatim in, formal report out*. Pair each transcript with the corresponding official summary (published compte-rendu) and wrap them in a consistent instruction format:
+The base model already knows the legal vocabulary; what it needs are examples of *verbatim in, formal report out*. Pair each transcript with the corresponding official summary (published compte rendu) and wrap them in a consistent instruction format:
 
 ```json
 {
@@ -197,11 +197,11 @@ Two axes matter, and they don't move together:
 - **Content fidelity:** ROUGE, or BERTScore with a multilingual backbone (the default English model is meaningless on French), against the reference report checks that facts and decisions weren't dropped or invented.
 - **Style adherence:** automatic metrics don't capture register. Score a held-out set with an LLM-as-judge prompt asking specifically whether the output matches the formal legislative tone, or do a manual side-by-side against the base model's (un-adapted) summary.
 
-A model can score well on ROUGE while still reading like a generic AI summary - that gap is exactly what the LoRA adapter is there to close, so don't skip the qualitative pass.
+A model can score well on ROUGE while still reading like a generic AI summary. That gap is exactly what the LoRA adapter is there to close, so don't skip the qualitative pass.
 
 ## Deployment
 
-Training produces an adapter, not a deployable model - a small set of A/B matrices that only make sense layered on top of the frozen base weights. There are two ways to ship that, and the right one depends on whether you're serving one report style or several.
+Training produces an adapter: a small set of A/B matrices that only make sense layered on top of the frozen base weights. There are two ways to ship that, and the right one depends on whether you're serving one report style or several.
 
 ### Merge for a Single Artifact
 
@@ -223,7 +223,7 @@ Load the base in bf16 for merging, not in the 4-bit config used for training. Wi
 
 ### Serve Unmerged, if You Have More Than One Style
 
-A legislative office rarely needs just one report format - a committee hearing, a plenary debate, and an administrative audit each call for a different adapter over the *same* base model. Both major serving stacks let you keep the base weights loaded once and hot-swap adapters per request instead of duplicating 8B of weights per style:
+A legislative office rarely needs just one report format. A committee hearing, a plenary debate, and an administrative audit each call for a different adapter over the *same* base model. Both major serving stacks let you keep the base weights loaded once and hot-swap adapters per request instead of duplicating 8B of weights per style:
 
 - **vLLM:** start the server with `--enable-lora` and register each adapter via `--lora-modules`, then pick one per request with the `model` field in the API call. vLLM caps adapter rank at 16 by default, so set `--max-lora-rank` to your highest adapter rank or the r=32 adapter above won't load. Adapters can also be added or removed at runtime by setting `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` ([vLLM LoRA docs](https://docs.vllm.ai/en/latest/features/lora/)).
 
@@ -234,7 +234,7 @@ A legislative office rarely needs just one report format - a committee hearing, 
     --lora-modules senate-report=./llama3-8b-legislative-lora audit-report=./llama3-8b-audit-lora
   ```
 
-- **Hugging Face Text Generation Inference (TGI)** - pass `--lora-adapters` (or the `LORA_ADAPTERS` env var) at startup with a comma-separated list of adapter repos or local paths, then select one per call with `adapter_id` in the request payload ([TGI LoRA docs](https://huggingface.co/docs/text-generation-inference/conceptual/lora)).
+- **Hugging Face Text Generation Inference (TGI):** pass `--lora-adapters` (or the `LORA_ADAPTERS` env var) at startup with a comma-separated list of adapter repos or local paths, then select one per call with `adapter_id` in the request payload ([TGI LoRA docs](https://huggingface.co/docs/text-generation-inference/conceptual/lora)).
 
   ```bash
   docker run --gpus all -p 8080:80 -v $PWD/data:/data \
@@ -245,7 +245,7 @@ A legislative office rarely needs just one report format - a committee hearing, 
 
 ### Quantizing for Constrained Hardware
 
-Legal and legislative bodies often can't push transcripts to a third-party API and don't have a rack of A100s either, so quantizing the merged model to fit a single GPU - or a CPU - is usually part of the deployment, not an afterthought:
+Legal and legislative bodies often can't push transcripts to a third-party API and don't have a rack of A100s either, so quantizing the merged model to fit a single GPU (or a CPU) belongs in the deployment plan from day one:
 
 - **GPTQ/AWQ for GPU serving:** both are well supported through vLLM and `transformers`. Quantize with [AutoAWQ](https://github.com/casper-hansen/AutoAWQ) for AWQ or [GPTQModel](https://github.com/ModelCloud/GPTQModel) for GPTQ. Both produce a quantized checkpoint vLLM can load directly.
 
@@ -264,4 +264,4 @@ Legal and legislative bodies often can't push transcripts to a third-party API a
 
 ## A Note on Confidentiality
 
-Public hearings (like Senate committee sessions) are fine to use as-is. For anything from private legal practice - client meetings, depositions, internal audits - redact or anonymize personal data in the transcripts *before* they enter the training set, not after. An adapter trained on unredacted verbatims can reproduce fragments of them at inference time.
+Public hearings (like Senate committee sessions) are fine to use as-is. For anything from private legal practice (client meetings, depositions, internal audits), redact or anonymize personal data in the transcripts before they enter the training set. An adapter trained on unredacted verbatims can reproduce fragments of them at inference time.
