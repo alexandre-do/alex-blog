@@ -45,11 +45,16 @@ asr = pipeline(
     device="cuda",
 )
 
-result = asr("hearing_2025_01_10.mp3", return_timestamps=True)
+result = asr(
+    "hearing_2025_01_10.mp3",
+    return_timestamps=True,
+    generate_kwargs={"language": "french"},
+)
 transcript = result["text"]
+chunks = result["chunks"]  # [{"timestamp": (start, end), "text": ...}]
 ```
 
-For long hearings, keep the timestamped chunks - they make it easier to align the transcript against the published report later when building the training set.
+Forcing the language avoids Whisper misdetecting short or noisy segments. Keep the timestamped chunks too. They make it much easier to align the transcript against the published report when building the training set.
 
 ## Step 2: Building the Instruction Dataset
 
@@ -63,10 +68,16 @@ The base model already knows the legal vocabulary; what it needs are examples of
 }
 ```
 
-A few hundred well-aligned pairs are usually enough to shift the register - this is a style-transfer task, not a task requiring the model to learn new facts, so it doesn't need Alpaca-scale volume.
+A whole hearing runs far past Llama 3's 8K-token context (an hour of speech is easily 10k+ tokens), so don't pair full transcripts with full reports. Split each transcript into agenda items using the Whisper timestamps and pair each chunk with the matching section of the compte rendu, so every example fits in the 2048-token training window. If you'd rather work on longer spans, Llama 3.1 8B Instruct is a drop-in replacement with a 128K context and official French support.
+
+Since the model only needs to learn a register, it doesn't need Alpaca-scale volume. A few hundred well-aligned pairs is a reasonable starting point.
 
 ```python
 from datasets import load_dataset
+from transformers import AutoTokenizer
+
+model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 dataset = load_dataset("json", data_files="legislative_summaries.jsonl", split="train")
 
@@ -75,12 +86,14 @@ def format_example(example):
         "text": (
             f"### Instruction:\n{example['instruction']}\n\n"
             f"### Transcript:\n{example['input']}\n\n"
-            f"### Report:\n{example['output']}"
+            f"### Report:\n{example['output']}{tokenizer.eos_token}"
         )
     }
 
 dataset = dataset.map(format_example)
 ```
+
+Two details here. The EOS token at the end matters: the trainer doesn't append one to the `text` field, and without it the model never learns where a report stops, so at inference it rambles until `max_new_tokens`. And I use a plain Alpaca-style template instead of the Llama 3 chat template so the same prompt works through the `/completions` endpoint in vLLM and `/generate` in TGI. If you serve through a chat endpoint, format the training data with `tokenizer.apply_chat_template` instead.
 
 ## Step 3: Loading Llama 3 8B in 4-bit
 
@@ -88,9 +101,7 @@ QLoRA keeps this trainable on a single consumer/prosumer GPU by quantizing the f
 
 ```python
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
@@ -99,7 +110,6 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=True,
 )
 
-tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
     quantization_config=bnb_config,
@@ -170,15 +180,15 @@ model = PeftModel.from_pretrained(base_model, "./llama3-8b-legislative-lora")
 prompt = (
     "### Instruction:\nRédige un compte rendu de séance dans le style d'un rapport "
     "sénatorial à partir de la transcription suivante.\n\n"
-    f"### Transcript:\n{transcript}\n\n### Report:\n"
+    f"### Transcript:\n{transcript_chunk}\n\n### Report:\n"
 )
 
 inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-output = model.generate(**inputs, max_new_tokens=512, temperature=0.3)
-print(tokenizer.decode(output[0], skip_special_tokens=True))
+output = model.generate(**inputs, max_new_tokens=512, do_sample=True, temperature=0.3)
+print(tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
 ```
 
-Low temperature matters here - a legislative report is a register with little room for creative variation, and sampling too loosely reintroduces the generic-summary tone the adapter is meant to remove.
+As in training, `transcript_chunk` is one agenda item, not the whole hearing. Slicing off the prompt tokens before decoding prints only the generated report. Low temperature matters here. A legislative report is a register with little room for creative variation, and sampling too loosely reintroduces the generic-summary tone the adapter is meant to remove.
 
 ## Evaluation
 
@@ -215,11 +225,12 @@ Merging a model that was loaded in 4-bit dequantizes it back to full precision f
 
 A legislative office rarely needs just one report format - a committee hearing, a plenary debate, and an administrative audit each call for a different adapter over the *same* base model. Both major serving stacks let you keep the base weights loaded once and hot-swap adapters per request instead of duplicating 8B of weights per style:
 
-- **vLLM** - start the server with `--enable-lora` and register each adapter via `--lora-modules`, then pick one per request with the `model` field in the API call. Adapters can also be added or removed at runtime by setting `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` ([vLLM LoRA docs](https://docs.vllm.ai/en/latest/features/lora/)).
+- **vLLM:** start the server with `--enable-lora` and register each adapter via `--lora-modules`, then pick one per request with the `model` field in the API call. vLLM caps adapter rank at 16 by default, so set `--max-lora-rank` to your highest adapter rank or the r=32 adapter above won't load. Adapters can also be added or removed at runtime by setting `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` ([vLLM LoRA docs](https://docs.vllm.ai/en/latest/features/lora/)).
 
   ```bash
   vllm serve meta-llama/Meta-Llama-3-8B-Instruct \
     --enable-lora \
+    --max-lora-rank 32 \
     --lora-modules senate-report=./llama3-8b-legislative-lora audit-report=./llama3-8b-audit-lora
   ```
 
