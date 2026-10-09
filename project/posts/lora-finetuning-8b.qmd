@@ -15,13 +15,13 @@ In the legal and legislative domain, a general-purpose LLM already summarizes co
 
 ## How LoRA Works
 
-Full fine-tuning updates every weight matrix $W \in \mathbb{R}^{d \times k}$ in the model - for an 8B model that's 8 billion optimizer states, gradients, and activations to hold in memory. LoRA freezes $W$ entirely and instead learns the *update* to it, $\Delta W$, as a low-rank decomposition:
+Full fine-tuning updates every weight matrix $W \in \mathbb{R}^{d \times k}$ in the model. For an 8B model trained with Adam in mixed precision, that's roughly 16 bytes per parameter (weights, gradients, two optimizer states), about 128 GB before you even count activations. LoRA ([Hu et al., 2021](https://arxiv.org/abs/2106.09685)) freezes $W$ entirely and instead learns the *update* to it, $\Delta W$, as a low-rank decomposition:
 
-$$W' = W + \Delta W = W + BA, \quad B \in \mathbb{R}^{d \times r},\ A \in \mathbb{R}^{r \times k},\ r \ll \min(d, k)$$
+$$W' = W + \frac{\alpha}{r} BA, \quad B \in \mathbb{R}^{d \times r},\ A \in \mathbb{R}^{r \times k},\ r \ll \min(d, k)$$
 
-$A$ is initialized from a random Gaussian and $B$ at zero, so training starts as a no-op ($\Delta W = 0$) and only perturbs the frozen model as $A$ and $B$ learn. The rank $r$ (typically 8-64) controls capacity: for a $4096 \times 4096$ projection matrix, full fine-tuning trains ~16.8M parameters, while LoRA at $r=32$ trains $2 \times 4096 \times 32 \approx 262$K - about 1.5% of that, per matrix, and it compounds across every projection in every layer you target. Because $W$ is untouched, the base checkpoint stays shared and reusable, and at inference time $B$ and $A$ are simply added into $W$ (or applied as a side path), adding negligible latency.
+$A$ is initialized from a random Gaussian and $B$ at zero, so training starts as a no-op ($\Delta W = 0$) and only perturbs the frozen model as $A$ and $B$ learn. The rank $r$ (typically 8-64) controls capacity, and $\alpha$ scales the update. For a $4096 \times 4096$ projection matrix, full fine-tuning trains ~16.8M parameters, while LoRA at $r=32$ trains $2 \times 4096 \times 32 \approx 262$K, about 1.6% of that. Across all seven projections in Llama 3 8B's 32 layers (the K/V projections are smaller because of grouped-query attention, the MLP ones larger), $r=32$ comes to ~84M trainable parameters, roughly 1% of the model. That's the number `print_trainable_parameters()` should report in Step 4. Because $W$ is untouched, the base checkpoint stays shared and reusable, and at inference time $BA$ is simply added into $W$ (or applied as a side path), adding negligible latency.
 
-This structure explains why LoRA is a good match for *style* transfer specifically: the pretrained model's factual and linguistic knowledge lives in $W$ and is left alone, while $\Delta W$ only needs enough capacity to bias the output distribution toward a different register. Trying to teach genuinely new facts through a rank-32 update on a frozen model is a much weaker signal than trying to shift phrasing and structure - which is exactly the task here.
+This structure explains why LoRA is a good match for *style* transfer specifically. The pretrained model's factual and linguistic knowledge lives in $W$ and is left alone, while $\Delta W$ only needs enough capacity to bias the output distribution toward a different register. Teaching genuinely new facts through a rank-32 update on a frozen model is a much weaker signal than shifting phrasing and structure ([Biderman et al., 2024](https://arxiv.org/abs/2405.09673) found LoRA "learns less and forgets less" than full fine-tuning), and shifting phrasing is exactly the task here.
 
 ## The Pipeline
 
@@ -97,7 +97,7 @@ Two details here. The EOS token at the end matters: the trainer doesn't append o
 
 ## Step 3: Loading Llama 3 8B in 4-bit
 
-QLoRA keeps this trainable on a single consumer/prosumer GPU by quantizing the frozen base model to 4-bit and training only the adapters in higher precision.
+QLoRA ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314)) keeps this trainable on a single consumer/prosumer GPU by quantizing the frozen base model to 4-bit and training only the adapters in higher precision.
 
 ```python
 import torch
@@ -119,7 +119,7 @@ model = AutoModelForCausalLM.from_pretrained(
 
 ## Step 4: LoRA Configuration
 
-Style transfer benefits from adapting both attention and MLP projections, not just `q_proj`/`v_proj` - the report's phrasing patterns live in the feed-forward layers too.
+Adapt all linear layers, not just `q_proj`/`v_proj`. The QLoRA paper found that targeting every linear layer was needed to match full fine-tuning quality. With `r=32` and `lora_alpha=64` the update is scaled by 2. Keeping alpha at 2r is a common convention that lets you change the rank without retuning the learning rate much.
 
 ```python
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
@@ -194,8 +194,8 @@ As in training, `transcript_chunk` is one agenda item, not the whole hearing. Sl
 
 Two axes matter, and they don't move together:
 
-- **Content fidelity** - ROUGE or BERTScore against the reference report checks that facts and decisions weren't dropped or invented.
-- **Style adherence** - automatic metrics don't capture register. Score a held-out set with an LLM-as-judge prompt asking specifically whether the output matches the formal legislative tone, or do a manual side-by-side against the base model's (un-adapted) summary.
+- **Content fidelity:** ROUGE, or BERTScore with a multilingual backbone (the default English model is meaningless on French), against the reference report checks that facts and decisions weren't dropped or invented.
+- **Style adherence:** automatic metrics don't capture register. Score a held-out set with an LLM-as-judge prompt asking specifically whether the output matches the formal legislative tone, or do a manual side-by-side against the base model's (un-adapted) summary.
 
 A model can score well on ROUGE while still reading like a generic AI summary - that gap is exactly what the LoRA adapter is there to close, so don't skip the qualitative pass.
 
@@ -205,7 +205,7 @@ Training produces an adapter, not a deployable model - a small set of A/B matric
 
 ### Merge for a Single Artifact
 
-If there's only one adapter and it's always on, merge it into the base weights with PEFT's `merge_and_unload()` and deploy the result like any standard `transformers` model - no PEFT dependency needed at inference time, and it drops straight into any serving stack (vLLM, TGI, `transformers.generate`).
+If there's only one adapter and it's always on, merge it into the base weights with PEFT's [`merge_and_unload()`](https://huggingface.co/docs/peft/en/developer_guides/lora#merge-lora-weights-into-the-base-model) and deploy the result like any standard `transformers` model. No PEFT dependency is needed at inference time, and it drops straight into any serving stack (vLLM, TGI, `transformers.generate`).
 
 ```python
 from peft import PeftModel
@@ -219,7 +219,7 @@ merged_model.save_pretrained("./llama3-8b-legislative-merged", safe_serializatio
 tokenizer.save_pretrained("./llama3-8b-legislative-merged")
 ```
 
-Merging a model that was loaded in 4-bit dequantizes it back to full precision first, so cast to `bfloat16` explicitly as above - otherwise the saved checkpoint balloons to roughly 4x the size you'd expect ([PEFT merging guide](https://huggingface.co/docs/peft/en/developer_guides/lora#merge-lora-weights-into-the-base-model)).
+Load the base in bf16 for merging, not in the 4-bit config used for training. Without an explicit `torch_dtype`, `transformers` loads Llama in fp32 and the merged checkpoint doubles to ~32 GB. Also keep in mind that the adapter was trained against the NF4-quantized base, so the merged bf16 model is not bit-identical to what you evaluated. Re-run the evaluation on the merged checkpoint.
 
 ### Serve Unmerged, if You Have More Than One Style
 
@@ -247,8 +247,11 @@ A legislative office rarely needs just one report format - a committee hearing, 
 
 Legal and legislative bodies often can't push transcripts to a third-party API and don't have a rack of A100s either, so quantizing the merged model to fit a single GPU - or a CPU - is usually part of the deployment, not an afterthought:
 
-- **GPTQ/AWQ for GPU serving** - both remain well supported through vLLM and `transformers`, but the tooling moved: AutoAWQ was archived in May 2025 and AutoGPTQ is likewise unmaintained, so quantize with their successors instead - [`llm-compressor`](https://github.com/vllm-project/llm-compressor) for AWQ and [GPTQModel](https://github.com/ModelCloud/GPTQModel) for GPTQ. Both produce a quantized checkpoint vLLM can load directly.
-- **GGUF for CPU/edge** - for on-prem deployment with no GPU at all, convert the merged model with `llama.cpp` and run it through `llama-cpp-python` or Ollama:
+- **GPTQ/AWQ for GPU serving:** both are well supported through vLLM and `transformers`. Quantize with [AutoAWQ](https://github.com/casper-hansen/AutoAWQ) for AWQ or [GPTQModel](https://github.com/ModelCloud/GPTQModel) for GPTQ. Both produce a quantized checkpoint vLLM can load directly.
+
+  > **Update (2025):** AutoAWQ was archived in May 2025 and its AWQ implementation moved into [`llm-compressor`](https://github.com/vllm-project/llm-compressor). Use that for AWQ now.
+
+- **GGUF for CPU/edge:** for on-prem deployment with no GPU at all, convert the merged model with `llama.cpp` and run it through `llama-cpp-python` or Ollama:
 
   ```bash
   python convert_hf_to_gguf.py ./llama3-8b-legislative-merged \
@@ -257,7 +260,7 @@ Legal and legislative bodies often can't push transcripts to a third-party API a
   ./llama-quantize legislative-f16.gguf legislative-Q4_K_M.gguf Q4_K_M
   ```
 
-  `Q4_K_M` (4-bit, mixed-precision blockwise quantization) is the usual starting point for an 8B model - it keeps quality close to fp16 while cutting memory roughly 4x ([llama.cpp quantize docs](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md)). Always re-run the style-adherence evaluation from the previous section on the quantized checkpoint - 4-bit quantization tends to preserve content better than it preserves register.
+  `Q4_K_M` (4-bit, mixed-precision blockwise quantization) is the usual starting point for an 8B model. It keeps quality close to fp16 at about 4.9 bits per weight, roughly 4.6 GB instead of 15 GB ([llama.cpp quantize docs](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md)). Always re-run the style-adherence evaluation from the previous section on the quantized checkpoint, since quantization can erode the subtle register shift the adapter learned even when content survives.
 
 ## A Note on Confidentiality
 
