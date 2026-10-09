@@ -1,0 +1,153 @@
+---
+title: "PagedAttention: Virtual Memory for the KV Cache"
+date: "2023-09-12"
+description: "Notes on Kwon et al. (SOSP 2023) - why LLM serving throughput is bounded by KV cache memory, how existing systems waste 60-80% of it, and how PagedAttention borrows paging from operating systems to get near-zero waste, cheap sharing across sequences, and 2-4x higher throughput in vLLM."
+categories:
+    - LLM
+    - Inference
+    - Systems
+    - Research
+source-title: "Efficient Memory Management for Large Language Model Serving with PagedAttention"
+source-url: "https://arxiv.org/abs/2309.06180"
+source-author: "Kwon, Li, Zhuang, Sheng, Zheng, Yu, Gonzalez, Zhang, Stoica - UC Berkeley / Stanford / UC San Diego, SOSP 2023"
+include-in-header:
+  text: |
+    <style>
+    /* Reading note: keep only two heading levels visible - the page
+       title (from the title block above) and the H2 sections below.
+       Quarto/Pandoc always emits a body-level H1 matching the title
+       when content starts at H2; hide that duplicate here. */
+    main#quarto-document-content > section.level1 > h1:first-child {
+      display: none;
+    }
+    </style>
+---
+
+> **Source:** [{{< meta source-title >}}]({{< meta source-url >}}) - {{< meta source-author >}}
+
+## The problem: serving throughput is memory-bound
+
+Autoregressive decoding generates one token per sequence per forward pass. Each pass reads every model weight from GPU memory to do very little arithmetic, so a single sequence leaves the GPU almost idle. The only way to use the hardware well is to **batch many sequences together**, so one read of the weights serves many tokens.
+
+What limits batch size is not compute but memory, specifically the **KV cache**: the keys and values of every previous token, kept around so attention does not recompute them. The paper's worked example for OPT-13B:
+
+$$
+\underbrace{2}_{K,\,V} \times \underbrace{5120}_{\text{hidden}} \times \underbrace{40}_{\text{layers}} \times \underbrace{2}_{\text{bytes (FP16)}} = 800\ \text{KB per token}
+$$
+
+At the model's 2048-token limit, one request can need **1.6 GB** of KV cache. On a 40 GB A100 serving a 13B model, about 65% of memory goes to the weights (26 GB) and roughly 30% to the KV cache. That 30% decides how many requests run concurrently, and therefore the throughput.
+
+The paper also makes a forward-looking point that aged well: GPU compute grows faster than GPU memory (A100 to H100 more than doubled FLOPS while staying at 80 GB), so memory will become an increasingly significant bottleneck.
+
+## How existing systems wasted that memory
+
+The KV cache has awkward properties: it grows and shrinks dynamically, and its final length is unknown when the request arrives. Systems at the time (FasterTransformer, Orca) stored each request's KV cache in a **contiguous** chunk, because deep learning frameworks and kernels expect contiguous tensors. To be safe, they pre-allocated a chunk sized for the *maximum* possible length.
+
+That produces three kinds of waste:
+
+```
+one request's pre-allocated contiguous chunk (max_len slots)
+┌──────────────┬────────────────┬──────────────────────────────┐
+│ prompt + out │   reserved     │   internal fragmentation     │ ... gap ... next request
+│ (used now)   │ (future tokens)│ (never used: request ends    │ (external fragmentation
+│              │                │  before max_len)             │  from the allocator)
+└──────────────┴────────────────┴──────────────────────────────┘
+```
+
+- **Reserved slots**: space for tokens that will eventually be generated, but held idle for the whole request.
+- **Internal fragmentation**: slots past the actual output length that are never used at all.
+- **External fragmentation**: gaps between chunks left by the memory allocator (e.g. a buddy allocator).
+
+The paper's profiling shows that only **20.4%-38.2%** of KV cache memory in existing systems held actual token states. vLLM reaches **96.3%**.
+
+Contiguous storage also blocks **sharing**. Parallel sampling (n completions from one prompt) and beam search naturally share prefix tokens, but with one contiguous buffer per sequence, each copy of the prompt's KV cache is duplicated.
+
+## The idea: page the KV cache like an OS pages memory
+
+The core analogy is clean and is the paper's main contribution:
+
+| OS virtual memory | PagedAttention / vLLM |
+|---|---|
+| Process | Request (sequence) |
+| Page | KV block (fixed number of tokens) |
+| Byte | Token |
+| Page table | Block table |
+| Demand paging | Allocate a new block only when the last one fills |
+| Copy-on-write for forked processes | Copy-on-write for forked sequences (sampling, beam search) |
+| Swap to disk | Swap blocks to CPU RAM |
+
+The KV cache of each sequence is split into **blocks** of $B$ tokens (16 by default). A sequence sees *logical* blocks laid out contiguously; a **block table** maps them to *physical* blocks anywhere in GPU memory, exactly like a page table.
+
+```
+Request A logical blocks        block table         physical KV blocks (GPU)
+┌─────────────────────┐        ┌────┬──────┐        ┌────────┐ 0
+│ 0: "Four score and" │ ─────▶ │ 0  │  7   │        ├────────┤ 1  ◀── A, block 1
+│ 1: "seven years ago"│ ─────▶ │ 1  │  1   │        ├────────┤ ...
+│ 2: "our ___"        │ ─────▶ │ 2  │  3   │        ├────────┤ 3  ◀── A, block 2 (partially filled)
+└─────────────────────┘        └────┴──────┘        ├────────┤ ...
+                                                    └────────┘ 7  ◀── A, block 0
+```
+
+Two consequences follow directly:
+
+- **Waste is bounded by one block per sequence.** Blocks are allocated on demand, so there is no reservation and no external fragmentation. The only waste is the unfilled tail of each sequence's last block.
+- **Blocks are shareable.** Multiple logical blocks can point to the same physical block, tracked with reference counts.
+
+## PagedAttention: attention over non-contiguous blocks
+
+Standard attention kernels assume each sequence's keys and values sit contiguously in memory. PagedAttention rewrites the kernel to compute attention block by block. With key and value blocks $K_j = (k_{(j-1)B+1}, \dots, k_{jB})$ and $V_j$ defined the same way, the attention output for query token $i$ is
+
+$$
+A_{ij} = \frac{\exp\left(q_i^\top K_j / \sqrt{d}\right)}{\sum_{t=1}^{\lceil i/B \rceil} \exp\left(q_i^\top K_t \mathbf{1} / \sqrt{d}\right)}, \qquad o_i = \sum_{j=1}^{\lceil i/B \rceil} V_j A_{ij}^\top
+$$
+
+Mathematically nothing changes, it is the same attention. The difference is that the kernel fetches each block through the block table instead of assuming a contiguous layout. The paper is honest about the cost: the extra indirection makes the attention kernel **20-26% slower** than FasterTransformer's highly optimized one. That only affects the attention operator, not the linear layers, and is more than repaid by the much larger batches it enables.
+
+## Sharing: parallel sampling, beam search, shared prefixes
+
+Because blocks are reference-counted, decoding strategies that fork sequences become cheap:
+
+- **Parallel sampling.** All n samples point to the same physical blocks for the prompt. When a sample writes to a shared block, vLLM applies **copy-on-write** at block granularity: copy that one block, update the table, decrement the reference count.
+- **Beam search.** Beams share not just the prompt but large parts of their generated history, and the sharing pattern changes every step as beams are pruned and forked. With blocks this is just reference counting; previous systems had to copy large contiguous regions.
+- **Shared prefix.** A service provider can cache the KV blocks of a common system prompt or few-shot examples once and map every request's first logical blocks to them.
+
+Measured memory savings from sharing (OPT-13B, Alpaca): **6.1%-9.8%** for parallel sampling and **37.6%-55.2%** for beam search (higher on ShareGPT: 16.2%-30.5% and 44.3%-66.3%). For shared few-shot prefixes on a translation task, vLLM got **1.67x** (1-shot) and **3.58x** (5-shot) the throughput of Orca (Oracle).
+
+## Scheduling and preemption
+
+Paging means memory can run out mid-generation, when sequences grow and no free block is left. vLLM's policy:
+
+- **First-come-first-serve** scheduling, preempting the most recent requests first.
+- **All-or-nothing eviction.** A sequence needs all its blocks to run, and sequences in the same group (e.g. beams of one request) are gang-scheduled, so a whole group is evicted together.
+- **Two recovery options**:
+  - *Swapping*: copy the evicted blocks to CPU RAM and bring them back later.
+  - *Recomputation*: drop the blocks and recompute the KV cache on resume. Because the prompt and generated tokens can be processed together in one prefill-style pass, this is faster than generating them originally.
+
+The ablation shows that recomputation wins for small block sizes (swapping many small blocks over PCIe is inefficient) and swapping wins for large ones, though recomputation's overhead never exceeded 20% of swapping's latency. For the 16-64 token range, the two are comparable.
+
+## Block size: why 16
+
+Too small and the kernel cannot exploit GPU parallelism when reading blocks. Too large and internal fragmentation grows and sharing becomes coarser. On ShareGPT (long sequences) block sizes from 16 to 128 performed best; on Alpaca (short sequences) anything above 32 hurt, because sequences became shorter than one block. **16** was the size that worked well everywhere, and it became vLLM's default.
+
+## Distributed execution
+
+For models that need multiple GPUs, vLLM uses Megatron-LM-style tensor parallelism. Each GPU holds a shard of the attention heads, but every shard processes the same tokens, so they need the same block table. A **single centralized scheduler and KV cache manager** decides block allocation once and broadcasts the block tables to all workers along with the inputs each step. The workers only store their heads' slice of each physical block.
+
+## Results
+
+Evaluated on OPT-13B/66B/175B and LLaMA-13B, with request traces synthesized from ShareGPT (long conversations) and Alpaca (short instructions). Baselines were FasterTransformer and three idealized versions of Orca that differ in how much memory they over-reserve: **Oracle** (knows the true output length), **Pow2** (rounds up to a power of 2), and **Max** (reserves the maximum length).
+
+- On ShareGPT, vLLM sustains **1.7x-2.7x** higher request rates than Orca (Oracle), **2.7x-8x** higher than Orca (Max), and up to **22x** higher than FasterTransformer, at similar latency.
+- The gain is largest with long sequences and large models, and smallest when memory is not the bottleneck (OPT-175B on Alpaca, where the 8-GPU setup has plenty of spare memory and the system becomes compute-bound).
+- The headline: **2-4x throughput** over state-of-the-art systems at the same latency.
+
+Note that Orca (Oracle) is an upper bound that no real system achieves, since it requires knowing output lengths in advance. vLLM beats it anyway, because even perfect reservation still cannot share memory across sequences.
+
+## Takeaway
+
+The paper's insight is not a new attention algorithm, it is a systems observation: the KV cache is dynamically sized, unknown in advance, and shareable, which is exactly the kind of memory operating systems learned to manage with paging decades ago. Once you stop insisting that each sequence's KV cache be contiguous, waste drops from 60-80% to under 4%, and copy-on-write sharing comes almost for free.
+
+Two details are worth remembering beyond the headline numbers:
+
+- The **cost** is real but contained: a 20-26% slower attention kernel, paid back many times by bigger batches.
+- The block abstraction turned out to be the foundation for most later serving features. Automatic prefix caching (content-hashed blocks), KV cache offloading, and disaggregated prefill/decode all assume the KV cache is a pool of fixed-size blocks rather than one tensor per request. That is why PagedAttention, or something equivalent, is now in essentially every serious LLM serving engine.
