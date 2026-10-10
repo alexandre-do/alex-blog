@@ -11,17 +11,17 @@ categories:
 
 # LoRA Fine-Tuning Llama 3 8B for Legislative-Style Summaries
 
-In the legal and legislative domain, a general-purpose LLM already summarizes correctly - it gets the facts, the arguments, the decisions. What it doesn't do out of the box is write like a rapporteur: the specific register, formulas, and structure of an official report (for example, the way a French Senate committee writes a *compte rendu* from the verbatim of a hearing). That's a style gap, not a knowledge gap, which makes it a good fit for a lightweight LoRA adapter rather than a full fine-tune.
+In the legal and legislative domain, a general-purpose LLM already summarizes correctly: it gets the facts, the arguments, the decisions. What it doesn't do out of the box is write like a rapporteur, with the specific register, formulas, and structure of an official report (for example, the way a French Senate committee writes a *compte rendu* from the verbatim of a hearing). That's a style gap, not a knowledge gap, which makes it a good fit for a lightweight LoRA adapter rather than a full fine-tune.
 
 ## How LoRA Works
 
-Full fine-tuning updates every weight matrix $W \in \mathbb{R}^{d \times k}$ in the model - for an 8B model that's 8 billion optimizer states, gradients, and activations to hold in memory. LoRA freezes $W$ entirely and instead learns the *update* to it, $\Delta W$, as a low-rank decomposition:
+Full fine-tuning updates every weight matrix $W \in \mathbb{R}^{d \times k}$ in the model. For an 8B model trained with Adam in mixed precision, that's roughly 16 bytes per parameter (weights, gradients, two optimizer states), about 128 GB before you even count activations. LoRA ([Hu et al., 2021](https://arxiv.org/abs/2106.09685)) freezes $W$ entirely and instead learns the *update* to it, $\Delta W$, as a low-rank decomposition:
 
-$$W' = W + \Delta W = W + BA, \quad B \in \mathbb{R}^{d \times r},\ A \in \mathbb{R}^{r \times k},\ r \ll \min(d, k)$$
+$$W' = W + \frac{\alpha}{r} BA, \quad B \in \mathbb{R}^{d \times r},\ A \in \mathbb{R}^{r \times k},\ r \ll \min(d, k)$$
 
-$A$ is initialized from a random Gaussian and $B$ at zero, so training starts as a no-op ($\Delta W = 0$) and only perturbs the frozen model as $A$ and $B$ learn. The rank $r$ (typically 8-64) controls capacity: for a $4096 \times 4096$ projection matrix, full fine-tuning trains ~16.8M parameters, while LoRA at $r=32$ trains $2 \times 4096 \times 32 \approx 262$K - about 1.5% of that, per matrix, and it compounds across every projection in every layer you target. Because $W$ is untouched, the base checkpoint stays shared and reusable, and at inference time $B$ and $A$ are simply added into $W$ (or applied as a side path), adding negligible latency.
+$A$ is initialized from a random Gaussian and $B$ at zero, so training starts as a no-op ($\Delta W = 0$) and only perturbs the frozen model as $A$ and $B$ learn. The rank $r$ (typically 8-64) controls capacity, and $\alpha$ scales the update. For a $4096 \times 4096$ projection matrix, full fine-tuning trains ~16.8M parameters, while LoRA at $r=32$ trains $2 \times 4096 \times 32 \approx 262$K, about 1.6% of that. Across all seven projections in Llama 3 8B's 32 layers (the K/V projections are smaller because of grouped-query attention, the MLP ones larger), $r=32$ comes to ~84M trainable parameters, roughly 1% of the model. That's the number `print_trainable_parameters()` should report in Step 4. Because $W$ is untouched, the base checkpoint stays shared and reusable, and at inference time $BA$ is simply added into $W$ (or applied as a side path), adding negligible latency.
 
-This structure explains why LoRA is a good match for *style* transfer specifically: the pretrained model's factual and linguistic knowledge lives in $W$ and is left alone, while $\Delta W$ only needs enough capacity to bias the output distribution toward a different register. Trying to teach genuinely new facts through a rank-32 update on a frozen model is a much weaker signal than trying to shift phrasing and structure - which is exactly the task here.
+This structure explains why LoRA is a good match for *style* transfer specifically. The pretrained model's factual and linguistic knowledge lives in $W$ and is left alone, while $\Delta W$ only needs enough capacity to bias the output distribution toward a different register. Teaching genuinely new facts through a rank-32 update on a frozen model is a much weaker signal than shifting phrasing and structure ([Biderman et al., 2024](https://arxiv.org/abs/2405.09673) found LoRA "learns less and forgets less" than full fine-tuning), and shifting phrasing is exactly the task here.
 
 ## The Pipeline
 
@@ -29,9 +29,9 @@ This structure explains why LoRA is a good match for *style* transfer specifical
 audio verbatim  -->  ASR transcript  -->  LoRA-adapted Llama 3 8B  -->  legislative-style summary
 ```
 
-1. **Speech-to-text** - transcribe the hearing/debate audio with Whisper.
-2. **Instruction fine-tuning** - adapt Llama 3 8B with LoRA on pairs of (raw transcript -> official-style summary) so it reproduces the target register.
-3. **Inference** - feed new verbatims through ASR then the adapted model to draft a summary in that same style.
+1. **Speech-to-text:** transcribe the hearing/debate audio with Whisper.
+2. **Instruction fine-tuning:** adapt Llama 3 8B with LoRA on pairs of (raw transcript -> official-style summary) so it reproduces the target register.
+3. **Inference:** feed new verbatims through ASR then the adapted model to draft a summary in that same style.
 
 ## Step 1: Transcribing the Audio
 
@@ -45,15 +45,20 @@ asr = pipeline(
     device="cuda",
 )
 
-result = asr("hearing_2025_01_10.mp3", return_timestamps=True)
+result = asr(
+    "hearing_2025_01_10.mp3",
+    return_timestamps=True,
+    generate_kwargs={"language": "french"},
+)
 transcript = result["text"]
+chunks = result["chunks"]  # [{"timestamp": (start, end), "text": ...}]
 ```
 
-For long hearings, keep the timestamped chunks - they make it easier to align the transcript against the published report later when building the training set.
+Forcing the language avoids Whisper misdetecting short or noisy segments. Keep the timestamped chunks too. They make it much easier to align the transcript against the published report when building the training set.
 
 ## Step 2: Building the Instruction Dataset
 
-The base model already knows the legal vocabulary; what it needs are examples of *verbatim in, formal report out*. Pair each transcript with the corresponding official summary (published compte-rendu) and wrap them in a consistent instruction format:
+The base model already knows the legal vocabulary; what it needs are examples of *verbatim in, formal report out*. Pair each transcript with the corresponding official summary (published compte rendu) and wrap them in a consistent instruction format:
 
 ```json
 {
@@ -63,10 +68,16 @@ The base model already knows the legal vocabulary; what it needs are examples of
 }
 ```
 
-A few hundred well-aligned pairs are usually enough to shift the register - this is a style-transfer task, not a task requiring the model to learn new facts, so it doesn't need Alpaca-scale volume.
+A whole hearing runs far past Llama 3's 8K-token context (an hour of speech is easily 10k+ tokens), so don't pair full transcripts with full reports. Split each transcript into agenda items using the Whisper timestamps and pair each chunk with the matching section of the compte rendu, so every example fits in the 2048-token training window. If you'd rather work on longer spans, Llama 3.1 8B Instruct is a drop-in replacement with a 128K context and official French support.
+
+Since the model only needs to learn a register, it doesn't need Alpaca-scale volume. A few hundred well-aligned pairs is a reasonable starting point.
 
 ```python
 from datasets import load_dataset
+from transformers import AutoTokenizer
+
+model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 dataset = load_dataset("json", data_files="legislative_summaries.jsonl", split="train")
 
@@ -75,22 +86,22 @@ def format_example(example):
         "text": (
             f"### Instruction:\n{example['instruction']}\n\n"
             f"### Transcript:\n{example['input']}\n\n"
-            f"### Report:\n{example['output']}"
+            f"### Report:\n{example['output']}{tokenizer.eos_token}"
         )
     }
 
 dataset = dataset.map(format_example)
 ```
 
+Two details here. The EOS token at the end matters: the trainer doesn't append one to the `text` field, and without it the model never learns where a report stops, so at inference it rambles until `max_new_tokens`. And I use a plain Alpaca-style template instead of the Llama 3 chat template so the same prompt works through the `/completions` endpoint in vLLM and `/generate` in TGI. If you serve through a chat endpoint, format the training data with `tokenizer.apply_chat_template` instead.
+
 ## Step 3: Loading Llama 3 8B in 4-bit
 
-QLoRA keeps this trainable on a single consumer/prosumer GPU by quantizing the frozen base model to 4-bit and training only the adapters in higher precision.
+QLoRA ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314)) keeps this trainable on a single consumer/prosumer GPU by quantizing the frozen base model to 4-bit and training only the adapters in higher precision.
 
 ```python
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
@@ -99,7 +110,6 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=True,
 )
 
-tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
     quantization_config=bnb_config,
@@ -109,7 +119,7 @@ model = AutoModelForCausalLM.from_pretrained(
 
 ## Step 4: LoRA Configuration
 
-Style transfer benefits from adapting both attention and MLP projections, not just `q_proj`/`v_proj` - the report's phrasing patterns live in the feed-forward layers too.
+Adapt all linear layers, not just `q_proj`/`v_proj`. The QLoRA paper found that targeting every linear layer was needed to match full fine-tuning quality. With `r=32` and `lora_alpha=64` the update is scaled by 2. Keeping alpha at 2r is a common convention that lets you change the rank without retuning the learning rate much.
 
 ```python
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
@@ -170,32 +180,32 @@ model = PeftModel.from_pretrained(base_model, "./llama3-8b-legislative-lora")
 prompt = (
     "### Instruction:\nRédige un compte rendu de séance dans le style d'un rapport "
     "sénatorial à partir de la transcription suivante.\n\n"
-    f"### Transcript:\n{transcript}\n\n### Report:\n"
+    f"### Transcript:\n{transcript_chunk}\n\n### Report:\n"
 )
 
 inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-output = model.generate(**inputs, max_new_tokens=512, temperature=0.3)
-print(tokenizer.decode(output[0], skip_special_tokens=True))
+output = model.generate(**inputs, max_new_tokens=512, do_sample=True, temperature=0.3)
+print(tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
 ```
 
-Low temperature matters here - a legislative report is a register with little room for creative variation, and sampling too loosely reintroduces the generic-summary tone the adapter is meant to remove.
+As in training, `transcript_chunk` is one agenda item, not the whole hearing. Slicing off the prompt tokens before decoding prints only the generated report. Low temperature matters here. A legislative report is a register with little room for creative variation, and sampling too loosely reintroduces the generic-summary tone the adapter is meant to remove.
 
 ## Evaluation
 
 Two axes matter, and they don't move together:
 
-- **Content fidelity** - ROUGE or BERTScore against the reference report checks that facts and decisions weren't dropped or invented.
-- **Style adherence** - automatic metrics don't capture register. Score a held-out set with an LLM-as-judge prompt asking specifically whether the output matches the formal legislative tone, or do a manual side-by-side against the base model's (un-adapted) summary.
+- **Content fidelity:** ROUGE, or BERTScore with a multilingual backbone (the default English model is meaningless on French), against the reference report checks that facts and decisions weren't dropped or invented.
+- **Style adherence:** automatic metrics don't capture register. Score a held-out set with an LLM-as-judge prompt asking specifically whether the output matches the formal legislative tone, or do a manual side-by-side against the base model's (un-adapted) summary.
 
-A model can score well on ROUGE while still reading like a generic AI summary - that gap is exactly what the LoRA adapter is there to close, so don't skip the qualitative pass.
+A model can score well on ROUGE while still reading like a generic AI summary. That gap is exactly what the LoRA adapter is there to close, so don't skip the qualitative pass.
 
 ## Deployment
 
-Training produces an adapter, not a deployable model - a small set of A/B matrices that only make sense layered on top of the frozen base weights. There are two ways to ship that, and the right one depends on whether you're serving one report style or several.
+Training produces an adapter: a small set of A/B matrices that only make sense layered on top of the frozen base weights. There are two ways to ship that, and the right one depends on whether you're serving one report style or several.
 
 ### Merge for a Single Artifact
 
-If there's only one adapter and it's always on, merge it into the base weights with PEFT's `merge_and_unload()` and deploy the result like any standard `transformers` model - no PEFT dependency needed at inference time, and it drops straight into any serving stack (vLLM, TGI, `transformers.generate`).
+If there's only one adapter and it's always on, merge it into the base weights with PEFT's [`merge_and_unload()`](https://huggingface.co/docs/peft/en/developer_guides/lora#merge-lora-weights-into-the-base-model) and deploy the result like any standard `transformers` model. No PEFT dependency is needed at inference time, and it drops straight into any serving stack (vLLM, TGI, `transformers.generate`).
 
 ```python
 from peft import PeftModel
@@ -209,21 +219,22 @@ merged_model.save_pretrained("./llama3-8b-legislative-merged", safe_serializatio
 tokenizer.save_pretrained("./llama3-8b-legislative-merged")
 ```
 
-Merging a model that was loaded in 4-bit dequantizes it back to full precision first, so cast to `bfloat16` explicitly as above - otherwise the saved checkpoint balloons to roughly 4x the size you'd expect ([PEFT merging guide](https://huggingface.co/docs/peft/en/developer_guides/lora#merge-lora-weights-into-the-base-model)).
+Load the base in bf16 for merging, not in the 4-bit config used for training. Without an explicit `torch_dtype`, `transformers` loads Llama in fp32 and the merged checkpoint doubles to ~32 GB. Also keep in mind that the adapter was trained against the NF4-quantized base, so the merged bf16 model is not bit-identical to what you evaluated. Re-run the evaluation on the merged checkpoint.
 
 ### Serve Unmerged, if You Have More Than One Style
 
-A legislative office rarely needs just one report format - a committee hearing, a plenary debate, and an administrative audit each call for a different adapter over the *same* base model. Both major serving stacks let you keep the base weights loaded once and hot-swap adapters per request instead of duplicating 8B of weights per style:
+A legislative office rarely needs just one report format. A committee hearing, a plenary debate, and an administrative audit each call for a different adapter over the *same* base model. Both major serving stacks let you keep the base weights loaded once and hot-swap adapters per request instead of duplicating 8B of weights per style:
 
-- **vLLM** - start the server with `--enable-lora` and register each adapter via `--lora-modules`, then pick one per request with the `model` field in the API call. Adapters can also be added or removed at runtime by setting `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` ([vLLM LoRA docs](https://docs.vllm.ai/en/latest/features/lora/)).
+- **vLLM:** start the server with `--enable-lora` and register each adapter via `--lora-modules`, then pick one per request with the `model` field in the API call. vLLM caps adapter rank at 16 by default, so set `--max-lora-rank` to your highest adapter rank or the r=32 adapter above won't load. Adapters can also be added or removed at runtime by setting `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` ([vLLM LoRA docs](https://docs.vllm.ai/en/latest/features/lora/)).
 
   ```bash
   vllm serve meta-llama/Meta-Llama-3-8B-Instruct \
     --enable-lora \
+    --max-lora-rank 32 \
     --lora-modules senate-report=./llama3-8b-legislative-lora audit-report=./llama3-8b-audit-lora
   ```
 
-- **Hugging Face Text Generation Inference (TGI)** - pass `--lora-adapters` (or the `LORA_ADAPTERS` env var) at startup with a comma-separated list of adapter repos or local paths, then select one per call with `adapter_id` in the request payload ([TGI LoRA docs](https://huggingface.co/docs/text-generation-inference/conceptual/lora)).
+- **Hugging Face Text Generation Inference (TGI):** pass `--lora-adapters` (or the `LORA_ADAPTERS` env var) at startup with a comma-separated list of adapter repos or local paths, then select one per call with `adapter_id` in the request payload ([TGI LoRA docs](https://huggingface.co/docs/text-generation-inference/conceptual/lora)).
 
   ```bash
   docker run --gpus all -p 8080:80 -v $PWD/data:/data \
@@ -234,10 +245,13 @@ A legislative office rarely needs just one report format - a committee hearing, 
 
 ### Quantizing for Constrained Hardware
 
-Legal and legislative bodies often can't push transcripts to a third-party API and don't have a rack of A100s either, so quantizing the merged model to fit a single GPU - or a CPU - is usually part of the deployment, not an afterthought:
+Legal and legislative bodies often can't push transcripts to a third-party API and don't have a rack of A100s either, so quantizing the merged model to fit a single GPU (or a CPU) belongs in the deployment plan from day one:
 
-- **GPTQ/AWQ for GPU serving** - both remain well supported through vLLM and `transformers`, but the tooling moved: AutoAWQ was archived in May 2025 and AutoGPTQ is likewise unmaintained, so quantize with their successors instead - [`llm-compressor`](https://github.com/vllm-project/llm-compressor) for AWQ and [GPTQModel](https://github.com/ModelCloud/GPTQModel) for GPTQ. Both produce a quantized checkpoint vLLM can load directly.
-- **GGUF for CPU/edge** - for on-prem deployment with no GPU at all, convert the merged model with `llama.cpp` and run it through `llama-cpp-python` or Ollama:
+- **GPTQ/AWQ for GPU serving:** both are well supported through vLLM and `transformers`. Quantize with [AutoAWQ](https://github.com/casper-hansen/AutoAWQ) for AWQ or [GPTQModel](https://github.com/ModelCloud/GPTQModel) for GPTQ. Both produce a quantized checkpoint vLLM can load directly.
+
+  > **Update (2025):** AutoAWQ was archived in May 2025 and its AWQ implementation moved into [`llm-compressor`](https://github.com/vllm-project/llm-compressor). Use that for AWQ now.
+
+- **GGUF for CPU/edge:** for on-prem deployment with no GPU at all, convert the merged model with `llama.cpp` and run it through `llama-cpp-python` or Ollama:
 
   ```bash
   python convert_hf_to_gguf.py ./llama3-8b-legislative-merged \
@@ -246,8 +260,8 @@ Legal and legislative bodies often can't push transcripts to a third-party API a
   ./llama-quantize legislative-f16.gguf legislative-Q4_K_M.gguf Q4_K_M
   ```
 
-  `Q4_K_M` (4-bit, mixed-precision blockwise quantization) is the usual starting point for an 8B model - it keeps quality close to fp16 while cutting memory roughly 4x ([llama.cpp quantize docs](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md)). Always re-run the style-adherence evaluation from the previous section on the quantized checkpoint - 4-bit quantization tends to preserve content better than it preserves register.
+  `Q4_K_M` (4-bit, mixed-precision blockwise quantization) is the usual starting point for an 8B model. It keeps quality close to fp16 at about 4.9 bits per weight, roughly 4.6 GB instead of 15 GB ([llama.cpp quantize docs](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md)). Always re-run the style-adherence evaluation from the previous section on the quantized checkpoint, since quantization can erode the subtle register shift the adapter learned even when content survives.
 
 ## A Note on Confidentiality
 
-Public hearings (like Senate committee sessions) are fine to use as-is. For anything from private legal practice - client meetings, depositions, internal audits - redact or anonymize personal data in the transcripts *before* they enter the training set, not after. An adapter trained on unredacted verbatims can reproduce fragments of them at inference time.
+Public hearings (like Senate committee sessions) are fine to use as-is. For anything from private legal practice (client meetings, depositions, internal audits), redact or anonymize personal data in the transcripts before they enter the training set. An adapter trained on unredacted verbatims can reproduce fragments of them at inference time.
