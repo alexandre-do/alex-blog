@@ -113,7 +113,7 @@ This is the axis that should drive your decision: do you need a runtime that let
 
 ### LangChain: a runtime you compose
 
-The current LangChain docs no longer ship supervisor or swarm prebuilts. Multi-agent is documented as five *patterns* - subagents, handoffs, skills, router, custom workflow - and you build the one you need on `StateGraph`:
+The current LangChain docs no longer feature supervisor or swarm prebuilts. Multi-agent is documented as five *patterns* (subagents, handoffs, skills, router, custom workflow), with Deep Agents as the built-in option. For anything custom, you build on `StateGraph`:
 
 ```python
 from typing import Annotated, TypedDict
@@ -268,9 +268,9 @@ Strands offers comparable components - skills, steering, context management, goa
 
 | | LangChain | Strands |
 |---|---|---|
-| Tracing | LangSmith, plus LangSmith Engine for issue detection | Observability, Metrics, Traces, Logs sections |
+| Tracing | LangSmith, plus LangSmith Engine for issue detection | OpenTelemetry traces, metrics and logs, exportable to any OTLP backend |
 | Evaluation | LangSmith evaluation | **Strands Evals SDK** - ~25 evaluators, red-teaming, chaos testing, root-cause detectors |
-| Streaming | `stream_mode` (values, updates, messages, custom, checkpoints, tasks, debug) and typed `stream_events(version="v3")` | `stream_async` with `multiagent_node_start` / `_stream` / `_handoff` / `_result`; plus bidirectional realtime voice (Nova Sonic, Gemini Live, OpenAI Realtime) |
+| Streaming | `stream_mode` (values, updates, messages, custom, checkpoints, tasks, debug) and typed `stream_events(version="v3")` | `stream_async` with `multiagent_node_start`, `multiagent_node_stream`, `multiagent_node_stop`, `multiagent_handoff` and `multiagent_result` events; plus bidirectional realtime voice (Nova Sonic, Gemini Live, OpenAI Realtime) |
 | Deployment | LangSmith Deployment / Agent Server: cloud, hybrid, self-hosted, standalone | AgentCore, Lambda, Fargate, App Runner, EKS, EC2, Docker, K8s, Terraform |
 | Models | `init_chat_model("provider:model")` across providers | Bedrock, Nova, Anthropic, Google, OpenAI, Mistral, Ollama, LiteLLM, llama.cpp, SageMaker, Writer, Vercel |
 
@@ -286,7 +286,7 @@ Four things that will cost you a day each if nobody tells you.
 
 **LangGraph's `interrupt()` re-runs the node.** Resume restarts the node function from the top, not from the interrupt line. Any side effect before the interrupt happens twice unless it's idempotent.
 
-**Strands Python `Graph` defaults to OR fan-in.** A node fires when *any* incoming edge's source completes - most frameworks default to AND. To get a real join you write a condition on every incoming edge:
+**Strands Python `Graph` defaults to OR fan-in.** A node fires when *any* incoming edge's source completes. Strands TypeScript waits for all of them, and LangGraph gives you an explicit join with `add_edge([...], node)` or `defer=True`. In Python Strands, you write a condition on every incoming edge:
 
 ```python
 from strands.multiagent import GraphBuilder
@@ -308,7 +308,7 @@ builder.add_edge("research", "synthesis", condition=join)
 builder.add_edge("market_data", "synthesis", condition=join)
 ```
 
-**Strands' Python and TypeScript SDKs are not the same API.** Python uses a `GraphBuilder`, TS a declarative `new Graph({nodes, edges, sources, maxSteps})`. Python has `max_handoffs` + `max_iterations`, TS has one `maxSteps`. Python's Swarm has a mutable `SharedContext`; TS passes only serialized handoff context. Exceeding the step limit *throws* in TS but returns a `FAILED` result in Python. If you plan to port between them, read the "SDK Differences" sections first.
+**Strands' Python and TypeScript SDKs are not the same API.** Python uses a `GraphBuilder`, TS a declarative `new Graph({nodes, edges, sources, maxSteps})`. Python's Swarm has `max_handoffs` + `max_iterations`, TS has one `maxSteps`. Python's Swarm also has a mutable `SharedContext`; TS passes only serialized handoff context. Exceeding the step limit *throws* in TS but returns a `FAILED` result in Python. If you plan to port between them, read the "SDK Differences" sections first.
 
 ## So: how do I choose?
 
@@ -321,9 +321,9 @@ Run down this list and stop at the first one that's true.
 5. **Orchestration is a standard graph, swarm, or dependency workflow and you want sensible safety boundaries immediately?** → Strands.
 6. **None of the above decisive?** → Choose the stack your team can operate confidently. The cost of changing frameworks is usually lower than the cost of never shipping the first agent.
 
-## The hybrid nobody mentions
+## The hybrid option
 
-You do not need to standardise on one SDK everywhere. LangSmith Deployment can host agents built with other frameworks, and AWS has published a LangGraph-and-Strands reference architecture on AgentCore.
+You do not need to standardise on one SDK everywhere. LangSmith Deployment's own guide deploys a Strands agent through the LangGraph Functional API, and AWS's market-surveillance reference architecture runs LangGraph as the outer workflow (state, checkpoints, recovery) with Strands agents doing the reasoning inside individual nodes, all on AgentCore.
 
 For a larger organisation, a sensible split can be:
 
@@ -334,4 +334,4 @@ The agent loop is commodity. The durable choices are the state model, the recove
 
 ---
 
-*Sources: the [Strands Agents docs](https://strandsagents.com/docs/user-guide/concepts/multi-agent/multi-agent-patterns/), the [LangChain agents](https://docs.langchain.com/oss/python/langchain/agents), [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api), and [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence) docs, and AWS's [LangGraph-and-Strands reference architecture](https://aws.amazon.com/blogs/machine-learning/market-surveillance-agent-with-langgraph-and-strands-on-agentcore/).*
+*Sources: the [Strands Agents docs](https://strandsagents.com/docs/user-guide/sdk/multi-agent/multi-agent-patterns/), the [LangChain agents](https://docs.langchain.com/oss/python/langchain/agents), [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api), and [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence) docs, and AWS's [LangGraph-and-Strands reference architecture](https://aws.amazon.com/blogs/machine-learning/market-surveillance-agent-with-langgraph-and-strands-on-agentcore/).*
