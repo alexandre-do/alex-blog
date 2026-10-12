@@ -40,7 +40,7 @@ That means this is not a simple framework-versus-framework decision:
 
 Everything else follows from that distinction.
 
-## 1. The agent loop: change its behaviour or explain its ending?
+## Axis 1: the agent loop, change its behaviour or explain its ending?
 
 Both ecosystems run the familiar cycle: call a model, execute requested tools, feed tool results back, and repeat until the model stops requesting tools. The differentiation is in the controls around that loop.
 
@@ -197,8 +197,6 @@ result = swarm("Design and implement a REST API for a todo app")
 
 The value is not that these patterns are impossible to build in LangGraph. It is that Strands makes their common failure modes visible early: handoff and iteration limits, timeouts, and repeated-handoff detection are part of the configuration.
 
-There is one important detail to keep in mind: the Python and TypeScript graph APIs intentionally differ. Python graph fan-in uses OR semantics by default; TypeScript uses AND semantics. If you are building a cross-language platform, validate the exact SDK behaviour rather than assuming a shared abstraction.
-
 **Choose LangGraph** for dynamic fan-out, custom reducers, sophisticated joins, or hybrid deterministic/agentic flow. **Choose Strands** when your system maps cleanly to a graph, swarm, or dependency workflow and you want a fast path with guardrails.
 
 ## Axis 3: durability and human-in-the-loop
@@ -227,7 +225,7 @@ with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
 
 LangGraph's `interrupt()` uses the same persistence machinery. A node can pause for human approval, then resume later - even in another process - with a `Command`. That makes it suited to audit-heavy, expensive, or long-lived workflows.
 
-There is one non-negotiable implementation rule: an interrupted node restarts from its beginning on resume. Make every side effect before `interrupt()` idempotent, or move it after the interruption.
+Keep the rule in mind for the traps section: the node re-runs on resume.
 
 ### Strands: interrupts without the replay story
 
@@ -259,6 +257,8 @@ agent = create_deep_agent(
     }],
 )
 ```
+
+Out of the box you get a todo-list planner, a virtual filesystem for intermediate artifacts, a `task` tool to delegate to subagents, and context summarization. `"mode": "isolated"` (the default) means the fact checker only sees the delegated task, not the parent's conversation; `"fork"` would hand it the full history.
 
 ### Strands: comparable ingredients, assembled by you
 
