@@ -63,8 +63,12 @@ agent = create_agent(
     system_prompt="You research topics thoroughly.",
     middleware=[
         ToolRetryMiddleware(max_retries=3, backoff_factor=2.0, jitter=True),
-        ModelFallbackMiddleware("openai:gpt-5.5", "google:gemini-3.6-flash"),
-        SummarizationMiddleware(trigger=("fraction", 0.7), keep=("messages", 20)),
+        ModelFallbackMiddleware("openai:gpt-5.5", "google_genai:gemini-3.6-flash"),
+        SummarizationMiddleware(
+            model="openai:gpt-5.4-mini",
+            trigger=("fraction", 0.7),
+            keep=("messages", 20),
+        ),
         ModelCallLimitMiddleware(thread_limit=40, run_limit=25, exit_behavior="end"),
     ],
 )
@@ -120,9 +124,12 @@ from langgraph.checkpoint.memory import InMemorySaver
 class State(TypedDict):
     messages: Annotated[list, add]
     findings: Annotated[list[str], add]
+    documents: list[str]
+    category: str
     attempts: int
 
 def route(state: State) -> str:
+    # analysis_node increments attempts
     if state["attempts"] >= 3:
         return "report"
     return "analysis" if not state["findings"] else "report"
@@ -175,6 +182,7 @@ Strands offers three primary multi-agent patterns: **Graph**, **Swarm**, and **W
 ```python
 from strands.multiagent import Swarm
 
+# each agent needs a unique name=
 swarm = Swarm(
     [researcher, coder, reviewer],
     entry_point=researcher,
@@ -204,14 +212,17 @@ With a checkpointer, LangGraph persists graph state at execution boundaries. A p
 ```python
 from langgraph.checkpoint.postgres import PostgresSaver
 
-graph = builder.compile(checkpointer=PostgresSaver(conn))
-config = {"configurable": {"thread_id": "case-482"}}
-graph.invoke(inputs, config=config, durability="sync")
+with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+    checkpointer.setup()  # first run only: creates the checkpoint tables
+    graph = builder.compile(checkpointer=checkpointer)
+    config = {"configurable": {"thread_id": "case-482"}}
+    graph.invoke(inputs, config=config, durability="sync")
 
-history = list(graph.get_state_history(config))
-snapshot = history[3]
-graph.update_state(snapshot.config, {"findings": ["corrected"]})
-graph.invoke(None, config=snapshot.config)
+    history = list(graph.get_state_history(config))  # newest first
+    snapshot = history[3]
+    # update_state forks a new checkpoint; "findings" goes through the add reducer, so this appends
+    fork_config = graph.update_state(snapshot.config, {"findings": ["corrected"]})
+    graph.invoke(None, config=fork_config)
 ```
 
 LangGraph's `interrupt()` uses the same persistence machinery. A node can pause for human approval, then resume later - even in another process - with a `Command`. That makes it suited to audit-heavy, expensive, or long-lived workflows.
@@ -278,6 +289,12 @@ Four things that will cost you a day each if nobody tells you.
 **Strands Python `Graph` defaults to OR fan-in.** A node fires when *any* incoming edge's source completes - most frameworks default to AND. To get a real join you write a condition on every incoming edge:
 
 ```python
+from strands.multiagent import GraphBuilder
+from strands.multiagent.base import Status
+from strands.multiagent.graph import GraphState
+
+builder = GraphBuilder()  # with "research", "market_data" and "synthesis" nodes added
+
 def all_complete(required: list[str]):
     def check(state: GraphState) -> bool:
         return all(
