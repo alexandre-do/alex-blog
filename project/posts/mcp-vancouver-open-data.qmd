@@ -13,28 +13,28 @@ categories:
 
 ![](images/mcp-vancouver-open-data.png){.post-banner fig-alt="Building an MCP Server for Vancouver's Open Data"}
 
-The City of Vancouver publishes about 200 public datasets - property assessments, building permits, public art, parking meters - through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.
+The City of Vancouver publishes about 200 public datasets (property assessments, building permits, public art, parking meters) through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.
 
 ## Why MCP Fits Open Data
 
-The Model Context Protocol standardizes how an LLM discovers and calls external tools. Open data portals are a good match for a few reasons:
+The Model Context Protocol standardizes how an LLM discovers and calls external tools, and open data portals fit it well. The data is already structured: each dataset has a stable schema, so tool inputs and outputs map cleanly to typed function signatures.
 
-- **The data is already structured** - each dataset has a stable schema, so tool inputs/outputs map cleanly to typed function signatures.
-- **Discovery is the hard part.** Most people don't know a dataset called `issued-building-permits` exists, let alone its field names. An MCP server can expose search as a tool, so the model finds the right dataset instead of the user having to.
-- **No auth complexity.** Vancouver's portal is fully public and read-only, so the server doesn't need to manage credentials or write access - it's a thin, safe translation layer.
+Discovery is the hard part. Most people don't know a dataset called `issued-building-permits` exists, let alone its field names. An MCP server can expose search as a tool, so the model finds the dataset, not the user.
+
+There is also no auth to deal with. Vancouver's portal is public and read-only, so the server doesn't manage credentials or write access. It's a thin translation layer.
 
 ## MCP Building Blocks: Hosts, Clients, Servers, Transports
 
-Before wiring up Vancouver's data, it's worth being precise about what "an MCP server" actually plugs into. The spec defines a handful of distinct pieces:
+Before wiring up Vancouver's data, here is what "an MCP server" actually plugs into. The spec defines a handful of distinct pieces:
 
-- **Host** - the user-facing application (Claude Desktop, an IDE, a custom agent). It owns the LLM conversation and decides which servers to connect to.
-- **Client** - lives inside the host, maintains a 1:1 connection to a single server, and handles the JSON-RPC message plumbing. A host with three servers configured runs three clients internally.
-- **Server** - the process you actually write. It advertises capabilities and responds to client requests. This post's `vancouver-open-data` server is one of these.
-- **Tools** - model-invoked functions with a name, description, and JSON-schema input (`search_datasets`, `get_property_values` below). The LLM decides when to call them based on the conversation.
-- **Resources** - addressable, read-only data the *host application* can pull in (a dataset schema, a file, a config blob) without going through the model's tool-calling loop. The client still sends a `resources/read` request, but no model turn is spent deciding to fetch it.
-- **Prompts** - reusable, user-triggered templates (e.g., a "/summarize-permits" slash command) that expand into a preset message, as opposed to tools which the model chooses on its own.
+- **Host**: The user-facing application (Claude Desktop, an IDE, a custom agent). It owns the LLM conversation and decides which servers to connect to.
+- **Client**: Lives inside the host, maintains a 1:1 connection to a single server, and handles the JSON-RPC message plumbing. A host with three servers configured runs three clients internally.
+- **Server**: The process you actually write. It advertises capabilities and responds to client requests. This post's `vancouver-open-data` server is one of these.
+- **Tools**: Model-invoked functions with a name, description, and JSON-schema input (`search_datasets`, `get_property_values` below). The LLM decides when to call them based on the conversation.
+- **Resources**: Addressable, read-only data the *host application* can pull in (a dataset schema, a file, a config blob) without going through the model's tool-calling loop. The client still sends a `resources/read` request, but no model turn is spent deciding to fetch it.
+- **Prompts**: Reusable, user-triggered templates (e.g., a "/summarize-permits" slash command) that expand into a preset message, as opposed to tools which the model chooses on its own.
 
-For the Vancouver server, only **tools** are used today - the "Next Steps" section below is really about starting to use **resources** for the schema-lookup use case, since `describe_dataset` is a better fit as something the client fetches directly than as a model-invoked round trip.
+For the Vancouver server, only **tools** are used today. The "Next Steps" section below is really about starting to use **resources** for the schema-lookup use case, since `describe_dataset` is a better fit as something the client fetches directly than as a model-invoked round trip.
 
 ### Transports
 
@@ -42,12 +42,12 @@ Transport is the channel the client and server exchange JSON-RPC messages over. 
 
 | Transport | How it works | When to use it |
 |---|---|---|
-| **stdio** | Host spawns the server as a local subprocess; messages go over stdin/stdout | Local tools, CLI integrations, anything running on the same machine as the host - no network, no auth needed |
+| **stdio** | Host spawns the server as a local subprocess; messages go over stdin/stdout | Local tools, CLI integrations, anything running on the same machine as the host, with no network or auth |
 | **Streamable HTTP** | Server runs as a standalone HTTP endpoint; client POSTs JSON-RPC and can receive streamed responses via SSE | Remote/shared servers, multi-client access, anything needing auth headers or running behind a real deployment |
 
 (An older HTTP+SSE transport with two separate endpoints predates Streamable HTTP and is now considered legacy.)
 
-The Vancouver server uses **stdio** - `mcp.run(transport="stdio")` in the code below - because it's a single-user, local integration registered directly in Claude Desktop's config. There's no case for standing up an HTTP server just to query a public, read-only API from one machine.
+The Vancouver server uses **stdio** (`mcp.run(transport="stdio")` in the code below) because it's a single-user, local integration registered directly in Claude Desktop's config. There's no case for standing up an HTTP server just to query a public, read-only API from one machine.
 
 ## Vancouver's Open Data API
 
@@ -69,12 +69,12 @@ Each dataset accepts `where` (an SQL-like filter expression), `select` (to trim 
 
 Rather than exposing the raw API 1:1, I mapped it to a small set of task-shaped tools plus a discovery tool:
 
-- `search_datasets(query)` - keyword search over the catalog, returns dataset IDs and descriptions.
-- `get_property_values(civic_number, street_name, year)` - assessed value lookup for one address.
-- `get_permits(address, since)` - building permits issued at an address, optionally since a date.
-- `describe_dataset(dataset_id)` - returns field names and types, so the model can build valid `where` filters for datasets it hasn't seen before.
+- `search_datasets(query)`: keyword search over the catalog, returns dataset IDs and descriptions.
+- `get_property_values(civic_number, street_name, year)`: assessed value lookup for one address.
+- `get_permits(address, since)`: building permits issued at an address, optionally since a date.
+- `describe_dataset(dataset_id)`: returns field names and types, so the model can build valid `where` filters for datasets it hasn't seen before.
 
-Keeping tools narrow (rather than one generic `query(dataset, filter)` tool) makes the model's job easier - it doesn't need to guess field names, and each tool can validate and sanitize its own inputs.
+Keeping tools narrow (rather than one generic `query(dataset, filter)` tool) makes the model's job easier. It doesn't need to guess field names, and each tool is the one place where its inputs get checked and escaped.
 
 ## Implementation
 
@@ -244,8 +244,10 @@ resolves into two tool calls, `get_property_values(civic_number="3771", street_n
 
 ## Lessons Learned and Next Steps
 
-- **Schema drift is real.** Field names and formats differ across datasets. The tax roll splits an address into `to_civic_number` plus `street_name` (`MAIN ST`), while permits store one `address` string (`3771 MAIN STREET, Vancouver, BC`). That is why `describe_dataset` ended up necessary rather than optional - the model needs a way to check before it guesses.
-- **Narrow tools beat clever ones.** An earlier version exposed a single generic `query` tool; the model produced malformed `where` clauses often enough that splitting into task-specific tools was a clear win for reliability.
-- **Rate limits matter at demo time.** Iterating on prompts replays the same lookups over and over - a thin caching layer in front of `get_property_values` and `get_permits` avoided hitting the public API again for identical calls.
+Schema drift is real. Field names and formats differ across datasets: the tax roll splits an address into `to_civic_number` plus `street_name` (`MAIN ST`), while permits store one `address` string (`3771 MAIN STREET, Vancouver, BC`). That is why `describe_dataset` ended up necessary rather than optional. The model needs a way to check before it guesses.
+
+Narrow tools beat clever ones. An earlier version exposed a single generic `query` tool, and the model wrote malformed `where` clauses often enough that splitting it into task-specific tools was a clear win for reliability.
+
+Caching helps even at demo scale. Iterating on prompts replays the same lookups over and over, so a thin cache in front of `get_property_values` and `get_permits` keeps identical calls from hitting the public API again.
 
 Next: expose dataset schemas as MCP *resources* (not just a tool) so the client can attach a schema to the context directly instead of spending a model turn on a tool call, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up.
