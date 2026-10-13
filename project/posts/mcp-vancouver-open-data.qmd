@@ -185,25 +185,28 @@ The host spawns the process itself over stdio, so there is nothing to host for l
 
 ## Python vs TypeScript: Same Server, Two SDKs
 
-MCP has first-party SDKs in both languages, and the same `search_datasets` tool looks like this in TypeScript with `@modelcontextprotocol/sdk`:
+MCP has first-party SDKs in both languages. Here is the same `search_datasets` tool in TypeScript with `@modelcontextprotocol/server` (v2; the v1 package was `@modelcontextprotocol/sdk`):
 
 ```typescript
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 
 const server = new McpServer({ name: "vancouver-open-data", version: "1.0.0" });
 const BASE_URL = "https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets";
 
-server.tool(
+server.registerTool(
   "search_datasets",
-  "Search the City of Vancouver's open data catalog by keyword.",
-  { query: z.string(), limit: z.number().default(10) },
+  {
+    description: "Search the City of Vancouver's open data catalog by keyword.",
+    inputSchema: z.object({ query: z.string(), limit: z.number().max(100).default(10) }),
+  },
   async ({ query, limit }) => {
     const url = new URL(BASE_URL);
-    url.searchParams.set("where", `search("${query}")`);
+    url.searchParams.set("where", `search("${query.replaceAll('"', '\\"')}")`);
     url.searchParams.set("limit", String(limit));
     const res = await fetch(url);
+    if (!res.ok) throw new Error(`ODS ${res.status}: ${await res.text()}`);
     const { results } = await res.json();
     const datasets = results.map((d: any) => ({
       id: d.dataset_id,
@@ -216,18 +219,20 @@ server.tool(
 await server.connect(new StdioServerTransport());
 ```
 
-A few things stand out doing it both ways:
+It needs `"type": "module"` in `package.json` for the top-level `await`. The `res.ok` check matters more than it looks: the API rejects `limit` above 100 with an error body, and without the check `results` is `undefined` and the `.map` call fails with an unhelpful `TypeError`.
 
-| | Python (`FastMCP`) | TypeScript (`McpServer`) |
+Writing the same tool twice made the differences easy to see:
+
+| | Python (`MCPServer`) | TypeScript (`McpServer`) |
 |---|---|---|
-| Tool registration | `@mcp.tool()` decorator on a plain function | `server.tool(name, description, schema, handler)` call |
-| Input validation | Python type hints, inferred into JSON schema | Explicit `zod` schema - more verbose, but the shape is visible at the call site |
+| Tool registration | `@mcp.tool()` decorator on a plain function | `server.registerTool(name, config, handler)` call |
+| Input validation | Python type hints, inferred into JSON schema and validated by Pydantic | Explicit `zod` schema, more verbose but visible at the call site |
 | Return value | Return the value directly (list/dict); SDK wraps it | Must hand-wrap into `{ content: [{ type: "text", ... }] }` yourself |
-| Docstring vs description | Docstring *is* the tool description shown to the model | Description is a separate string argument |
+| Docstring vs description | Docstring *is* the tool description shown to the model | `description` is a separate field in the config |
 | Async | `async def`, `httpx.AsyncClient` | `async`/`await`, native `fetch` |
 | Ecosystem fit | Natural if the data/ML stack (pandas, existing scripts) is already Python | Natural if the server needs to live next to a Node/web backend, or ship as an npm package |
 
-Functionally they're equivalent - both compile down to the same JSON-RPC-over-stdio wire format, so a Claude Desktop config can't tell the difference. The real deciding factor is which language the surrounding project already lives in: FastMCP's decorator + type-hint style is less code for a Python-only script like this one, while the TypeScript SDK's explicit Zod schemas pay off more in a larger codebase where you want the tool's input contract checked at compile time.
+Functionally they're equivalent. Both speak the same JSON-RPC over stdio, so the client on the other end can't tell which language the server is written in. The deciding factor is the language the surrounding project already uses. The decorator and type-hint style is less code for a Python-only script like this one. In TypeScript, one Zod schema gives you runtime validation and typed handler arguments, which pays off in a larger codebase.
 
 ## Example Queries and Results
 
