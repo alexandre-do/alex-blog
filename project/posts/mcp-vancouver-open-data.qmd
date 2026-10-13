@@ -13,7 +13,7 @@ categories:
 
 ![](images/mcp-vancouver-open-data.png){.post-banner fig-alt="Building an MCP Server for Vancouver's Open Data"}
 
-The City of Vancouver publishes hundreds of public datasets - property assessments, building permits, public art, parking meters - through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.
+The City of Vancouver publishes about 200 public datasets - property assessments, building permits, public art, parking meters - through a REST API. Wiring that API up as an MCP server means any MCP-compatible LLM client can query it directly, with natural language instead of hand-written filter syntax.
 
 ## Why MCP Fits Open Data
 
@@ -30,8 +30,8 @@ Before wiring up Vancouver's data, it's worth being precise about what "an MCP s
 - **Host** - the user-facing application (Claude Desktop, an IDE, a custom agent). It owns the LLM conversation and decides which servers to connect to.
 - **Client** - lives inside the host, maintains a 1:1 connection to a single server, and handles the JSON-RPC message plumbing. A host with three servers configured runs three clients internally.
 - **Server** - the process you actually write. It advertises capabilities and responds to client requests. This post's `vancouver-open-data` server is one of these.
-- **Tools** - model-invoked functions with a name, description, and JSON-schema input (`search_datasets`, `get_property_values` above). The LLM decides when to call them based on the conversation.
-- **Resources** - addressable, read-only data the *host application* can pull in (a dataset schema, a file, a config blob) without it necessarily going through the model's tool-calling loop. Cheaper than a tool call when the client just needs to display or attach data.
+- **Tools** - model-invoked functions with a name, description, and JSON-schema input (`search_datasets`, `get_property_values` below). The LLM decides when to call them based on the conversation.
+- **Resources** - addressable, read-only data the *host application* can pull in (a dataset schema, a file, a config blob) without going through the model's tool-calling loop. The client still sends a `resources/read` request, but no model turn is spent deciding to fetch it.
 - **Prompts** - reusable, user-triggered templates (e.g., a "/summarize-permits" slash command) that expand into a preset message, as opposed to tools which the model chooses on its own.
 
 For the Vancouver server, only **tools** are used today - the "Next Steps" section below is really about starting to use **resources** for the schema-lookup use case, since `describe_dataset` is a better fit as something the client fetches directly than as a model-invoked round trip.
@@ -57,7 +57,7 @@ Vancouver's portal (`opendata.vancouver.ca`) runs on Opendatasoft, exposed throu
 https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/{dataset_id}/records
 ```
 
-Each dataset accepts `where` (an SQL-like filter expression), `limit`, `offset`, and `order_by` query params, and returns JSON records with a consistent `results` envelope. A handful of datasets cover most useful queries:
+Each dataset accepts `where` (an SQL-like filter expression), `select` (to trim the fields returned), `limit` (capped at 100), `offset`, and `order_by` query params, and returns JSON records with a consistent `results` envelope. A handful of datasets cover most useful queries:
 
 | Dataset ID | Contents |
 |---|---|
@@ -238,14 +238,14 @@ Functionally they're equivalent. Both speak the same JSON-RPC over stdio, so the
 
 Once connected, a prompt like:
 
-> "What's the assessed value trend for 123 Main St over the last few years, and were any permits pulled recently?"
+> "What's the assessed value trend for 3771 Main St over the last few years, and were any permits pulled recently?"
 
-resolves into two tool calls - `get_property_values(address="123 Main St")` and `get_permits(address="123 Main St", since="2023-01-01")` - and the model composes the JSON results into a plain-language answer, without the user ever touching the Opendatasoft query syntax.
+resolves into two tool calls, `get_property_values(civic_number="3771", street_name="MAIN ST")` and `get_permits(address="3771 MAIN STREET", since="2023-01-01")`. The first returns seven assessment years (2020 to 2026): land value peaks at $3.5M in 2023 and falls to $1.5M by 2026, while the improvement value climbs from about $12K to $1.9M over the same years. The second returns four alteration permits issued in March 2026. The model turns that into a plain-language answer, and the user never touches the Opendatasoft query syntax.
 
 ## Lessons Learned and Next Steps
 
-- **Schema drift is real.** Field names differ across datasets (`street_name` vs `civic_address`), which is why `describe_dataset` ended up necessary rather than optional - the model needs a way to check before it guesses.
+- **Schema drift is real.** Field names and formats differ across datasets. The tax roll splits an address into `to_civic_number` plus `street_name` (`MAIN ST`), while permits store one `address` string (`3771 MAIN STREET, Vancouver, BC`). That is why `describe_dataset` ended up necessary rather than optional - the model needs a way to check before it guesses.
 - **Narrow tools beat clever ones.** An earlier version exposed a single generic `query` tool; the model produced malformed `where` clauses often enough that splitting into task-specific tools was a clear win for reliability.
-- **Rate limits matter at demo time.** The public API is generous but not unlimited - a thin caching layer in front of `get_property_values` and `get_permits` avoided repeat calls during iterative testing.
+- **Rate limits matter at demo time.** Iterating on prompts replays the same lookups over and over - a thin caching layer in front of `get_property_values` and `get_permits` avoided hitting the public API again for identical calls.
 
-Next: expose dataset schemas as MCP *resources* (not just a tool) so clients can inspect them without a round trip, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up.
+Next: expose dataset schemas as MCP *resources* (not just a tool) so the client can attach a schema to the context directly instead of spending a model turn on a tool call, add a small on-disk cache, and cover a couple more datasets (transit stops, parking meters) once the pattern holds up.
