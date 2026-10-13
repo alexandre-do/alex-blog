@@ -70,58 +70,118 @@ Each dataset accepts `where` (an SQL-like filter expression), `limit`, `offset`,
 Rather than exposing the raw API 1:1, I mapped it to a small set of task-shaped tools plus a discovery tool:
 
 - `search_datasets(query)` - keyword search over the catalog, returns dataset IDs and descriptions.
-- `get_property_values(address, year)` - assessed value lookup for a street address.
-- `get_permits(address, permit_type, since)` - building permits filtered by location, type, date.
+- `get_property_values(civic_number, street_name, year)` - assessed value lookup for one address.
+- `get_permits(address, since)` - building permits issued at an address, optionally since a date.
 - `describe_dataset(dataset_id)` - returns field names and types, so the model can build valid `where` filters for datasets it hasn't seen before.
 
 Keeping tools narrow (rather than one generic `query(dataset, filter)` tool) makes the model's job easier - it doesn't need to guess field names, and each tool can validate and sanitize its own inputs.
 
 ## Implementation
 
-The server is built with the Python MCP SDK's `FastMCP`, talking to the Opendatasoft API over `httpx`:
+The server is built with the Python MCP SDK's `MCPServer` (called `FastMCP` before v2), talking to the Opendatasoft API over `httpx`. The code targets `mcp` 2.x; on 1.x the import is `from mcp.server.fastmcp import FastMCP` and the rest is the same.
 
 ```python
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 import httpx
 
-mcp = FastMCP("vancouver-open-data")
+mcp = MCPServer("vancouver-open-data")
 BASE_URL = "https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets"
+
+
+def quote(value: str) -> str:
+    """Escape a value for use inside an ODSQL double-quoted string."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+async def fetch(path: str, **params) -> dict:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{BASE_URL}{path}", params=params)
+        resp.raise_for_status()
+        return resp.json()
 
 
 @mcp.tool()
 async def search_datasets(query: str, limit: int = 10) -> list[dict]:
     """Search the City of Vancouver's open data catalog by keyword."""
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            BASE_URL, params={"where": f'search("{query}")', "limit": limit}
-        )
-        resp.raise_for_status()
-        return [
-            {"id": d["dataset_id"], "title": d["metas"]["default"]["title"]}
-            for d in resp.json()["results"]
-        ]
+    data = await fetch("", where=f'search("{quote(query)}")', limit=min(limit, 100))
+    return [
+        {"id": d["dataset_id"], "title": d["metas"]["default"]["title"]}
+        for d in data["results"]
+    ]
 
 
 @mcp.tool()
-async def get_property_values(address: str, year: int | None = None, limit: int = 5) -> list[dict]:
-    """Look up assessed property values for a given street address."""
-    where = f'street_name like "{address}"'
+async def describe_dataset(dataset_id: str) -> list[dict]:
+    """List a dataset's field names and types, to build valid filters."""
+    data = await fetch(f"/{dataset_id}")
+    return [{"name": f["name"], "type": f["type"]} for f in data["fields"]]
+
+
+@mcp.tool()
+async def get_property_values(
+    civic_number: str, street_name: str, year: int | None = None
+) -> list[dict]:
+    """Assessed land and building values for one address, newest year first.
+
+    street_name uses the tax roll's short form, e.g. "MAIN ST".
+    """
+    where = (
+        f'to_civic_number = "{quote(civic_number)}" '
+        f'and street_name = "{quote(street_name.upper())}"'
+    )
     if year:
-        where += f" and tax_assessment_year = {year}"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{BASE_URL}/property-tax-report/records",
-            params={"where": where, "limit": limit},
-        )
-        resp.raise_for_status()
-        return resp.json()["results"]
+        where += f' and tax_assessment_year = "{year}"'
+    data = await fetch(
+        "/property-tax-report/records",
+        where=where,
+        order_by="tax_assessment_year desc",
+        select="tax_assessment_year,current_land_value,current_improvement_value",
+        limit=20,
+    )
+    return data["results"]
+
+
+@mcp.tool()
+async def get_permits(address: str, since: str | None = None, limit: int = 20) -> list[dict]:
+    """Building permits issued at an address like "3771 MAIN STREET".
+
+    since is an ISO date (YYYY-MM-DD).
+    """
+    where = f'address like "{quote(address)}"'
+    if since:
+        where += f" and issuedate >= date'{since}'"
+    data = await fetch(
+        "/issued-building-permits/records",
+        where=where,
+        order_by="issuedate desc",
+        select="permitnumber,issuedate,typeofwork,projectvalue,projectdescription",
+        limit=min(limit, 100),
+    )
+    return data["results"]
 
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
 ```
 
-Registering it with Claude Desktop (or any MCP client) is a one-line config entry pointing at the server's entrypoint over stdio - no separate hosting needed for local use.
+Every value the model passes in goes through `quote()` before it lands in a `where` clause, so an address containing a `"` can't break out of the string literal and rewrite the filter.
+
+The address lookup is less obvious than it looks. The tax roll splits an address into `to_civic_number` (`3771`) and `street_name` (`MAIN ST`), so `get_property_values` takes the two parts separately. Matching a full string like `"3771 Main St"` against `street_name` returns zero rows.
+
+Registering the server with Claude Desktop takes a short entry in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "vancouver-open-data": {
+      "command": "uv",
+      "args": ["run", "--with", "mcp", "--with", "httpx", "/path/to/server.py"]
+    }
+  }
+}
+```
+
+The host spawns the process itself over stdio, so there is nothing to host for local use.
 
 ## Python vs TypeScript: Same Server, Two SDKs
 
