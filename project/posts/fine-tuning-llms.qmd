@@ -14,7 +14,7 @@ categories:
 
 ![](images/fine-tuning-llms.png){.post-banner fig-alt="Fine-Tuning LLMs"}
 
-There are two practical ways to fine-tune an LLM: train a LoRA adapter yourself with Hugging Face, or hand the job to a managed service like Bedrock. This post covers the minimum you need for the first, how supervised fine-tuning compares to continued pre-training, DPO and RLHF, and then the three Bedrock customization workflows (reinforcement fine-tuning, supervised fine-tuning, distillation) with the data format, launch call and evaluation for each.
+There are two practical ways to fine-tune an LLM: train a LoRA adapter yourself with Hugging Face, or hand the job to a managed service like Bedrock. This post covers the minimum you need for the first, how supervised fine-tuning compares to continued pre-training, DPO and RLHF, how to get a LoRA model into Bedrock, and then the three Bedrock customization workflows (reinforcement fine-tuning, supervised fine-tuning, distillation) with the data format, launch call and evaluation for each.
 
 ## Full Fine-Tuning vs PEFT
 
@@ -113,6 +113,27 @@ Most teams now reach for DPO first and keep online RL for cases where the reward
 - You can score outputs automatically (tests pass, answer matches, schema validates): RL with GRPO, on Bedrock or with TRL's `GRPOTrainer`.
 
 These stack in that order, and LoRA works at every stage.
+
+## From a LoRA Adapter to Bedrock
+
+If you trained the adapter yourself, [Custom Model Import](https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model.html) is how it reaches Bedrock. It accepts Llama, Mistral, Qwen and a few other architectures as Hugging Face safetensors (fp16, bf16 or fp32), and it takes full weights, so the adapter has to be merged into the base first:
+
+```python
+merged = model.merge_and_unload()
+merged.save_pretrained("llama3-8b-support", safe_serialization=True)
+tokenizer.save_pretrained("llama3-8b-support")
+# then: aws s3 sync llama3-8b-support s3://my-bucket/cmi/llama3-8b-support/
+
+client = boto3.client("bedrock")
+client.create_model_import_job(
+    jobName="import-llama3-8b-support",
+    importedModelName="llama3-8b-support",
+    roleArn="arn:aws:iam::<account-id>:role/BedrockImportRole",
+    modelDataSource={"s3DataSource": {"s3Uri": "s3://my-bucket/cmi/llama3-8b-support/"}},
+)
+```
+
+Once the job completes, call the imported model's ARN through `bedrock-runtime` like any other model. The [merge section of the Llama 3 post](lora-finetuning-8b.qmd#merge-for-a-single-artifact) covers the merge step in more detail. The alternative is to skip local training and let Bedrock run it, which is what the rest of this post is about.
 
 ## AWS Bedrock Model Customization
 
@@ -307,3 +328,7 @@ response = client.create_model_customization_job(
 #### Evaluation metrics
 
 Because the whole point is a favorable accuracy/latency/cost trade, evaluate the student against the teacher on all three axes rather than accuracy alone: run a Bedrock **Model Evaluation** job with the same test prompts through both models to get a direct accuracy delta, then separately track p50/p90 **latency** and **cost per 1K tokens** for the student versus teacher to confirm the trade you're accepting is the one you intended.
+
+### Serving the custom model
+
+None of these jobs leaves you with something you can call yet. A customized model needs either Provisioned Throughput or an on-demand custom model deployment before `bedrock-runtime` will accept it, and that choice, not the training job, is usually where the bill grows. Check [the inference options for custom models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-use.html) before you commit to a workflow.
