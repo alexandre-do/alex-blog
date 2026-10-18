@@ -17,11 +17,7 @@ Clicking through the AWS console to deploy a model works once. Infrastructure as
 
 ## What Is Infrastructure as Code?
 
-Infrastructure as Code (IaC) means describing infrastructure - networks, IAM roles, compute, storage - in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. Three properties fall out of that:
-
-- **Reproducibility** - the same definition produces the same stack in dev, staging, and prod.
-- **Auditability** - changes to infrastructure show up as diffs, not as an entry in someone's shell history.
-- **Idempotency** - re-applying a template that already matches reality is a no-op; the tool only acts on the delta.
+Infrastructure as Code (IaC) means describing infrastructure (networks, IAM roles, compute, storage) in a text file instead of provisioning it by hand. That file is checked into version control, reviewed in a pull request, and applied by a tool that reconciles the target environment to match it. That buys three things. The same definition produces the same stack in dev, staging and prod. Infrastructure changes show up as diffs in a pull request, not as an entry in someone's shell history. And re-applying a template that already matches reality is a no-op, because the tool only acts on the delta.
 
 IaC tools split along one main axis: **declarative vs. imperative**. Declarative tools (CloudFormation, Terraform, ARM/Bicep) describe the desired end state and let the engine figure out the create/update/delete sequence. Imperative tools (a hand-rolled boto3 script, a bash script wrapping the AWS CLI) describe the steps to get there. Pulumi and CDK sit in between: you write real code in Python or TypeScript, but that code builds a desired-state model that an engine diffs and applies, so they behave declaratively. Declarative is the norm for cloud infrastructure because the engine can diff current vs. desired state and tell you what will change *before* it changes it.
 
@@ -39,7 +35,7 @@ CloudFormation is AWS's own declarative engine: no install, no state file to man
 | Ecosystem | Native AWS support, SAM for serverless | Largest ecosystem, most third-party modules, works across clouds | Native Azure support, best for Azure-centric shops |
 | Best fit | AWS-only teams that want zero extra tooling and tight IAM integration | Teams running multi-cloud or hybrid infra, or who want one tool for everything | Azure-only teams already inside the Microsoft stack |
 
-For an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there's no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you're provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) - at the cost of managing state yourself. Azure's tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.
+For an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there's no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you're provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint), at the cost of managing state yourself. Azure's tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.
 
 ## A Minimal Stack
 
@@ -156,33 +152,25 @@ aws sagemaker-runtime invoke-endpoint \
 
 The request body depends on the container's input handler, so adjust it to whatever your model server parses.
 
-## Tips
-
-- Deploy the same file once per environment: `--stack-name ml-inference-dev` with `InstanceType=ml.m5.large`, `--stack-name ml-inference-prod` with something bigger. No `Conditions` blocks branching on an `Env` parameter.
-- Shipping a new model is a new `ModelDataUrl` (or `ImageUri`). Because no resource names are hard-coded, CloudFormation replaces the Model and EndpointConfig and updates the Endpoint in place to the new config.
-- Tear down with `aws cloudformation delete-stack --stack-name ml-inference-dev` when you're done. An idle `ml.m5.large` endpoint still bills every hour it's up, and since the artifact bucket lives outside this stack, deleting the endpoint never touches your model files.
-
-CloudFormation won't replace judgment about architecture, but it turns "how did we deploy this?" from a Slack archaeology exercise into a file you can read.
-
 ## SAM vs. Plain CloudFormation
 
-AWS SAM (Serverless Application Model) isn't a separate deployment engine - it's a CloudFormation *transform* (`Transform: AWS::Serverless-2016-10-31`). A SAM template gets expanded into a full CloudFormation template at deploy time, plus you get a CLI built around a Lambda-centric workflow: `sam build`, `sam local invoke`, `sam deploy --guided`.
+AWS SAM (Serverless Application Model) is a CloudFormation *transform* (`Transform: AWS::Serverless-2016-10-31`), not a separate engine. A SAM template gets expanded into a full CloudFormation template at deploy time, plus you get a CLI built around a Lambda-centric workflow: `sam build`, `sam local invoke`, `sam deploy --guided`.
 
 | | Plain CloudFormation | SAM |
 |---|---|---|
-| Best fit | Any AWS resource type - SageMaker, S3, IAM, VPC, RDS, whatever the stack needs | Serverless apps: Lambda, API Gateway, Step Functions, DynamoDB |
+| Best fit | Any AWS resource type (SageMaker, S3, IAM, VPC, RDS) | Serverless apps: Lambda, API Gateway, Step Functions, DynamoDB |
 | Template verbosity | Full resource properties every time (IAM permissions, API Gateway integrations spelled out) | Shorthand types (`AWS::Serverless::Function`, `::Api`) expand that boilerplate for you |
 | Local testing | None in the CloudFormation CLI (the SAM CLI can still `sam local invoke` a plain `AWS::Lambda::Function`) | `sam local invoke` / `sam local start-api` run your Lambda in a local Docker container before it ever touches AWS |
 | Packaging | Manual `aws cloudformation package` to zip and upload code to S3 | `sam build` handles dependency installation and packaging |
-| Underlying engine | CloudFormation | Also CloudFormation - SAM templates are valid CloudFormation with one added `Transform` line |
+| Underlying engine | CloudFormation | Also CloudFormation. A SAM template is a CloudFormation template plus one `Transform` line |
 
-For the SageMaker stack above, plain CloudFormation is the right call: SAM's shorthand only covers serverless resource types, and `AWS::SageMaker::Model`/`EndpointConfig`/`Endpoint` have no SAM equivalent to shrink. SAM earns its keep the moment the inference layer *is* a Lambda function - e.g., a lightweight CPU model invoked behind API Gateway, or a Lambda that calls out to a SageMaker endpoint. In that case the boilerplate SAM strips away (API Gateway wiring, Lambda execution roles and permissions) is exactly the boilerplate that pattern generates, and the local dev loop (`sam local invoke`) comes with the SAM CLI, which is reason enough to install it. Nothing stops a single template from mixing both - SAM resources alongside raw CloudFormation ones - since a SAM template is just CloudFormation with a transform applied.
+For the SageMaker stack above, plain CloudFormation is the right call: SAM's shorthand only covers serverless resource types, and `AWS::SageMaker::Model`/`EndpointConfig`/`Endpoint` have no SAM equivalent to shrink. SAM earns its keep the moment the inference layer *is* a Lambda function, for example a lightweight CPU model invoked behind API Gateway, or a Lambda that calls out to a SageMaker endpoint. In that case the boilerplate SAM strips away (API Gateway wiring, Lambda execution roles and permissions) is exactly the boilerplate that pattern generates, and the local dev loop (`sam local invoke`) comes with the SAM CLI, which is reason enough to install it. Nothing stops a single template from mixing both (SAM resources next to raw CloudFormation ones), since a SAM template is just CloudFormation with a transform applied.
 
 ### Quick SAM How-To
 
 ```bash
 # 1. Install the CLI
-brew install aws-sam-cli   # or the pip/binary installer
+brew install aws-sam-cli   # or the official installer from the AWS docs
 
 # 2. Scaffold a project (template.yaml + function code)
 sam init
@@ -214,7 +202,7 @@ Resources:
 sam build
 
 # 4. Test locally, in a Docker container that mimics the Lambda runtime
-sam local invoke InferenceFunction --event event.json
+sam local invoke InferenceFunction --event events/event.json
 
 # 5. First deploy: walks through stack name/region/confirmation prompts
 #    and saves the answers to samconfig.toml
@@ -225,3 +213,11 @@ sam deploy
 ```
 
 The rule of thumb: reach for SAM when the deployable unit is a Lambda function and you want a local test loop before every deploy; stay with plain CloudFormation when the stack is built from broader AWS resource types that SAM's transform doesn't shorten anyway.
+
+## Tips
+
+- Deploy the same file once per environment: `--stack-name ml-inference-dev` with `InstanceType=ml.m5.large`, `--stack-name ml-inference-prod` with something bigger. No `Conditions` blocks branching on an `Env` parameter.
+- Shipping a new model is a new `ModelDataUrl` (or `ImageUri`). Because no resource names are hard-coded, CloudFormation replaces the Model and EndpointConfig and updates the Endpoint in place to the new config.
+- Tear down with `aws cloudformation delete-stack --stack-name ml-inference-dev` when you're done. An idle `ml.m5.large` endpoint still bills every hour it's up, and since the artifact bucket lives outside this stack, deleting the endpoint never touches your model files.
+
+CloudFormation won't replace judgment about architecture, but it turns "how did we deploy this?" from a Slack archaeology exercise into a file you can read.
