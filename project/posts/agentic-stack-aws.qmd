@@ -25,7 +25,7 @@ The layer numbers below are depth, not sequence: L0 lives inside a single model 
 | **L1: Agent loop / framework** | Who writes the reason → act → observe → repeat cycle? | Strands Agents, LangGraph, LangChain, Bedrock Agents (managed) |
 | **L2: Runtime / hosting** | Where does that agent process run, with what identity, memory and tools? | AgentCore Runtime (+ Memory, Identity, Gateway, Observability), Lambda, Fargate/EKS |
 | **L3: Multi-agent routing** | Which of my already-built specialist agents should take this request? | Agent Squad, Strands supervisor/swarm/graph, Bedrock multi-agent collaboration |
-| **L4: Durable outer workflow** | What guarantees retries, approvals, audit trail and week-long execution? | AWS Step Functions, EventBridge, SQS |
+| **L4: Durable outer workflow** | What guarantees retries, approvals, audit trail and long-running (up to a year) execution? | AWS Step Functions (EventBridge and SQS as the triggers and buffers around it) |
 
 ## Reading the Question
 
@@ -38,7 +38,7 @@ Scenario descriptions are usually written around one distinguishing constraint. 
 | "…we already have agents built in LangGraph and CrewAI, need them in production with session isolation and identity" | **L2: AgentCore Runtime.** Framework- and model-agnostic hosting. |
 | "…one chat entry point, several specialist agents, conversation context must follow the user across them" | **L3: Agent Squad** (classifier + storage), or a Strands supervisor. |
 | "…Lambda's 15-minute limit is being hit by a long-running agent session" | **L2: AgentCore Runtime.** A session lives up to 8 hours, but one synchronous request still caps at 15 minutes, so long work runs as an async task (or streams, up to 60 minutes). |
-| "…minimum custom orchestration code, AWS should own the loop" | **Bedrock Agents** (managed), or the AgentCore **Harness**. |
+| "…minimum custom orchestration code, AWS should own the loop" | **L1, managed: Bedrock Agents**, or the AgentCore harness (GA June 2026). |
 | "…accuracy on multi-step arithmetic or logic is poor, no tools involved" | **L0: chain-of-thought**, not an agent framework. |
 | "…payload between steps exceeds the limit" | **Step Functions' 256 KiB cap.** Pass S3 references, not documents. |
 
@@ -118,7 +118,7 @@ response = await orchestrator.route_request(text, user_id, session_id)
 
 Classifier options are Bedrock, Anthropic, or OpenAI; storage can be in-memory, DynamoDB, or SQL (libSQL). There's also a *SupervisorAgent* mode for agents-as-tools instead of pure routing.
 
-What tells it apart: intent classification plus conversation persistence are the actual product · Python and TypeScript · streaming and non-streaming · if a scenario describes building the agent's own tool-calling loop, Agent Squad is the wrong answer, because it routes between agents and doesn't build one.
+What tells it apart: what you're really getting is intent classification plus conversation persistence · Python and TypeScript · streaming and non-streaming · if a scenario describes building the agent's own tool-calling loop, Agent Squad is the wrong answer, because it routes between agents and doesn't build one.
 
 ### LangChain & LangGraph (L1, developer-driven loop)
 
@@ -181,7 +181,7 @@ L0 patterns are prompt-and-control-flow techniques, not services. Each one can b
 
 ## Three Compositions Worth Memorizing
 
-Real answers are usually a stack, not a single service. These three combinations are the ones AWS itself publishes.
+Most real designs combine several of these. These three keep showing up in AWS samples and reference architectures.
 
 #### The AWS-native default
 
@@ -189,7 +189,7 @@ Strands Agents writes the ReAct loop, AgentCore Runtime hosts it with 8-hour ses
 
 #### Durable enterprise workflow
 
-Step Functions (Standard) is the outer, auditable process; `Map` fans out over documents; `InvokeAgentRuntime` calls the agent per item (keep each call under the 15-minute synchronous limit, or start an async task and poll); `waitForTaskToken` gates on human approval before commit. Pick this combination when the words are *compliance, audit trail, retries, approval, long-running*. The agent reasons; Step Functions guarantees.
+Step Functions (Standard) is the outer, auditable process; `Map` fans out over documents; `InvokeAgentRuntime` calls the agent per item (keep each call under the 15-minute synchronous limit, or start an async task and poll); `waitForTaskToken` gates on human approval before commit. Pick this combination when the words are *compliance, audit trail, retries, approval, long-running*.
 
 #### Many specialists, one door
 
@@ -201,8 +201,8 @@ Where these terms get deliberately swapped or conflated:
 
 - Step Functions gets offered as the reasoning loop. It *can* loop a Choice state back to the model, and that pattern is real, but if the requirement says the path is chosen by the model at runtime, the right tool is Strands or LangGraph. Step Functions is for known sequences.
 - Agent Squad gets mistaken for something that builds an agent. It routes between agents and keeps history; it does not implement tool-calling reasoning. If nothing in the requirement mentions multiple existing agents, it's the wrong fit.
-- AgentCore Runtime gets mistaken for a framework. It's hosting plus managed services and doesn't decide how your agent thinks. "Framework-agnostic" is the phrase to hold onto.
-- Bedrock Agents and AgentCore get conflated. Bedrock Agents is the fully managed console/API agent: action groups, knowledge bases, AWS owns the loop, and you get the least control. AgentCore is the platform for agents *you* built. Different products, easily conflated.
+- AgentCore Runtime gets mistaken for a framework. It's hosting plus managed services and doesn't decide how your agent thinks. If a scenario says "framework-agnostic", it's pointing at Runtime.
+- Bedrock Agents and AgentCore get conflated. Bedrock Agents is the fully managed console/API agent: action groups, knowledge bases, AWS owns the loop, and you get the least control. AgentCore is the platform for agents *you* built.
 - LangChain and LangGraph get treated as one thing. "Stateful", "cycles", "checkpoint", "human-in-the-loop interrupt", or "multi-agent orchestration" all point to LangGraph specifically, not the LangChain component library.
 
 The one-line version to keep straight: pattern (L0) decides how it thinks, framework (L1) decides who writes the loop, runtime (L2) decides where it runs, router (L3) decides which agent, workflow (L4) decides what is guaranteed.
