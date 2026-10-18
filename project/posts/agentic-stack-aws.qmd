@@ -13,7 +13,7 @@ categories:
 
 ![](images/agentic-stack-aws.png){.post-banner fig-alt="The Agentic Stack on AWS"}
 
-AWS's agent tooling looks like a pile of overlapping options - AgentCore Runtime, Strands, Agent Squad, LangChain, LangGraph, Step Functions - until you notice they're not five answers to one question. They're answers to five different questions, stacked at different depths: how a model reasons within one call, who writes the reason-act-observe loop, where that loop actually runs, how a request gets routed to the right specialist agent, and what guarantees retries and audit trail around the whole thing. Most confusion about "which one do I use" disappears once you identify which depth a requirement is actually describing.
+AWS's agent tooling looks like a pile of overlapping options (AgentCore Runtime, Strands, Agent Squad, LangChain, LangGraph, Step Functions) until you notice they don't answer the same question. They answer five different questions, stacked at different depths: how a model reasons within one call, who writes the reason-act-observe loop, where that loop actually runs, how a request gets routed to the right specialist agent, and what guarantees retries and audit trail around the whole thing. Most confusion about "which one do I use" disappears once you identify which depth a requirement is actually describing.
 
 ## The Five Layers
 
@@ -37,7 +37,7 @@ Scenario descriptions are usually written around one distinguishing constraint. 
 | "…must be auditable, retried, resumed after a human approval, run for days" | **L4 - Step Functions Standard** with `waitForTaskToken`. |
 | "…we already have agents built in LangGraph and CrewAI, need them in production with session isolation and identity" | **L2 - AgentCore Runtime.** Framework- and model-agnostic hosting. |
 | "…one chat entry point, several specialist agents, conversation context must follow the user across them" | **L3 - Agent Squad** (classifier + storage), or a Strands supervisor. |
-| "…Lambda's 15-minute limit is being hit by a long-running agent session" | **L2 - AgentCore Runtime**, up to 8-hour sessions. |
+| "…Lambda's 15-minute limit is being hit by a long-running agent session" | **L2: AgentCore Runtime.** A session lives up to 8 hours, but one synchronous request still caps at 15 minutes, so long work runs as an async task (or streams, up to 60 minutes). |
 | "…minimum custom orchestration code, AWS should own the loop" | **Bedrock Agents** (managed), or the AgentCore **Harness**. |
 | "…accuracy on multi-step arithmetic or logic is poor, no tools involved" | **L0 - chain-of-thought**, not an agent framework. |
 | "…payload between steps exceeds the limit" | **Step Functions' 256 KB cap.** Pass S3 references, not documents. |
@@ -48,7 +48,7 @@ Scenario descriptions are usually written around one distinguishing constraint. 
 
 A serverless, session-isolated runtime for agents you've already written, plus a set of surrounding managed services: Memory, Identity, Gateway, Observability, Code Interpreter, Browser, Policy, Evaluations. It reached general availability in October 2025. The important framing: it does not write your agent, it runs it - and it doesn't care what wrote it.
 
-Reach for it when an agent already exists (Strands, LangGraph, CrewAI, LlamaIndex, the OpenAI Agents SDK) and now needs production hosting; when sessions run longer than Lambda's 15-minute ceiling - Runtime supports up to **8 hours**; when per-user session isolation is a security requirement, since each session gets its own microVM; when you need OAuth/Cognito/IAM agent identity or want to expose Lambdas and REST APIs to the agent as MCP tools through Gateway; or when short- and long-term memory should be managed rather than hand-rolled in DynamoDB.
+Reach for it when an agent already exists (Strands, LangGraph, CrewAI, LlamaIndex, the OpenAI Agents SDK) and now needs production hosting; when sessions run longer than Lambda's 15-minute ceiling (a Runtime session lasts up to **8 hours**, though each synchronous request is still capped at 15 minutes, so long jobs go through async tasks); when per-user session isolation is a security requirement, since each session gets its own microVM; when you need OAuth/Cognito/IAM agent identity or want to expose Lambdas and REST APIs to the agent as MCP tools through Gateway; or when short- and long-term memory should be managed rather than hand-rolled in DynamoDB.
 
 ```python
 from bedrock_agentcore import BedrockAgentCoreApp
@@ -61,14 +61,15 @@ agent = Agent(tools=[...])
 def invoke(payload, context):
     return agent(payload["prompt"])
 
-# agentcore configure --entrypoint app.py
-# agentcore launch      → ARN
-# InvokeAgentRuntime(runtimeSessionId=...)
+# npm install -g @aws/agentcore
+# agentcore create      (Agent → Strands)
+# agentcore deploy      → runtime ARN (agentcore status)
+# InvokeAgentRuntime(agentRuntimeArn=..., runtimeSessionId=...)
 ```
 
-The same three steps apply whatever the framework - the container just has to speak the Runtime contract.
+The same steps apply whatever the framework, because Runtime only needs your code to speak its HTTP contract (`/invocations` and `/ping`).
 
-**Discriminators:** framework-agnostic *and* model-agnostic (models inside or outside Bedrock) · 8-hour sessions · microVM session isolation · MCP and A2A support · OTEL/CloudWatch observability built in. **Harness** is the newer managed-loop option, where you declare model + tools + behavior instead of writing the loop yourself.
+**Discriminators:** framework-agnostic *and* model-agnostic (models inside or outside Bedrock) · 8-hour sessions · microVM session isolation · MCP and A2A support · OTEL/CloudWatch observability built in. **Harness** (GA June 2026, backed by a managed Runtime) is the newer managed-loop option, where you declare model + tools + behavior instead of writing the loop yourself.
 
 ### Strands Agents - L1, model-driven loop
 
@@ -82,10 +83,10 @@ from strands import Agent, tool
 @tool
 def get_order(order_id: str) -> dict:
     """Look up an order."""
-    return ddb.get_item(...)
+    return ddb.get_item(...)  # ddb: a boto3 DynamoDB Table
 
 agent = Agent(
-    model="anthropic.claude-...",
+    model="global.anthropic.claude-...",  # inference profile ID
     system_prompt="You are support...",
     tools=[get_order],
 )
@@ -99,29 +100,29 @@ Agent(tools=[billing_agent, tech_agent])
 
 ### Agent Squad - L3, routing
 
-An AWS Labs open-source orchestrator (formerly Multi-Agent Orchestrator) that classifies an incoming request, routes it to the right specialist agent, and keeps one conversation history across all of them. It does not implement a reasoning loop of its own - it sits on top of agents built elsewhere.
+An open-source orchestrator that started at AWS Labs and has been maintained by 2FastLabs since April 2026 (formerly Multi-Agent Orchestrator) that classifies an incoming request, routes it to the right specialist agent, and keeps one conversation history across all of them. It does not implement a reasoning loop of its own - it sits on top of agents built elsewhere.
 
 Reach for it when several agents already exist and one front door needs to pick between them; when the agents are heterogeneous - a Bedrock Agent, a Lex bot, a Lambda, an OpenAI model - and still need shared context; when context has to survive a switch mid-conversation ("now about my bill…"); or when the router itself needs to run anywhere - Lambda, local, another cloud.
 
 ```python
 orchestrator = AgentSquad(
-  classifier=BedrockClassifier(...),
-  storage=DynamoDbChatStorage(...),
+    classifier=BedrockClassifier(...),
+    storage=DynamoDbChatStorage(...),
 )
-orchestrator.add_agent(BedrockLLMAgent(...))   # tech
-orchestrator.add_agent(LambdaAgent(...))       # billing
-orchestrator.add_agent(AmazonBedrockAgent(...))# KB
+orchestrator.add_agent(BedrockLLMAgent(...))     # tech
+orchestrator.add_agent(LambdaAgent(...))         # billing
+orchestrator.add_agent(AmazonBedrockAgent(...))  # KB
 
-orchestrator.route_request(text, user_id, session_id)
+response = await orchestrator.route_request(text, user_id, session_id)
 ```
 
-Classifier options are Bedrock, Anthropic, or OpenAI; storage can be in-memory, DynamoDB, or Redis/SQL. There's also a *SupervisorAgent* mode for agents-as-tools instead of pure routing.
+Classifier options are Bedrock, Anthropic, or OpenAI; storage can be in-memory, DynamoDB, or SQL (libSQL). There's also a *SupervisorAgent* mode for agents-as-tools instead of pure routing.
 
 **Discriminators:** intent classification plus conversation persistence are the actual product · Python and TypeScript · streaming and non-streaming · if a scenario describes building the agent's own tool-calling loop, Agent Squad is the wrong answer - it routes between agents, it doesn't build one.
 
 ### LangChain & LangGraph - L1, developer-driven loop
 
-Two different things under one brand, and AWS documents them separately. **LangChain** is the component library - loaders, retrievers, chains, integrations. **LangGraph** is the stateful graph: nodes, conditional edges, cycles, checkpoints.
+Two different things under one brand, even though AWS's prescriptive guidance covers them on a single page. **LangChain** is the component library - loaders, retrievers, chains, integrations. **LangGraph** is the stateful graph: nodes, conditional edges, cycles, checkpoints.
 
 Reach for LangChain for rapid prototyping, RAG plumbing, or reusing a broad pre-built integration ecosystem. Reach for LangGraph when control flow must be explicit and inspectable: complex branching, long-running stateful sessions, checkpointed human-in-the-loop interrupts, multi-agent supervisor graphs - or when portability across clouds and models is a stated requirement. The general rule versus Strands: choose LangGraph when you want to *own* the topology rather than let the model choose it.
 
@@ -134,12 +135,12 @@ g.add_conditional_edges(
     "assistant", needs_tool,
     {"yes": "tools", "no": END})
 g.add_edge("tools", "assistant")   # the cycle
-app = g.compile(checkpointer=saver)
+graph = g.compile(checkpointer=saver)
 ```
 
 That cycle *is* ReAct, written by hand. Deploy the compiled graph on Lambda, ECS/EKS, or package it into AgentCore Runtime.
 
-**Discriminators:** LangChain is components, LangGraph is a state machine with cycles · both integrate with Bedrock (Claude, Nova) · AWS frames it as "developer-first, explicit chain construction" versus Strands' "LLM-first" · reflection, plan-and-execute and supervisor patterns are all just extra nodes on the graph.
+**Discriminators:** LangChain is components, LangGraph is a state machine with cycles · both integrate with Bedrock (Claude, Nova) · AWS's Strands deep dive calls LangChain "developer-first" (you assemble the chain) and Strands "LLM-first" (the model plans) · reflection, plan-and-execute and supervisor patterns are all just extra nodes on the graph.
 
 ### AWS Step Functions - L4, durable workflow
 
@@ -159,10 +160,10 @@ Model → Choice("tool_use"?)
   └ no  → Succeed
 
 // current AWS-native combo
-Map → bedrock-agentcore:InvokeAgentRuntime
+Map → aws-sdk:bedrockagentcore:invokeAgentRuntime
 ```
 
-**Discriminators:** a **256 KB** payload limit between states - pass S3 references, treat state as control plane, not data plane · Standard (1 year, callbacks) versus Express (5 minutes, no callbacks, cheaper at volume) · the optimized `bedrock:invokeModel` integration does *not* cover Converse or streaming - use the generic SDK integration for those · March 2026 added direct AgentCore SDK integrations; June 2026 added an AgentCore-powered agentic reasoning step (declare model + tools in Workflow Studio, session ID for context, per-invocation overrides), currently in preview.
+**Discriminators:** a **256 KB** payload limit between states - pass S3 references, treat state as control plane, not data plane · Standard (1 year, callbacks) versus Express (5 minutes, no callbacks, cheaper at volume) · the optimized `bedrock:invokeModel` integration does *not* cover Converse or streaming - use the generic SDK integration for those · March 2026 added direct AgentCore SDK integrations; June 2026 announced, in preview, an `InvokeHarness` Task (`bedrockagentcore:invokeHarness`) that runs an AgentCore harness as a step, with a session ID for context and per-invocation model, prompt and tool overrides. It is request-response only (no `.sync`, no `waitForTaskToken`) and the Task caps at 15 minutes, so long agent runs still belong in Runtime.
 
 ## Reasoning Patterns, and Where Each One Lives
 
@@ -184,7 +185,7 @@ Real answers are usually a stack, not a single service. These three combinations
 
 **The AWS-native default** - Strands Agents writes the ReAct loop, AgentCore Runtime hosts it with 8-hour sessions, AgentCore Gateway turns Lambdas into MCP tools, and AgentCore Memory + Identity handle context and auth. This is the fastest AWS-blessed path from a laptop prototype to a production agent - pick it when the requirement stresses "minimal infrastructure management."
 
-**Durable enterprise workflow** - Step Functions (Standard) is the outer, auditable process; `Map` fans out over documents; `InvokeAgentRuntime` calls the agent per item; `waitForTaskToken` gates on human approval before commit. Pick this combination when the words are *compliance, audit trail, retries, approval, long-running*. The agent reasons; Step Functions guarantees.
+**Durable enterprise workflow** - Step Functions (Standard) is the outer, auditable process; `Map` fans out over documents; `InvokeAgentRuntime` calls the agent per item (keep each call under the 15-minute synchronous limit, or start an async task and poll); `waitForTaskToken` gates on human approval before commit. Pick this combination when the words are *compliance, audit trail, retries, approval, long-running*. The agent reasons; Step Functions guarantees.
 
 **Many specialists, one door** - API Gateway is the chat entry point, Agent Squad classifies and keeps DynamoDB history, specialist agents (Strands, Bedrock Agents, or Lex) do the actual work, and AgentCore Runtime hosts each specialist. Pick this when several teams own separate agents and context has to survive the handoff between them.
 
