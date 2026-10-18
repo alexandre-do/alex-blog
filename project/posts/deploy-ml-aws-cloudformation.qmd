@@ -41,40 +41,64 @@ CloudFormation is AWS's own declarative engine: no install, no state file to man
 
 For an AWS-only ML deployment like the one below, CloudFormation removes a moving part: there's no state file to lose or corrupt, and permissions are governed by the same IAM you already use for everything else in the account. Terraform earns its keep once you're provisioning outside AWS too (e.g., a Snowflake warehouse or a GCP BigQuery dataset alongside your SageMaker endpoint) - at the cost of managing state yourself. Azure's tools are the equivalent choice if your ML platform lives in Azure ML instead of SageMaker.
 
-## Core Building Blocks
-
-A typical ML inference stack needs:
-
-- An **S3 bucket** to store model artifacts
-- An **IAM role** with least-privilege access for the compute layer
-- A **compute target** - a SageMaker endpoint for managed hosting, or Lambda/ECS for lighter-weight inference
-
 ## A Minimal Stack
 
-```yaml
-Resources:
-  ModelArtifactsBucket:
-    Type: AWS::S3::Bucket
+The serving stack is four resources: an IAM role SageMaker assumes to pull the image and the artifact, a Model that pairs the two, an EndpointConfig that picks the instance type, and the Endpoint itself. The artifact bucket lives outside the stack on purpose. If the stack created the bucket, it would be empty when the Model tries to load `model.tar.gz` from it, and the deploy would roll back.
 
+```yaml
+Parameters:
+  ImageUri:
+    Type: String
+  ModelDataUrl:
+    Type: String
+    Description: s3://<bucket>/<prefix>/model.tar.gz, uploaded before deploy
+  ModelBucketName:
+    Type: String
+  InstanceType:
+    Type: String
+    Default: ml.m5.large
+
+Resources:
   SageMakerExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: sagemaker.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: model-hosting
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ModelBucketName}/*"
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchCheckLayerAvailability
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - cloudwatch:PutMetricData
+                Resource: "*"
 
   Model:
     Type: AWS::SageMaker::Model
     Properties:
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       PrimaryContainer:
-        Image: <ecr-image-uri>
-        ModelDataUrl: !Sub "s3://${ModelArtifactsBucket}/model.tar.gz"
+        Image: !Ref ImageUri
+        ModelDataUrl: !Ref ModelDataUrl
 
   EndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -83,28 +107,60 @@ Resources:
         - ModelName: !GetAtt Model.ModelName
           VariantName: AllTraffic
           InitialInstanceCount: 1
-          InstanceType: ml.m5.large
+          InstanceType: !Ref InstanceType
 
   Endpoint:
     Type: AWS::SageMaker::Endpoint
     Properties:
       EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName
+
+Outputs:
+  EndpointName:
+    Value: !GetAtt Endpoint.EndpointName
 ```
+
+The role is scoped to what an endpoint actually does: read one bucket, pull from ECR, write logs and metrics. `AmazonSageMakerFullAccess` is the tempting shortcut, but it only grants `s3:GetObject` on buckets with "sagemaker" in the name (or objects tagged `SageMaker=true`), and it grants far more SageMaker permissions than an endpoint needs.
+
+`ImageUri` is either an AWS Deep Learning Container or SageMaker framework image, or your own image in ECR. `model.tar.gz` has to match the layout that container expects, so check the image's docs before packaging.
 
 ## Deploying the Stack
 
+Upload the artifact first, then deploy:
+
 ```bash
+aws s3 cp model.tar.gz s3://my-model-bucket/v1/model.tar.gz
+
 aws cloudformation deploy \
   --template-file stack.yaml \
-  --stack-name ml-inference-stack \
-  --capabilities CAPABILITY_IAM
+  --stack-name ml-inference-dev \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides \
+      ImageUri=123456789012.dkr.ecr.us-east-1.amazonaws.com/my-model:1.0 \
+      ModelDataUrl=s3://my-model-bucket/v1/model.tar.gz \
+      ModelBucketName=my-model-bucket
 ```
+
+`CAPABILITY_IAM` is enough because the role has no explicit `RoleName`. Once the stack reaches `CREATE_COMPLETE`, check that the endpoint answers:
+
+```bash
+aws cloudformation describe-stacks --stack-name ml-inference-dev \
+  --query "Stacks[0].Outputs"
+
+aws sagemaker-runtime invoke-endpoint \
+  --endpoint-name <EndpointName from outputs> \
+  --content-type application/json \
+  --body '{"inputs": [[1.0, 2.0, 3.0]]}' \
+  --cli-binary-format raw-in-base64-out \
+  out.json && cat out.json
+```
+
+The request body depends on the container's input handler, so adjust it to whatever your model server parses.
 
 ## Tips
 
-- Parameterize the instance type and image URI so the same template works across environments.
-- Use one stack per environment (dev/staging/prod) rather than branching logic inside a single template.
-- Tear down with `aws cloudformation delete-stack` when you're done - an idle SageMaker endpoint bills by the hour.
+- Deploy the same file once per environment: `--stack-name ml-inference-dev` with `InstanceType=ml.m5.large`, `--stack-name ml-inference-prod` with something bigger. No `Conditions` blocks branching on an `Env` parameter.
+- Shipping a new model is a new `ModelDataUrl` (or `ImageUri`). Because no resource names are hard-coded, CloudFormation replaces the Model and EndpointConfig and updates the Endpoint in place to the new config.
+- Tear down with `aws cloudformation delete-stack --stack-name ml-inference-dev` when you're done. An idle `ml.m5.large` endpoint still bills every hour it's up, and since the artifact bucket lives outside this stack, deleting the endpoint never touches your model files.
 
 CloudFormation won't replace judgment about architecture, but it turns "how did we deploy this?" from a Slack archaeology exercise into a file you can read.
 
