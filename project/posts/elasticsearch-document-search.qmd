@@ -31,7 +31,7 @@ The important shift in mindset: a relational query returns *correct* rows, an El
 
 ## Core Mechanism 1: Turning Text Into an Inverted Index
 
-Every `text` field gets run through an **analyzer** at index time, and the output of that analyzer is what actually gets stored and searched - not the raw string.
+Every `text` field gets run through an **analyzer** at index time, and the output of that analyzer is what actually gets stored and searched, not the raw string.
 
 ```
 "The Quick Foxes ran"
@@ -47,9 +47,9 @@ This is a custom (or `english`) analyzer. The default `standard` analyzer only l
 
 An analyzer is three stages, all pluggable:
 
-1. **Character filters** - strip HTML, map characters, run before tokenization.
-2. **Tokenizer** - splits the stream into tokens (`standard` splits on word boundaries and Unicode text segmentation rules).
-3. **Token filters** - `lowercase`, `stop` (remove stopwords), `stemmer` (`running` → `run`), `asciifolding` (`réseau` → `reseau`), `synonym`.
+1. **Character filters**: strip HTML, map characters, run before tokenization.
+2. **Tokenizer**: splits the stream into tokens (`standard` splits on word boundaries and Unicode text segmentation rules).
+3. **Token filters**: `lowercase`, `stop` (remove stopwords), `stemmer` (`running` → `run`), `asciifolding` (`réseau` → `reseau`), `synonym`.
 
 The result is an **inverted index**: a map from term to the list of documents (and positions) that contain it.
 
@@ -59,7 +59,7 @@ term        → postings
 "overdue"   → [doc_12 (pos 4), doc_88 (pos 1)]
 ```
 
-Searching "overdue invoice" is then a matter of intersecting/unioning postings lists, not scanning documents - which is why full-text search on millions of documents stays fast: cost is driven by postings-list size, not corpus size.
+Searching "overdue invoice" is then a matter of intersecting/unioning postings lists, not scanning documents. That's why full-text search stays fast on millions of documents: cost depends on postings-list size, not corpus size.
 
 Field type matters a lot here, because not every field should be analyzed:
 
@@ -81,10 +81,10 @@ $$
 
 Reading it left to right:
 
-- **$\text{IDF}(t)$** - inverse document frequency: rare terms score higher than common ones. A term in 3 documents out of a million is far more informative than one in 500,000.
-- **$f(t, d)$** - raw term frequency in the document.
+- **$\text{IDF}(t)$**: inverse document frequency. Rare terms score higher than common ones. A term in 3 documents out of a million is far more informative than one in 500,000.
+- **$f(t, d)$**: raw term frequency in the document.
 - **Saturation**: Lucene's old TF-IDF used `sqrt(tf)`, which keeps growing without limit. BM25's term-frequency component tends toward a ceiling of `k1 + 1`, so the 10th occurrence of "invoice" barely moves the score past the 5th.
-- **Length normalization** - $|d| / \text{avgdl}$ penalizes documents longer than the field average, so a 5,000-word body that mentions "invoice" once in passing ranks below a 50-word body where it's the topic. Normalization is per field, against that field's own average.
+- **Length normalization**: $|d| / \text{avgdl}$ penalizes documents longer than the field average, so a 5,000-word body that mentions "invoice" once in passing ranks below a 50-word body where it's the topic. Normalization is per field, against that field's own average.
 
 The two tunable constants:
 
@@ -97,7 +97,7 @@ To change them you define a custom similarity in the index settings (e.g. `"titl
 
 ## Core Mechanism 3: Natural Language + Metadata Filters
 
-Real search UIs are rarely pure full-text - "unpaid invoices from the Normandy office" is a text query ("unpaid invoices") plus structural filters (`office = normandy`). Elasticsearch's `bool` query cleanly separates the two into different **contexts**:
+Real search UIs are rarely pure full-text. "Unpaid invoices from the Normandy office" is a text query ("unpaid invoices") plus structural filters (`office = normandy`). Elasticsearch's `bool` query cleanly separates the two into different **contexts**:
 
 ```json
 {
@@ -121,7 +121,7 @@ Real search UIs are rarely pure full-text - "unpaid invoices from the Normandy o
 }
 ```
 
-The distinction between `must`/`should` and `filter` is the single most consequential design decision in a query:
+The distinction between `must`/`should` and `filter` matters more than any scoring knob:
 
 | | Query context (`must`, `should`) | Filter context (`filter`, `must_not`) |
 |---|---|---|
@@ -132,12 +132,12 @@ The distinction between `must`/`should` and `filter` is the single most conseque
 
 Putting `office = normandy` in `filter` instead of `must` means it never affects the relevance score and Elasticsearch can cache the resulting bitset, so the same filter on later queries is close to free. Note the `/d` rounding in the example: a bare `now` changes every millisecond and is never cached. The cache is also only populated for filters that recur, on segments big enough to matter, so the win shows up under real repeated traffic rather than on the first query. This is the pattern behind almost every "search + facets" UI: text goes to a scored `multi_match`, every sidebar checkbox and date range goes to `filter`.
 
-Other tunables worth knowing on the text side:
+Other text-side knobs:
 
-- **`operator`** (`or` vs `and`) - whether all query terms must appear or just one.
-- **`minimum_should_match`** - middle ground between the two, e.g. "3 of 4 terms must match."
-- **`fuzziness`** - Levenshtein-distance tolerance for typos (`AUTO` scales the allowed edit distance with term length).
-- **`tie_breaker`** on `multi_match` (`type: best_fields`) - blends in a fraction of the non-best matching fields' scores instead of discarding them entirely.
+- **`operator`** (`or` vs `and`): whether all query terms must appear or just one.
+- **`minimum_should_match`**: middle ground between the two, e.g. "3 of 4 terms must match."
+- **`fuzziness`**: Levenshtein-distance tolerance for typos (`AUTO` scales the allowed edit distance with term length).
+- **`tie_breaker`** on `multi_match` (`type: best_fields`): blends in a fraction of the non-best matching fields' scores instead of discarding them entirely.
 
 ## Core Mechanism 4: Geo-Location Search
 
@@ -148,9 +148,9 @@ Two field types cover essentially every geo use case:
 | Field type | Stores | Typical use |
 |---|---|---|
 | `geo_point` | A single `{lat, lon}` | A store, a user, a delivery address |
-| `geo_shape` | Arbitrary GeoJSON - polygon, multipolygon, linestring | A delivery zone, a country border, a service area |
+| `geo_shape` | Arbitrary GeoJSON: polygon, multipolygon, linestring | A delivery zone, a country border, a service area |
 
-The common pairing the field type table implies - and the one worth calling out explicitly - is **indexed polygon, query point**: a `geo_shape` polygon is indexed once per delivery zone or site boundary, and each incoming query supplies a `geo_point` (a user's lat/long) to test containment against it:
+The pairing worth spelling out is **indexed polygon, query point**: you index one `geo_shape` per delivery zone or site boundary, and each query supplies the user's location as a point to test containment against it:
 
 ```json
 {
@@ -169,7 +169,7 @@ The common pairing the field type table implies - and the one worth calling out 
 }
 ```
 
-`relation` controls the topological test: `intersects` (any overlap, the default), `within` (the indexed shape lies inside the query shape, e.g. "which stores are inside this polygon"), `contains` (the indexed shape fully contains the query shape, the strict form of "is this point inside this zone"), or `disjoint`. For a point query against zone polygons, `intersects` gives the same answer and is the more common choice. The same query direction reverses just as easily - index `geo_point` locations (stores, addresses) and query with a `geo_shape` polygon (a hand-drawn map selection) using `intersects`.
+`relation` controls the topological test: `intersects` (any overlap, the default), `within` (the indexed shape lies inside the query shape, e.g. "which stores are inside this polygon"), `contains` (the indexed shape fully contains the query shape, the strict form of "is this point inside this zone"), or `disjoint`. For a point query against zone polygons, `intersects` gives the same answer and is the more common choice. The direction reverses just as easily: index `geo_point` locations (stores, addresses) and query with a `geo_shape` polygon (a hand-drawn map selection) using `intersects`.
 
 For the much more common "within X km" case, `geo_point` plus a `geo_distance` filter is lighter than shapes entirely:
 
@@ -183,15 +183,15 @@ Watch the coordinate order: GeoJSON arrays are `[lon, lat]`, the object form is 
 
 **How it's actually indexed.** `geo_point` has been indexed in Lucene's **BKD tree** (Block K-D tree) since 5.0, and `geo_shape` since 7.0 (before that it used geohash/quadtree prefix trees). It's the same multi-dimensional binary-tree structure Lucene uses for numeric `range` queries, recursively partitioning space into bounding boxes so a bounding-box or distance query only has to descend the branches that could possibly overlap, instead of scanning every point. This is why geo filters stay cheap even over hundreds of millions of points: cost is driven by the tree depth and the number of matching points, not a scan of the whole index.
 
-Tunables worth knowing:
+Geo knobs:
 
-- **`distance_type`** (`arc` vs `plane`) - `arc` is geodesically accurate (accounts for Earth's curvature) and the default; `plane` is faster and fine at small distances (city-scale) where the error is negligible.
-- **`precision`** on a `geohash_grid` aggregation - controls the geohash cell size when bucketing points into a map cluster/heatmap view; higher precision means smaller cells and more buckets.
-- **`ignore_malformed`** - lets ingestion continue past bad coordinates instead of rejecting the whole document, worth enabling for any pipeline consuming external/scraped location data.
+- **`distance_type`** (`arc` vs `plane`): `arc` is geodesically accurate (accounts for Earth's curvature) and the default; `plane` is faster and fine at small distances (city-scale) where the error is negligible.
+- **`precision`** on a `geohash_grid` aggregation: controls the geohash cell size when bucketing points into a map cluster/heatmap view; higher precision means smaller cells and more buckets.
+- **`ignore_malformed`**: lets ingestion continue past bad coordinates instead of rejecting the whole document. Turn it on for any pipeline consuming external/scraped location data.
 
 ## Core Mechanism 5: Semantic Vector Search
 
-BM25 matches on shared terms, so a query for "car won't start" and a document about "vehicle fails to ignite" score zero, despite the same meaning. **Semantic search** closes that gap by matching on embedding similarity instead of shared vocabulary - "vector search" and "semantic search" are the same mechanism, named after the technique and the goal respectively.
+BM25 matches on shared terms, so a query for "car won't start" and a document about "vehicle fails to ignite" score zero, despite the same meaning. **Semantic search** closes that gap by matching on embedding similarity instead of shared vocabulary. In this post I use "vector search" and "semantic search" interchangeably.
 
 The pipeline: embed each document with a sentence-embedding model, store the vector in a `dense_vector` field, embed the query with the same model, and look up the nearest stored vectors. The usual choice is a Sentence-BERT model: a BERT encoder fine-tuned on sentence pairs (NLI and STS originally, contrastive pairs in the newer `all-MiniLM`/`all-mpnet` models) so that cosine similarity tracks meaning, which raw `[CLS]` vectors don't.
 
@@ -212,9 +212,9 @@ The pipeline: embed each document with a sentence-embedding model, store the vec
 
 `dims` must exactly match the model's output width (768 for BERT-base/SBERT-base, 384 for the smaller MiniLM variants), and `similarity` picks the distance function: `cosine` for direction-only similarity (the standard choice for SBERT-style embeddings), `dot_product`, which 8.0 only accepts if every document and query vector is unit length (normalize at embedding time; it's then equivalent to cosine and cheaper), or `l2_norm` for raw Euclidean distance.
 
-**Two very different search strategies sit behind the same field type, and which one you get depends on the version:**
+There are two quite different ways to search a `dense_vector` field, and which one you can use depends on your version:
 
-- **Exact (`script_score` + `cosineSimilarity`)**: available since 7.3 (`cosineSimilarity(params.query_vector, 'body_embedding') + 1.0` inside a `script_score`), this scores *every* matching document by literally computing the vector distance in a script. It's brute-force, O(n) in the candidate set, and only viable when combined with a `bool` filter that narrows the candidate pool first (e.g. score by vector similarity only within `category: automotive`) - running it over an unfiltered multi-million-document index is not something you want to explain to on-call.
+- **Exact (`script_score` + `cosineSimilarity`)**: available since 7.3 (`cosineSimilarity(params.query_vector, 'body_embedding') + 1.0` inside a `script_score`), this scores *every* matching document by literally computing the vector distance in a script. It's brute-force, O(n) in the candidate set, and only viable when combined with a `bool` filter that narrows the candidate pool first (e.g. score by vector similarity only within `category: automotive`). Running it over an unfiltered multi-million-document index is not something you want to explain to on-call.
 - **Approximate kNN (`_knn_search`)**: new in Elasticsearch 8.0 (released this month) as a technical preview. It's a separate endpoint taking `field`, `query_vector`, `k` and `num_candidates`, and it indexes vectors into an **HNSW graph** (Hierarchical Navigable Small World) per segment. In full HNSW the top layer has long-range links for coarse navigation and each lower layer refines the search, so a query descends the layers like a skip list. Lucene 9.0, which 8.0 ships, still builds a single-layer graph; the hierarchy lands in Lucene 9.1. Either way the search is sub-linear and scales to the full index, at the cost of being approximate: it can miss the true nearest neighbor. In 8.0 you also can't add a `bool` filter to it or combine it with a BM25 query in the same request.
 
 HNSW's own tunables trade index quality against build/query cost:
@@ -225,26 +225,25 @@ HNSW's own tunables trade index quality against build/query cost:
 | `ef_construction` (default 100) | Mapping, under `index_options` | Candidate list size while building the graph; higher = better graph quality, slower indexing |
 | `num_candidates` | `_knn_search` request | Candidates explored per shard before returning top `k`; higher = better recall, higher query latency |
 
-In practice, as of early 2022 the pragmatic production pattern is **hybrid, not pure vector**: keep BM25 plus the `bool` filter pattern from the section above as the primary path, and treat semantic vector matching as a narrowing or re-ranking step layered on top - either pre-filter with `bool`/`filter` before the `script_score` similarity pass, or blend a BM25 score and a vector score with a weighted combination. Both patterns only work with `script_score` in 8.0: `_knn_search` can't filter or blend with a text query yet, which is the main reason it isn't a drop-in for faceted search today. It's also brand new, evaluation data on recall/latency tradeoffs at real production scale is still thin, and lexical + facet search already covers the bulk of real queries well - which is exactly the kind of decision that belongs in a pilot next to the existing search, not a wholesale replacement of it.
+In practice, as of early 2022 the pragmatic production pattern is **hybrid, not pure vector**: keep BM25 plus the `bool` filter pattern from the section above as the primary path, and treat semantic vector matching as a narrowing or re-ranking step layered on top. Either pre-filter with `bool`/`filter` before the `script_score` similarity pass, or blend a BM25 score and a vector score with a weighted combination. Both patterns only work with `script_score` in 8.0: `_knn_search` can't filter or blend with a text query yet, which is the main reason it isn't a drop-in for faceted search today. It's also brand new, evaluation data on recall/latency tradeoffs at real production scale is still thin, and lexical + facet search already covers the bulk of real queries well. This is a decision for a pilot next to the existing search, not a wholesale replacement of it.
 
 ## Deploying Elasticsearch in Production
 
 A cluster is made of nodes with different roles, and getting the topology wrong is the most common cause of production instability:
 
-- **Master-eligible nodes** - manage cluster state (index creation, shard allocation). Three master-eligible nodes let the cluster survive losing one without split-brain; make them dedicated once you're past three to five data nodes.
-- **Data nodes** - hold shards, do the actual indexing/search work. CPU and disk I/O bound.
-- **Ingest nodes** - run pre-processing pipelines (`grok`, field enrichment) before indexing.
-- **Coordinating nodes** - stateless, fan out a query to data nodes and merge results; useful as a buffer in front of a heavy-query workload.
+- **Master-eligible nodes**: manage cluster state (index creation, shard allocation). Three master-eligible nodes let the cluster survive losing one without split-brain; make them dedicated once you're past three to five data nodes.
+- **Data nodes**: hold shards, do the actual indexing/search work. CPU and disk I/O bound.
+- **Ingest nodes**: run pre-processing pipelines (`grok`, field enrichment) before indexing.
+- **Coordinating nodes**: stateless, fan out a query to data nodes and merge results; useful as a buffer in front of a heavy-query workload.
 
-**Shards** are the unit of scale - each shard is a self-contained Lucene index. Two rules of thumb that come from hard-won incidents across the ecosystem: keep individual shards under roughly 50GB, and don't over-shard (thousands of tiny shards waste heap on cluster state and per-shard overhead just as badly as under-sharding wastes parallelism). The primary shard count is set at index creation. `_shrink` (5.0+) and `_split` (6.1+) can change it, but only by copying a read-only source into a new index, with factor constraints, so size for the data volume you expect rather than today's, or plan to reindex or roll over.
+**Shards** are the unit of scale; each shard is a self-contained Lucene index. Two rules of thumb: keep individual shards under roughly 50GB, and don't over-shard (thousands of tiny shards waste heap on cluster state and per-shard overhead just as badly as under-sharding wastes parallelism). The primary shard count is set at index creation. `_shrink` (5.0+) and `_split` (6.1+) can change it, but only by copying a read-only source into a new index, with factor constraints, so size for the data volume you expect rather than today's, or plan to reindex or roll over.
 
-As of early 2022 the deployment landscape has an extra wrinkle worth planning around: Elastic announced in January 2021 that from 7.11 on, Elasticsearch and Kibana would be dual-licensed under SSPL and the Elastic License, and AWS forked 7.10.2 as **OpenSearch**. The managed offering on AWS is now Amazon OpenSearch Service (renamed from Amazon Elasticsearch Service in September 2021). It runs OpenSearch, or legacy Elasticsearch up to 7.10, never 8.x. The core query DSL is still mostly compatible, but newer features diverge: OpenSearch has its own approximate k-NN plugin with a different API from Elastic's new `_knn_search`, and 8.0's security-on-by-default has no direct equivalent. If you want Elasticsearch 8.0 on AWS, that means Elastic Cloud or running it yourself.
+As of early 2022 there's an extra complication on AWS: Elastic announced in January 2021 that from 7.11 on, Elasticsearch and Kibana would be dual-licensed under SSPL and the Elastic License, and AWS forked 7.10.2 as **OpenSearch**. The managed offering on AWS is now Amazon OpenSearch Service (renamed from Amazon Elasticsearch Service in September 2021). It runs OpenSearch, or legacy Elasticsearch up to 7.10, never 8.x. The core query DSL is still mostly compatible, but newer features diverge: OpenSearch has its own approximate k-NN plugin with a different API from Elastic's new `_knn_search`, and 8.0's security-on-by-default has no direct equivalent. If you want Elasticsearch 8.0 on AWS, that means Elastic Cloud or running it yourself.
 
 Practical deployment checklist:
 
-- **Snapshot repository** (S3, GCS, or shared filesystem) with scheduled snapshots - this is the actual backup/restore mechanism, replicas protect against node loss, not data corruption or accidental deletes.
+- **Snapshot repository** (S3, GCS, or shared filesystem) with scheduled snapshots. This is the actual backup/restore mechanism; replicas protect against node loss, not data corruption or accidental deletes.
 - **Rolling upgrades**, one node at a time, with shard allocation disabled during the restart to avoid unnecessary rebalancing traffic.
-- **Dedicated coordinating-only nodes** in front of heavy aggregation or fan-out-heavy workloads, so query load doesn't compete with indexing for the same node's heap.
 
 ## Monitoring
 
@@ -256,33 +255,33 @@ Cluster-level, the cheapest possible check is `GET _cluster/health`:
 |---|---|
 | `green` | All primary and replica shards allocated |
 | `yellow` | All primaries allocated, some replicas aren't (often normal during a rolling restart) |
-| `red` | At least one primary shard is unallocated - active data loss risk |
+| `red` | At least one primary shard is unallocated, so active data loss risk |
 
 Beyond that binary signal, the metrics that actually predict trouble:
 
 | Metric | Where | Why it matters |
 |---|---|---|
 | Heap usage / old-gen GC frequency | `_nodes/stats` | Elasticsearch runs on the JVM; old-gen usage that stays above ~75% after GC means latency spikes are coming, and the parent breaker trips at 95% by default |
-| Circuit breaker trips | `_nodes/stats/breaker` | The parent/fielddata/request breakers exist specifically to reject work before an OOM - a rising trip count is an early warning, not just noise |
+| Circuit breaker trips | `_nodes/stats/breaker` | The parent/fielddata/request breakers exist specifically to reject work before an OOM; a rising trip count is an early warning, not just noise |
 | Thread pool rejections | `_cat/thread_pool` | `search` or `write` queue rejections mean the node can't keep up with request rate |
 | Indexing rate & merge time | `_nodes/stats/indices` | Segment merge pressure competes with search for disk I/O |
 | Query latency (p50/p95/p99) | Slow log + APM | p99 diverging from p50 usually points at a small number of expensive queries, not overall load |
 | Disk watermarks | `_cat/allocation?v` for usage, `_cluster/settings?include_defaults=true` for thresholds | low 85%: no new shards on the node; high 90%: shards relocated away; flood stage 95%: indices go read-only (`read_only_allow_delete`) |
 
-For visualization, **Kibana's Stack Monitoring** ships with the stack and is the fastest path to a working dashboard; a Prometheus exporter (`elasticsearch_exporter`) plus Grafana is the alternative when monitoring is already centralized outside the Elastic stack. Either way, alert on GC time and circuit breaker trips before heap percentage alone - by the time heap usage itself looks alarming, latency has usually already degraded.
+For visualization, **Kibana's Stack Monitoring** ships with the stack and is the fastest path to a working dashboard; a Prometheus exporter (`elasticsearch_exporter`) plus Grafana is the alternative when monitoring is already centralized outside the Elastic stack. Either way, alert on GC time and circuit breaker trips before heap percentage alone. By the time heap usage itself looks alarming, latency has usually already degraded.
 
 ## Optimizing for Real Production Load
 
-**Indexing throughput.** The `_bulk` API is non-negotiable for any real ingestion volume - single-document indexing pays the network round-trip cost per document. During large backfills, temporarily setting `refresh_interval` to `-1` and `number_of_replicas` to `0` skips per-request segment refresh and replica-write overhead, then restore both once the load finishes. Forget the first and new documents silently never show up in search; forget the second and you're one node failure away from a red cluster.
+**Indexing throughput.** The `_bulk` API is non-negotiable for any real ingestion volume, since single-document indexing pays the network round-trip cost per document. During large backfills, temporarily setting `refresh_interval` to `-1` and `number_of_replicas` to `0` skips per-request segment refresh and replica-write overhead, then restore both once the load finishes. Forget the first and new documents silently never show up in search; forget the second and you're one node failure away from a red cluster.
 
-**Mapping discipline.** Dynamic mapping is convenient in development and dangerous in production - an unbounded set of incoming field names (user-generated keys, nested JSON blobs) creates a "mapping explosion" that bloats cluster state and can eventually make the cluster unable to accept new mappings at all. `index.mapping.total_fields.limit` (default 1000) is the guardrail that eventually starts rejecting documents. Set `dynamic: false` or `strict` on indices with any untrusted document shape. Set `doc_values: false` on fields you search but never sort or aggregate on, `index: false` on fields you return but never query, and `enabled: false` on objects you only store. Leave `_source` on: disabling it breaks `_update`, `_reindex` and highlighting.
+**Mapping discipline.** Dynamic mapping is convenient in development and dangerous in production. An unbounded set of incoming field names (user-generated keys, nested JSON blobs) creates a "mapping explosion" that bloats cluster state and can eventually make the cluster unable to accept new mappings at all. `index.mapping.total_fields.limit` (default 1000) is the guardrail that eventually starts rejecting documents. Set `dynamic: false` or `strict` on indices with any untrusted document shape. Set `doc_values: false` on fields you search but never sort or aggregate on, `index: false` on fields you return but never query, and `enabled: false` on objects you only store. Leave `_source` on: disabling it breaks `_update`, `_reindex` and highlighting.
 
-**Query-side.** Deep pagination forces every shard to sort and return `from + size` documents just to discard most of them, which is why `from + size` is capped at `index.max_result_window` (10,000). For any "load more" pattern use `search_after` with a point-in-time (7.10+) instead of paging with `from`. Keep filters in filter context (see above) so repeat queries hit the cached bitset rather than re-evaluating. For aggregation-heavy dashboards, watch `fielddata` circuit breaker pressure specifically - aggregating on a `text` field is rejected by default, and the "fix" people reach for, `fielddata: true`, loads the whole field into heap. That's why aggregatable fields should be `keyword` in the first place.
+**Query-side.** Deep pagination forces every shard to sort and return `from + size` documents just to discard most of them, which is why `from + size` is capped at `index.max_result_window` (10,000). For any "load more" pattern use `search_after` with a point-in-time (7.10+) instead of paging with `from`. Keep filters in filter context (see above) so repeat queries hit the cached bitset rather than re-evaluating. For aggregation-heavy dashboards, watch `fielddata` circuit breaker pressure specifically. Aggregating on a `text` field is rejected by default, and the "fix" people reach for, `fielddata: true`, loads the whole field into heap. That's why aggregatable fields should be `keyword` in the first place.
 
-**Segment and lifecycle management.** Read-mostly or time-series indices (logs, an archived month of documents) benefit from a **force merge** down to one segment once writes stop (and only then, since merging an index that still takes writes leaves oversized segments behind), which speeds up search by reducing the number of segments a query has to hit. For anything with a natural time axis, **Index Lifecycle Management (ILM)** automates the hot → warm → cold → delete progression: hot nodes on fast SSDs handle current writes and queries, warm nodes on cheaper storage hold read-only older indices, and a delete phase enforces retention - without ILM this tends to become a manual cron job that someone eventually forgets to run.
+**Segment and lifecycle management.** Read-mostly or time-series indices (logs, an archived month of documents) benefit from a **force merge** down to one segment once writes stop (and only then, since merging an index that still takes writes leaves oversized segments behind), which speeds up search by reducing the number of segments a query has to hit. For anything with a natural time axis, **Index Lifecycle Management (ILM)** automates the hot → warm → cold → delete progression: hot nodes on fast SSDs handle current writes and queries, warm nodes on cheaper storage hold read-only older indices, and a delete phase enforces retention. Without ILM this tends to become a manual cron job that someone eventually forgets to run.
 
 **Vector fields are heavier than they look.** Lucene keeps the vectors and the HNSW graph in segment files and relies on the OS page cache to keep them hot, so the cost lands off-heap. Raw float32 vectors alone take `4 × dims` bytes each: 10M documents at 768 dims is about 30.7 GB before the graph. Leave that much RAM outside the JVM heap on data nodes; a bigger heap makes it worse by shrinking the page cache.
 
 ## Takeaways
 
-The inverted index and BM25 explain *why* Elasticsearch is fast at lexical ranking, BKD trees explain why geo filters stay cheap at any scale, and HNSW is the same "don't scan everything" idea applied to embedding similarity for semantic search. The `must`/`filter` split in the `bool` query is the actual design pattern tying all of it together - text goes to a scored match, geo and metadata constraints go to a filter - and it's the pattern behind every real "search bar + facets + map" interface. Production stability, in turn, comes down to a short list of unglamorous things: dedicated masters, sane shard sizes, `keyword` fields where you filter, memory sized for whatever's memory-hungry (vectors included), and watching GC and circuit breakers rather than waiting for heap usage to look scary. None of it requires exotic tuning to get right; it requires treating the mapping and the query shape as first-class design decisions instead of an afterthought bolted on after the schema is already in production.
+The inverted index and BM25 explain why Elasticsearch is fast at lexical ranking, BKD trees explain why geo filters stay cheap, and HNSW applies the same "don't scan everything" idea to embeddings. The `bool` query's split between scored clauses and filters ties it together: text goes to a scored match, geo and metadata constraints go to a filter. On the operations side, most of the stability comes from decisions made before the first document goes in: `text` vs `keyword` for every field, explicit mappings, sane shard counts, and memory sized for what the data actually needs.
