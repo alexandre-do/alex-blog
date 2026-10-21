@@ -11,6 +11,10 @@ categories:
 
 # Elasticsearch Under the Hood: Text Search, Filtering, and Running It in Production
 
+::: {.callout-note}
+Written in February 2022, against Elasticsearch 8.0. Vector search has changed a lot since; see the [October 2026 update](#update-october-2026-what-changed-for-embedding-and-vector-search) at the end.
+:::
+
 Elasticsearch is a distributed search and analytics engine built on top of Apache Lucene. It stores JSON documents, exposes a REST API over HTTP, and shards + replicates data across a cluster so both indexing and search scale horizontally. The two use cases that dominate in practice are log/metrics analytics (the "ELK stack") and full-text document search, and this post is about the second one: how a query like "unpaid invoice normandy site" combined with a filter like `status: overdue` actually gets resolved, what knobs control relevance, and what it takes to run that in production without it falling over.
 
 ## Elasticsearch vs. a Relational Database
@@ -285,3 +289,104 @@ For visualization, **Kibana's Stack Monitoring** ships with the stack and is the
 ## Takeaways
 
 The inverted index and BM25 explain why Elasticsearch is fast at lexical ranking, BKD trees explain why geo filters stay cheap, and HNSW applies the same "don't scan everything" idea to embeddings. The `bool` query's split between scored clauses and filters ties it together: text goes to a scored match, geo and metadata constraints go to a filter. On the operations side, most of the stability comes from decisions made before the first document goes in: `text` vs `keyword` for every field, explicit mappings, sane shard counts, and memory sized for what the data actually needs.
+
+## Update (October 2026): What Changed for Embedding and Vector Search
+
+Everything above describes Elasticsearch as of 8.0 in February 2022. The lexical, geo and operations parts have aged well. The vector section has not: most of the 2022 caveats were fixed over the 8.x line and in 9.x (9.0 shipped in April 2025 on Lucene 10). Rather than rewrite those sections, this one covers what changed.
+
+### One search API, with filters and text in the same request
+
+The separate `_knn_search` endpoint was deprecated in 8.4, replaced by a `knn` option inside the normal `_search` API. That option takes a `filter`, and it can sit next to a regular `query` in the same request, so the "can't filter, can't blend with BM25" limitation from 8.0 is gone. 8.12 added a `knn` *query* as well, which you can nest inside a `bool` like any other clause.
+
+Filtered kNN also got much cheaper. In 9.1 Elastic switched filtered HNSW search to ACORN-1, which applies the filter while walking the graph (and also explores neighbors-of-neighbors, so a restrictive filter doesn't strand the search in a disconnected corner). Elastic reports up to 5x faster filtered queries. You don't need to configure it: any `knn` with a `filter` uses it.
+
+### Quantization fixed the memory problem
+
+The warning in the optimization section (10M × 768-dim float32 vectors ≈ 30.7 GB before the graph) is now mostly a configuration choice rather than a cost you're stuck with:
+
+| `index_options.type` | Bytes per dim (approx.) | Arrived | Note |
+|---|---|---|---|
+| `hnsw` | 4 (float32) | 8.0 | The 2022 behaviour |
+| `int8_hnsw` | 1 | 8.12, default since 8.14 | About 4x smaller, small recall loss |
+| `int4_hnsw` | 0.5 | 8.15 | About 8x smaller |
+| `bbq_hnsw` | 1 bit | 8.16, default for dims ≥ 384 since 9.1 | About 32x smaller, recovered by rescoring |
+| `bbq_disk` (DiskBBQ) | 1 bit | 9.2 | Clustered (IVF-style) layout read from disk instead of an in-memory graph |
+
+BBQ (Better Binary Quantization) only works because of rescoring. The search runs on the compressed vectors, pulls `oversample × k` candidates, then re-ranks them with the full-precision vectors that are still on disk. You set this with `rescore_vector: { oversample: 3.0 }` in the mapping or per query. The 2022 sizing rule changes accordingly. What has to fit in the page cache is the quantized vectors plus the graph. The float32 originals only get read for the rescored candidates.
+
+A 2026 version of the mapping from earlier:
+
+```json
+{
+  "mappings": {
+    "properties": {
+      "body_embedding": {
+        "type": "dense_vector",
+        "dims": 768,
+        "similarity": "cosine",
+        "index_options": {
+          "type": "bbq_hnsw",
+          "rescore_vector": { "oversample": 3.0 }
+        }
+      }
+    }
+  }
+}
+```
+
+`dims` can now go up to 4096 (it was 1024 for indexed vectors in 8.0), which matters because many current embedding models are wider than BERT-base.
+
+### Embeddings no longer have to be computed outside the cluster
+
+In 2022 you ran SBERT yourself and sent Elasticsearch the vector. Now the cluster can do it:
+
+- The **inference API** registers an embedding endpoint: a model running on ML nodes, Elastic's own hosted service, or an external provider (OpenAI, Cohere, Hugging Face, Bedrock and others). Ingest pipelines and queries call it by `inference_id`.
+- The **`semantic_text`** field type (GA in 9.0) packages the whole pipeline. You index plain text, and Elasticsearch chunks it, embeds every chunk, stores the vectors and picks sensible index options. At query time a `match` or `semantic` query on that field embeds the query text with the same endpoint. With no `inference_id` it defaults to ELSER.
+- **ELSER** (Elastic Learned Sparse EncodeR, first released in 8.8 in 2023) is a learned *sparse* model. Instead of a dense vector, it expands the text into weighted terms stored in a `sparse_vector` field. That field is served by the inverted index, so it fits between BM25 and dense kNN: it handles synonyms and paraphrase out of the box, with no HNSW graph, but it's English-first.
+- In October 2025 Elastic acquired **Jina AI**, and its multilingual and multimodal embedding and reranker models are now served through the Elastic Inference Service next to ELSER and E5.
+
+Sentence-BERT models still work fine in a `dense_vector` field, but in 2026 they're one option among many rather than the default choice.
+
+### Hybrid search is built in
+
+The 2022 advice was to hand-roll hybrid search with `script_score` or a weighted sum of scores. That's now part of the query DSL through **retrievers** (introduced in 8.14):
+
+- **`rrf`** (technical preview in 8.8, GA in 8.16) fuses ranked lists using Reciprocal Rank Fusion, `score = Σ 1 / (rank_constant + rank)`. It only uses ranks, so you don't have to normalize BM25 scores and cosine similarities onto the same scale, which was the hard part of the 2022 weighted-sum approach.
+- **`linear`** (8.18 / 9.0) is a weighted score combination, with optional per-retriever normalization, for when you have labelled data to tune weights against.
+- **`text_similarity_reranker`** re-scores the top N with a cross-encoder reranking model through the inference API. This is the "re-ranking step layered on top" from 2022, as a single built-in clause.
+
+The "unpaid invoice" search as a hybrid query:
+
+```json
+{
+  "retriever": {
+    "rrf": {
+      "retrievers": [
+        { "standard": {
+            "query": { "bool": {
+              "must":   [{ "multi_match": { "query": "unpaid invoice", "fields": ["title^3", "body"] } }],
+              "filter": [{ "term": { "office": "normandy" } }]
+            }}
+        }},
+        { "knn": {
+            "field": "body_embedding",
+            "query_vector_builder": { "text_embedding": { "model_id": "my-embedding-endpoint", "model_text": "unpaid invoice" } },
+            "k": 20,
+            "num_candidates": 200,
+            "filter": { "term": { "office": "normandy" } }
+        }}
+      ]
+    }
+  }
+}
+```
+
+Two caveats. The filter has to appear in both retrievers, because each one ranks its own candidates before fusion. And on self-managed clusters, RRF, linear and the reranker retriever are paid-tier features, so check your licence before designing around them.
+
+### Licensing and the AWS picture
+
+In August 2024 Elastic added **AGPLv3** as a third licence option next to SSPL and ELv2, so Elasticsearch is OSI open source again. OpenSearch moved to the Linux Foundation's OpenSearch Software Foundation in September 2024. It has kept its own k-NN plugin (Faiss and Lucene engines, with its own quantization options), so in 2026 the two projects' vector APIs are further apart than they were in 2022.
+
+### What I'd change in the 2022 advice
+
+Hybrid is still the right default, but it no longer needs to be a cautious pilot. RRF over BM25 and kNN, with the filters repeated in both legs, is now a few lines of standard query DSL, and quantization takes most of the memory cost away. The parts that haven't changed are the lexical ones: exact identifiers, SKUs, status codes and short queries are still won by `keyword` fields and BM25, and the query-vs-filter discipline from the core sections applies to every retriever in a hybrid query too.
